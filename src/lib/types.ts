@@ -1,3 +1,19 @@
+export interface Client {
+  id: string
+  name: string
+  contact_name: string | null
+  contact_phone: string | null
+  contact_email: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  notes: string | null
+  is_active: boolean
+  user_id: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Dvr {
   id: string
   name: string
@@ -9,6 +25,7 @@ export interface Dvr {
   username: string | null
   password: string | null
   notes: string | null
+  client_id: string | null
   user_id: string
   created_at: string
   updated_at: string
@@ -33,6 +50,7 @@ export interface Camera {
   switch_id: string | null
   switch_port: number | null
   notes: string | null
+  client_id: string | null
   user_id: string
   created_at: string
   updated_at: string
@@ -46,6 +64,7 @@ export interface PowerBalun {
   total_ports: number
   status: string
   notes: string | null
+  client_id: string | null
   user_id: string
   created_at: string
   updated_at: string
@@ -63,6 +82,7 @@ export interface Switch {
   poe_budget_watts: number | null
   status: string
   notes: string | null
+  client_id: string | null
   user_id: string
   created_at: string
   updated_at: string
@@ -79,6 +99,7 @@ export interface Credential {
   port: number | null
   protocol: string | null
   notes: string | null
+  client_id: string | null
   user_id: string
   created_at: string
   updated_at: string
@@ -120,6 +141,7 @@ export interface CableConnection {
   power_source_info: string | null
   cable_length_meters: number | null
   notes: string | null
+  client_id: string | null
   user_id: string
   created_at: string
   updated_at: string

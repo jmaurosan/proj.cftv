@@ -11,10 +11,12 @@ import {
   Shield,
   ChevronLeft,
   X,
+  Building2,
 } from 'lucide-react'
 
 const navItems = [
   { to: '/', label: 'Painel', icon: LayoutDashboard },
+  { to: '/clientes', label: 'Clientes', icon: Building2 },
   { to: '/dvrs', label: 'DVRs', icon: Server },
   { to: '/cameras', label: 'Câmeras', icon: Camera },
   { to: '/baluns', label: 'Power Baluns', icon: Cable },

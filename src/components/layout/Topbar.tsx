@@ -1,9 +1,11 @@
-import { useLocation } from 'react-router-dom'
-import { LogOut, Menu } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { LogOut, Menu, Building2, X } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { useClient } from '../../contexts/ClientContext'
 
 const pageTitles: Record<string, string> = {
   '/': 'Painel',
+  '/clientes': 'Clientes',
   '/dvrs': 'DVRs',
   '/cameras': 'Câmeras',
   '/baluns': 'Power Baluns',
@@ -19,13 +21,20 @@ interface TopbarProps {
 
 export default function Topbar({ onMenuClick }: TopbarProps) {
   const { user, signOut } = useAuth()
+  const { selectedClientId, selectedClientName, clearSelectedClient } = useClient()
   const location = useLocation()
+  const navigate = useNavigate()
   const title = pageTitles[location.pathname] || 'Sistema CFTV'
 
   const handleMenuClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     onMenuClick()
+  }
+
+  const handleClearClient = () => {
+    clearSelectedClient()
+    navigate('/clientes')
   }
 
   return (
@@ -39,7 +48,24 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         >
           <Menu className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-semibold text-text-primary">{title}</h1>
+        <div>
+          <h1 className="text-lg font-semibold text-text-primary">{title}</h1>
+          {selectedClientId && selectedClientName && location.pathname !== '/clientes' && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-text-muted flex items-center gap-1">
+                <Building2 className="w-3 h-3" />
+                {selectedClientName}
+              </span>
+              <button
+                onClick={handleClearClient}
+                className="text-text-muted hover:text-danger transition-colors"
+                title="Trocar cliente"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-4">
         <span className="text-sm text-text-muted hidden sm:block">{user?.email}</span>
