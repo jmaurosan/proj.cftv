@@ -1,0 +1,46 @@
+name: Keep Alive - Supabase
+
+on:
+  schedule:
+    # Executa a cada 5 dias às 3:00 AM UTC
+    - cron: '0 3 */5 * *'
+  workflow_dispatch: # Permite execução manual através do painel do GitHub
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Tables
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "🔄 Iniciando Keep Alive do Supabase..."
+          echo "⏰ $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+
+          TABLES=("dvrs" "cameras" "power_baluns" "switches" "credentials" "cable_connections")
+          ERRORS=0
+
+          for TABLE in "${TABLES[@]}"; do
+            echo "📡 Consultando tabela: $TABLE"
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${SUPABASE_URL}/rest/v1/${TABLE}?select=id&limit=1" \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+
+            if [ "$RESPONSE" -eq 200 ]; then
+              echo "   ✅ $TABLE - OK (HTTP $RESPONSE)"
+            else
+              echo "   ❌ $TABLE - FALHA (HTTP $RESPONSE)"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+
+          echo ""
+          if [ $ERRORS -eq 0 ]; then
+            echo "🎉 Keep Alive concluído com sucesso! Todas as ${#TABLES[@]} tabelas responderam."
+          else
+            echo "⚠️ Keep Alive concluído com $ERRORS erro(s)."
+            exit 1
+          fi

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { Switch } from '../../lib/types'
-import { STATUS_OPTIONS } from '../../lib/constants'
+import { STATUS_OPTIONS, POE_STANDARDS } from '../../lib/constants'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
@@ -17,6 +17,9 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
   const [model, setModel] = useState(initialData?.model ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [totalPorts, setTotalPorts] = useState(initialData?.total_ports ?? 8)
+  const [isPoe, setIsPoe] = useState(initialData?.is_poe ?? false)
+  const [poeStandard, setPoeStandard] = useState(initialData?.poe_standard ?? '')
+  const [poeBudgetWatts, setPoeBudgetWatts] = useState(initialData?.poe_budget_watts ?? '')
   const [status, setStatus] = useState(initialData?.status ?? 'ativo')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [loading, setLoading] = useState(false)
@@ -32,6 +35,9 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
       model: model || null,
       location,
       total_ports: totalPorts,
+      is_poe: isPoe,
+      poe_standard: isPoe && poeStandard ? poeStandard : null,
+      poe_budget_watts: isPoe && poeBudgetWatts ? Number(poeBudgetWatts) : null,
       status,
       notes: notes || null,
     })
@@ -58,6 +64,41 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
         <Input label="Total de Portas" type="number" value={totalPorts} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />
         <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} />
       </div>
+
+      {/* PoE Section */}
+      <div className="border border-border-light rounded-lg p-4 space-y-3">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isPoe}
+            onChange={(e) => setIsPoe(e.target.checked)}
+            className="w-4 h-4 rounded border-border accent-accent"
+          />
+          <span className="text-sm font-medium text-text-primary">Switch PoE</span>
+          <span className="text-xs text-text-muted">(Power over Ethernet)</span>
+        </label>
+
+        {isPoe && (
+          <div className="grid grid-cols-2 gap-4 pt-1">
+            <Select
+              label="Padrão PoE"
+              value={poeStandard}
+              onChange={(e) => setPoeStandard(e.target.value)}
+              options={POE_STANDARDS}
+              placeholder="Selecione"
+            />
+            <Input
+              label="Budget PoE (Watts)"
+              type="number"
+              value={poeBudgetWatts}
+              onChange={(e) => setPoeBudgetWatts(e.target.value)}
+              placeholder="Ex: 150"
+              min={0}
+            />
+          </div>
+        )}
+      </div>
+
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>

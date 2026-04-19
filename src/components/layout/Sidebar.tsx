@@ -7,6 +7,7 @@ import {
   Network,
   KeyRound,
   Monitor,
+  FileText,
   Shield,
   ChevronLeft,
 } from 'lucide-react'
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/switches', label: 'Switches', icon: Network },
   { to: '/credenciais', label: 'Credenciais', icon: KeyRound },
   { to: '/visualizacao', label: 'Visualização', icon: Monitor },
+  { to: '/relatorios', label: 'Relatórios', icon: FileText },
 ]
 
 interface SidebarProps {

@@ -17,8 +17,12 @@ export interface Dvr {
 export interface Camera {
   id: string
   name: string
-  dvr_id: string
-  channel_number: number
+  connection_type: string
+  dvr_id: string | null
+  channel_number: number | null
+  ip_address: string | null
+  mac_address: string | null
+  poe_powered: boolean
   location: string
   type: string
   status: string
@@ -54,6 +58,9 @@ export interface Switch {
   model: string | null
   location: string
   total_ports: number
+  is_poe: boolean
+  poe_standard: string | null
+  poe_budget_watts: number | null
   status: string
   notes: string | null
   user_id: string

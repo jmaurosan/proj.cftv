@@ -25,6 +25,18 @@ export default function SwitchesPage() {
     { key: 'model', label: 'Modelo' },
     { key: 'location', label: 'Localização' },
     { key: 'total_ports', label: 'Portas', render: (s) => `${s.total_ports} portas` },
+    {
+      key: 'is_poe',
+      label: 'PoE',
+      render: (s) =>
+        s.is_poe ? (
+          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/15 text-emerald-400">
+            {s.poe_standard || 'PoE'}{s.poe_budget_watts ? ` · ${s.poe_budget_watts}W` : ''}
+          </span>
+        ) : (
+          <span className="text-text-muted text-xs">—</span>
+        ),
+    },
     { key: 'status', label: 'Status', render: (s) => <Badge status={s.status} /> },
   ]
 

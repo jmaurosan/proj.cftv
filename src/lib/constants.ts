@@ -40,6 +40,17 @@ export const PROTOCOL_OPTIONS = [
 
 export const CHANNEL_OPTIONS = [4, 8, 16, 32] as const
 
+export const CONNECTION_TYPES = [
+  { value: 'analogica', label: 'Analógica (DVR)' },
+  { value: 'ip', label: 'IP (Rede)' },
+] as const
+
+export const POE_STANDARDS = [
+  { value: '802.3af', label: '802.3af (PoE - 15.4W)' },
+  { value: '802.3at', label: '802.3at (PoE+ - 30W)' },
+  { value: '802.3bt', label: '802.3bt (PoE++ - 60/90W)' },
+] as const
+
 // ============================================
 // Cabeamento
 // ============================================

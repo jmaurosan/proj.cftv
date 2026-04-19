@@ -44,8 +44,29 @@ export default function CamerasPage() {
 
   const columns: Column<Camera>[] = [
     { key: 'name', label: 'Nome', sortable: true },
-    { key: 'dvr', label: 'DVR', render: (c) => c.dvrs?.name ?? '-' },
-    { key: 'channel_number', label: 'Canal' },
+    {
+      key: 'connection_type',
+      label: 'Conexão',
+      render: (c) =>
+        c.connection_type === 'ip' ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-500/15 text-blue-400">
+            IP{c.poe_powered ? ' ⚡' : ''}
+          </span>
+        ) : (
+          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-slate-500/15 text-slate-400">
+            Analógica
+          </span>
+        ),
+    },
+    {
+      key: 'dvr',
+      label: 'DVR / IP',
+      render: (c) =>
+        c.connection_type === 'ip'
+          ? c.ip_address ?? '-'
+          : c.dvrs?.name ?? '-',
+    },
+    { key: 'channel_number', label: 'Canal', render: (c) => c.channel_number ?? '-' },
     { key: 'location', label: 'Localização' },
     { key: 'type', label: 'Tipo', render: (c) => c.type.charAt(0).toUpperCase() + c.type.slice(1) },
     {

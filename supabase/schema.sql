@@ -85,6 +85,9 @@ create table switches (
   model varchar(100),
   location varchar(200) not null,
   total_ports smallint not null default 8,
+  is_poe boolean not null default false,
+  poe_standard varchar(20),
+  poe_budget_watts numeric(6,1),
   status varchar(20) not null default 'ativo',
   notes text,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -113,8 +116,12 @@ create trigger switches_updated_at
 create table cameras (
   id uuid primary key default gen_random_uuid(),
   name varchar(100) not null,
-  dvr_id uuid not null references dvrs(id) on delete cascade,
-  channel_number smallint not null,
+  connection_type varchar(20) not null default 'analogica',
+  dvr_id uuid references dvrs(id) on delete cascade,
+  channel_number smallint,
+  ip_address varchar(45),
+  mac_address varchar(17),
+  poe_powered boolean not null default false,
   location varchar(200) not null,
   type varchar(30) not null default 'dome',
   status varchar(20) not null default 'ativo',
@@ -133,7 +140,11 @@ create table cameras (
 create index idx_cameras_user_id on cameras(user_id);
 create index idx_cameras_dvr_id on cameras(dvr_id);
 create index idx_cameras_status on cameras(status);
-create unique index uq_cameras_dvr_channel on cameras(dvr_id, channel_number);
+create index idx_cameras_connection_type on cameras(connection_type);
+create unique index uq_cameras_dvr_channel on cameras(dvr_id, channel_number)
+  where dvr_id is not null;
+create unique index uq_cameras_ip_user on cameras(user_id, ip_address)
+  where ip_address is not null;
 
 alter table cameras enable row level security;
 

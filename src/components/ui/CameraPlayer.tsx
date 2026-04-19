@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { VideoOff, Loader2, WifiOff } from 'lucide-react'
+import { Loader2, WifiOff } from 'lucide-react'
 
 interface CameraPlayerProps {
   /** Camera name displayed on screen */

@@ -1,5 +1,4 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import type { CableConnection } from '../../lib/types'
 import {
   CABLE_TYPES,
   WIRING_STANDARDS,
