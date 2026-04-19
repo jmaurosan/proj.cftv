@@ -8,6 +8,7 @@ import LoadingSpinner from '../ui/LoadingSpinner'
 export default function AppLayout() {
   const { user, loading } = useAuth()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   if (loading) {
     return (
@@ -23,12 +24,21 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-bg-primary">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        mobileOpen={mobileOpen}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onMobileClose={() => setMobileOpen(false)}
+      />
+      {/* Content area - margin adjusts based on sidebar state on desktop */}
       <div
-        className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-60'}`}
+        className={`transition-all duration-300 min-h-screen
+          ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-60'}
+          ml-0
+        `}
       >
-        <Topbar onMenuClick={() => setSidebarCollapsed(!sidebarCollapsed)} />
-        <main className="p-6">
+        <Topbar onMenuClick={() => setMobileOpen(!mobileOpen)} />
+        <main className="p-4 sm:p-6">
           <Outlet />
         </main>
       </div>
