@@ -61,7 +61,7 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required />
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <Input label="Total de Portas" type="number" value={totalPorts} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />
+        <Input label="Total de Portas" type="number" value={totalPorts.toString()} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />
         <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} />
       </div>
 

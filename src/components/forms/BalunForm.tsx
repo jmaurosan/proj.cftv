@@ -47,7 +47,7 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Poste frontal" />
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <Input label="Total de Portas" type="number" value={totalPorts} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />
+        <Input label="Total de Portas" type="number" value={totalPorts.toString()} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />
         <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} />
       </div>
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />

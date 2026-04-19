@@ -124,7 +124,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
             placeholder="Selecione o DVR"
             required
           />
-          <Input label="Canal" type="number" value={channelNumber} onChange={(e) => setChannelNumber(Number(e.target.value))} min={1} required />
+          <Input label="Canal" type="number" value={channelNumber.toString()} onChange={(e) => setChannelNumber(Number(e.target.value))} min={1} required />
         </div>
       )}
 
