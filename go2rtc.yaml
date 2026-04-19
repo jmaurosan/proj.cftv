@@ -1,0 +1,18 @@
+# Configuracao do go2rtc para o Sistema CFTV
+# Documentacao: https://github.com/AlexxIT/go2rtc
+
+# As streams sao adicionadas dinamicamente pelo app via API
+# Voce tambem pode adicionar streams fixas aqui:
+
+# streams:
+#   camera1: rtsp://admin:senha@192.168.1.100:554/stream1
+#   camera2: rtsp://admin:senha@192.168.1.101:554/stream1
+
+# Configuracao do servidor web
+api:
+  listen: ":1984"
+  origin: "*"
+
+# Habilitar WebRTC para menor latencia
+webrtc:
+  listen: ":8555"
