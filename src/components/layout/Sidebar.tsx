@@ -46,11 +46,9 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onMobileClose
 
       <aside
         className={`fixed left-0 top-0 h-screen bg-bg-secondary border-r border-border-light flex flex-col z-50
-          transition-all duration-300 ease-in-out
-          /* Mobile: always full width, hidden by default */
+          transition-transform duration-300 ease-in-out
           w-60
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          /* Desktop: visible, width changes based on collapsed */
           lg:translate-x-0
           ${collapsed ? 'lg:w-16' : 'lg:w-60'}
         `}
