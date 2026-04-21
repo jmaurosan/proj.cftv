@@ -1,10 +1,13 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent, useRef } from 'react'
 import type { Camera, Dvr, PowerBalun, Switch } from '../../lib/types'
 import { STATUS_OPTIONS, CAMERA_TYPES, RESOLUTION_OPTIONS, CONNECTION_TYPES } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
+import { uploadQRCodeImage, deleteQRCodeImage } from '../../services/storageService'
+import { useAuth } from '../../hooks/useAuth'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import { CameraIcon, X, QrCode } from 'lucide-react'
 
 interface CameraFormProps {
   initialData?: Camera | null
@@ -30,8 +33,13 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [switchPort, setSwitchPort] = useState(initialData?.switch_port ?? '')
   const [rtspUrl, setRtspUrl] = useState(initialData?.rtsp_url ?? '')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
+  const [qrCodeUrl, setQrCodeUrl] = useState(initialData?.qr_code_url ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [uploadingQr, setUploadingQr] = useState(false)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { user } = useAuth()
 
   const [dvrs, setDvrs] = useState<Dvr[]>([])
   const [baluns, setBaluns] = useState<PowerBalun[]>([])
@@ -74,6 +82,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       switch_id: switchId || null,
       switch_port: switchPort ? Number(switchPort) : null,
       rtsp_url: rtspUrl || null,
+      qr_code_url: qrCodeUrl || null,
       notes: notes || null,
     })
     if (result.error) setError(result.error)
@@ -81,6 +90,34 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   }
 
   const poeSwitches = switches.filter((s) => s.is_poe)
+
+  const handleQrFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+    setUploadingQr(true)
+
+    // Se já tinha uma imagem anterior, remove
+    if (qrCodeUrl && qrCodeUrl !== initialData?.qr_code_url) {
+      await deleteQRCodeImage(qrCodeUrl)
+    }
+
+    const result = await uploadQRCodeImage(file, user.id, initialData?.id)
+    if (result.error) {
+      setError('Erro ao fazer upload da foto: ' + result.error)
+    } else if (result.url) {
+      setQrCodeUrl(result.url)
+      setError(null)
+    }
+    setUploadingQr(false)
+    e.target.value = ''
+  }
+
+  const handleRemoveQr = async () => {
+    if (qrCodeUrl && qrCodeUrl !== initialData?.qr_code_url) {
+      await deleteQRCodeImage(qrCodeUrl)
+    }
+    setQrCodeUrl('')
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -202,6 +239,69 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         onChange={(e) => setRtspUrl(e.target.value)}
         placeholder="rtsp://usuario:senha@192.168.1.100:554/stream1"
       />
+      {/* ── QR Code / Foto de acesso ── */}
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
+          <QrCode className="w-3.5 h-3.5" />
+          Foto do QR Code de Acesso
+        </label>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleQrFileChange}
+          className="hidden"
+        />
+
+        {qrCodeUrl ? (
+          <div className="relative w-fit group">
+            <img
+              src={qrCodeUrl}
+              alt="QR Code da câmera"
+              className="w-48 h-48 object-contain border border-border-light rounded-lg bg-bg-primary"
+            />
+            <button
+              type="button"
+              onClick={handleRemoveQr}
+              className="absolute -top-2 -right-2 w-7 h-7 bg-danger text-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Remover foto"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute bottom-1 right-1 px-2 py-1 bg-bg-tertiary/90 backdrop-blur-sm text-text-primary text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              Substituir
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingQr}
+            className="w-full sm:w-auto flex items-center gap-2 px-4 py-8 border-2 border-dashed border-border-light rounded-lg text-text-muted hover:border-accent hover:text-accent transition-colors"
+          >
+            {uploadingQr ? (
+              <span className="animate-pulse">Enviando...</span>
+            ) : (
+              <>
+                <CameraIcon className="w-5 h-5" />
+                <span>Tirar foto do QR Code</span>
+                <span className="text-xs opacity-60">(ou selecionar arquivo)</span>
+              </>
+            )}
+          </button>
+        )}
+
+        <p className="text-xs text-text-muted">
+          Bata uma foto do QR Code do app da câmera para acessar de outro dispositivo.
+        </p>
+      </div>
+
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>

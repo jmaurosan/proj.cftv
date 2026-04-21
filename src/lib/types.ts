@@ -58,6 +58,7 @@ export interface Camera {
   balun_port: number | null
   switch_id: string | null
   switch_port: number | null
+  qr_code_url: string | null
   notes: string | null
   client_id: string | null
   user_id: string
