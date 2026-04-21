@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Search, Building2, Phone, Mail, MapPin, MoreVertical, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, Trash2 } from 'lucide-react'
 import { useClients } from '../hooks/useClients'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -143,22 +143,17 @@ export default function ClientsPage() {
 
       {/* Lista de clientes */}
       {filteredClients.length === 0 ? (
-        <EmptyState
-          title={searchQuery ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}
-          description={
-            searchQuery
-              ? 'Tente ajustar os termos da busca'
-              : 'Cadastre seu primeiro cliente para começar'
-          }
-          action={
-            !searchQuery && (
-              <Button onClick={() => handleOpenModal()}>
-                <Plus className="w-4 h-4 mr-2" />
-                Cadastrar Cliente
-              </Button>
-            )
-          }
-        />
+        <div className="text-center py-16">
+          <EmptyState
+            message={searchQuery ? 'Nenhum cliente encontrado. Tente ajustar os termos da busca.' : 'Nenhum cliente cadastrado. Cadastre seu primeiro cliente para começar.'}
+          />
+          {!searchQuery && (
+            <Button onClick={() => handleOpenModal()} className="mt-4">
+              <Plus className="w-4 h-4 mr-2" />
+              Cadastrar Cliente
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredClients.map((client) => (
@@ -239,7 +234,7 @@ export default function ClientsPage() {
 
       {/* Modal de formulário */}
       <Modal
-        isOpen={isModalOpen}
+        open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingClient ? 'Editar Cliente' : 'Novo Cliente'}
       >
@@ -306,13 +301,11 @@ export default function ClientsPage() {
 
       {/* Dialog de confirmação */}
       <ConfirmDialog
-        isOpen={!!deleteClientId}
+        open={!!deleteClientId}
         onClose={() => setDeleteClientId(null)}
         onConfirm={handleDelete}
         title="Excluir Cliente"
         message="Tem certeza que deseja excluir este cliente? Todos os equipamentos associados serão removidos."
-        confirmText="Excluir"
-        variant="danger"
       />
     </div>
   )
