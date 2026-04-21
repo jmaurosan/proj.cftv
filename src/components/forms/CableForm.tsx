@@ -184,7 +184,7 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
       )}
 
       {/* Tipo de Cabo */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Tipo de Cabo"
           value={cableType}
@@ -242,7 +242,7 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Select
                     label="Fio 1"
                     value={w1}

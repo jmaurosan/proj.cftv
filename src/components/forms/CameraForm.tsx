@@ -145,14 +145,14 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Estacionamento" />
       </div>
 
       {/* Analógica: DVR + Canal */}
       {!isIP && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
             label="DVR"
             value={dvrId}
@@ -167,7 +167,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
       {/* IP: Endereço IP + MAC */}
       {isIP && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Endereço IP"
             value={ipAddress}
@@ -184,7 +184,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Select label="Tipo" value={type} onChange={(e) => setType(e.target.value)} options={CAMERA_TYPES} />
         <Select label="Resolução" value={resolution} onChange={(e) => setResolution(e.target.value)} options={RESOLUTION_OPTIONS} />
         <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} />
@@ -192,7 +192,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
       {/* Balun - only for analog cameras */}
       {!isIP && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
             label="Power Balun (opcional)"
             value={balunId}
@@ -205,7 +205,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       )}
 
       {/* Switch - available for both, but especially important for IP */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label={isIP ? 'Switch PoE' : 'Switch (opcional)'}
           value={switchId}

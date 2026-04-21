@@ -44,17 +44,21 @@ export default function CredentialForm({ initialData, onSubmit, onCancel }: Cred
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
         <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-2.5">
           {error}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-4">
+
+      {/* Linha 1: Rótulo + Tipo */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Rótulo" value={label} onChange={(e) => setLabel(e.target.value)} required placeholder="Ex: DVR Principal" />
         <Select label="Tipo de Dispositivo" value={deviceType} onChange={(e) => setDeviceType(e.target.value)} options={DEVICE_TYPES} />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+
+      {/* Linha 2: Usuário + Senha */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Usuário" value={username} onChange={(e) => setUsername(e.target.value)} required placeholder="admin" />
         <div>
           <label className="block text-sm font-medium text-text-secondary mb-1.5">Senha</label>
@@ -76,12 +80,18 @@ export default function CredentialForm({ initialData, onSubmit, onCancel }: Cred
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+
+      {/* Linha 3: IP + Porta + Protocolo (1 coluna no mobile, 3 no desktop) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Input label="Endereço IP" value={ipAddress} onChange={(e) => setIpAddress(e.target.value)} placeholder="192.168.1.100" />
         <Input label="Porta" type="number" value={port} onChange={(e) => setPort(e.target.value)} placeholder="80" />
         <Select label="Protocolo" value={protocol} onChange={(e) => setProtocol(e.target.value)} options={PROTOCOL_OPTIONS} />
       </div>
+
+      {/* Linha 4: Observações */}
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
+
+      {/* Botões */}
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
         <Button type="submit" disabled={loading}>

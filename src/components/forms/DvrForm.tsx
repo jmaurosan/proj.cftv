@@ -44,21 +44,21 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
         <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-2.5">
           {error}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
         <Input label="Endereço IP" value={ipAddress} onChange={(e) => setIpAddress(e.target.value)} required placeholder="192.168.1.100" />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: Intelbras MHDX 3116" />
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Sala de TI" />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Total de Canais"
           value={totalChannels}
@@ -72,7 +72,7 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
           options={STATUS_OPTIONS}
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Usuário de Acesso" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" />
         <Input label="Senha de Acesso" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
