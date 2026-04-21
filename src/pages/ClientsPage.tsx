@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, Trash2, Globe, User, Loader2 } from 'lucide-react'
 import { useClients } from '../hooks/useClients'
+import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
@@ -119,6 +120,7 @@ const inputClass =
 // Sistema de gerenciamento de clientes/projetos
 export default function ClientsPage() {
   const { clients, loading, error, createClient, updateClient, deleteClient } = useClients()
+  const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
@@ -272,9 +274,10 @@ export default function ClientsPage() {
       ? await updateClient(editingClient.id, data)
       : await createClient(data)
     if (result.error) {
-      alert(result.error)
+      toast(result.error, 'error')
     } else {
       setIsModalOpen(false)
+      toast(editingClient ? 'Cliente atualizado com sucesso' : 'Cliente criado com sucesso')
     }
     setSubmitting(false)
   }
@@ -282,7 +285,11 @@ export default function ClientsPage() {
   const handleDelete = async () => {
     if (!deleteClientId) return
     const result = await deleteClient(deleteClientId)
-    if (result.error) alert(result.error)
+    if (result.error) {
+      toast(result.error, 'error')
+    } else {
+      toast('Cliente excluído com sucesso')
+    }
     setDeleteClientId(null)
   }
 
