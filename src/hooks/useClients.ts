@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Client } from '../lib/types'
+import { useAuth } from './useAuth'
 
 export function useClients() {
+  const { user } = useAuth()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +30,8 @@ export function useClients() {
   }, [fetchClients])
 
   const createClient = async (client: Omit<Client, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
-    const { data, error } = await supabase.from('clients').insert(client).select().single()
+    if (!user) return { error: 'Não autenticado' }
+    const { data, error } = await supabase.from('clients').insert({ ...client, user_id: user.id }).select().single()
     if (error) return { error: error.message }
     await fetchClients()
     return { data, error: null }
