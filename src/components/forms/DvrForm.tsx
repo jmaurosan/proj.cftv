@@ -13,6 +13,7 @@ interface DvrFormProps {
 
 export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProps) {
   const [name, setName] = useState(initialData?.name ?? '')
+  const [brand, setBrand] = useState(initialData?.brand ?? '')
   const [ipAddress, setIpAddress] = useState(initialData?.ip_address ?? '')
   const [model, setModel] = useState(initialData?.model ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
@@ -30,6 +31,7 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
     setError(null)
     const result = await onSubmit({
       name,
+      brand: brand || null,
       ip_address: ipAddress,
       model: model || null,
       location,
@@ -55,7 +57,10 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
         <Input label="Endereço IP" value={ipAddress} onChange={(e) => setIpAddress(e.target.value)} required placeholder="192.168.1.100" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: Intelbras MHDX 3116" />
+        <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: Intelbras" />
+        <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: MHDX 3116" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Sala de TI" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

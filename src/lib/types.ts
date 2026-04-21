@@ -26,6 +26,7 @@ export interface Client {
 export interface Dvr {
   id: string
   name: string
+  brand: string | null
   ip_address: string
   model: string | null
   location: string
@@ -43,6 +44,7 @@ export interface Dvr {
 export interface Camera {
   id: string
   name: string
+  brand: string | null
   connection_type: string
   dvr_id: string | null
   channel_number: number | null
@@ -83,6 +85,7 @@ export interface PowerBalun {
 export interface Switch {
   id: string
   name: string
+  brand: string | null
   ip_address: string
   model: string | null
   location: string
@@ -159,3 +162,14 @@ export interface CableConnection {
 
 export type CableConnectionInsert = Omit<CableConnection, 'id' | 'created_at' | 'updated_at'>
 export type CableConnectionUpdate = Partial<Omit<CableConnection, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+
+export interface EquipmentLog {
+  id: string
+  equipment_type: 'camera' | 'dvr' | 'balun' | 'switch' | 'credential'
+  equipment_id: string | null
+  action: 'created' | 'updated' | 'deleted'
+  equipment_name: string | null
+  details: Record<string, unknown> | null
+  user_id: string
+  created_at: string
+}

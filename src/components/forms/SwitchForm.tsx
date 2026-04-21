@@ -13,6 +13,7 @@ interface SwitchFormProps {
 
 export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFormProps) {
   const [name, setName] = useState(initialData?.name ?? '')
+  const [brand, setBrand] = useState(initialData?.brand ?? '')
   const [ipAddress, setIpAddress] = useState(initialData?.ip_address ?? '')
   const [model, setModel] = useState(initialData?.model ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
@@ -31,6 +32,7 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
     setError(null)
     const result = await onSubmit({
       name,
+      brand: brand || null,
       ip_address: ipAddress,
       model: model || null,
       location,
@@ -57,7 +59,10 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
         <Input label="Endereço IP" value={ipAddress} onChange={(e) => setIpAddress(e.target.value)} required placeholder="192.168.1.1" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: TP-Link TL-SG1016" />
+        <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: TP-Link" />
+        <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: TL-SG1016" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -17,6 +17,7 @@ interface CameraFormProps {
 
 export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFormProps) {
   const [name, setName] = useState(initialData?.name ?? '')
+  const [brand, setBrand] = useState(initialData?.brand ?? '')
   const [connectionType, setConnectionType] = useState(initialData?.connection_type ?? 'analogica')
   const [dvrId, setDvrId] = useState(initialData?.dvr_id ?? '')
   const [channelNumber, setChannelNumber] = useState(initialData?.channel_number ?? 1)
@@ -49,8 +50,8 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
   useEffect(() => {
     supabase.from('dvrs').select('id, name').order('name').then(({ data }) => setDvrs((data as Dvr[]) || []))
-    supabase.from('power_baluns').select('id, name').order('name').then(({ data }) => setBaluns((data as PowerBalun[]) || []))
-    supabase.from('switches').select('id, name, is_poe').order('name').then(({ data }) => setSwitches((data as Switch[]) || []))
+    supabase.from('power_baluns').select('id, name, total_ports').order('name').then(({ data }) => setBaluns((data as PowerBalun[]) || []))
+    supabase.from('switches').select('id, name, is_poe, total_ports').order('name').then(({ data }) => setSwitches((data as Switch[]) || []))
   }, [])
 
   // Auto-mark PoE when selecting a PoE switch for IP cameras
@@ -67,6 +68,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
     setError(null)
     const result = await onSubmit({
       name,
+      brand: brand || null,
       connection_type: connectionType,
       dvr_id: !isIP && dvrId ? dvrId : null,
       channel_number: !isIP && channelNumber ? channelNumber : null,
@@ -147,6 +149,9 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: Intelbras, Hikvision" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Estacionamento" />
       </div>
 
@@ -161,7 +166,13 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
             placeholder="Selecione o DVR"
             required
           />
-          <Input label="Canal" type="number" value={channelNumber.toString()} onChange={(e) => setChannelNumber(Number(e.target.value))} min={1} required />
+          <Select
+            label="Canal"
+            value={channelNumber}
+            onChange={(e) => setChannelNumber(Number(e.target.value))}
+            options={Array.from({ length: 16 }, (_, i) => ({ value: i + 1, label: `Canal ${i + 1}` }))}
+            required
+          />
         </div>
       )}
 
@@ -200,7 +211,17 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
             options={baluns.map((b) => ({ value: b.id, label: b.name }))}
             placeholder="Nenhum"
           />
-          <Input label="Porta do Balun" type="number" value={balunPort} onChange={(e) => setBalunPort(e.target.value)} min={1} />
+          <Select
+            label="Porta do Balun"
+            value={balunPort}
+            onChange={(e) => setBalunPort(e.target.value)}
+            options={(() => {
+              const b = baluns.find((x) => x.id === balunId)
+              const max = b?.total_ports ?? 16
+              return Array.from({ length: max }, (_, i) => ({ value: i + 1, label: `Porta ${i + 1}` }))
+            })()}
+            placeholder="Selecione"
+          />
         </div>
       )}
 
@@ -217,7 +238,18 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
           placeholder="Nenhum"
           required={isIP}
         />
-        <Input label="Porta do Switch" type="number" value={switchPort} onChange={(e) => setSwitchPort(e.target.value)} min={1} required={isIP} />
+        <Select
+          label="Porta do Switch"
+          value={switchPort}
+          onChange={(e) => setSwitchPort(e.target.value)}
+          options={(() => {
+            const s = switches.find((x) => x.id === switchId)
+            const max = s?.total_ports ?? 24
+            return Array.from({ length: max }, (_, i) => ({ value: i + 1, label: `Porta ${i + 1}` }))
+          })()}
+          placeholder="Selecione"
+          required={isIP}
+        />
       </div>
 
       {/* PoE checkbox for IP cameras */}
