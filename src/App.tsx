@@ -14,6 +14,7 @@ import SwitchesPage from './pages/SwitchesPage'
 import CredentialsPage from './pages/CredentialsPage'
 import ViewerPage from './pages/ViewerPage'
 import ClientsPage from './pages/ClientsPage'
+import ChannelMappingPage from './pages/ChannelMappingPage'
 import LoadingSpinner from './components/ui/LoadingSpinner'
 
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
@@ -31,6 +32,7 @@ export default function App() {
                 <Route path="/clientes" element={<ClientsPage />} />
                 <Route path="/dvrs" element={<DvrsPage />} />
                 <Route path="/cameras" element={<CamerasPage />} />
+                <Route path="/mapeamento" element={<ChannelMappingPage />} />
                 <Route path="/baluns" element={<BalunsPage />} />
                 <Route path="/switches" element={<SwitchesPage />} />
                 <Route path="/credenciais" element={<CredentialsPage />} />

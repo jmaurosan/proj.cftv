@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   X,
   Building2,
+  ListOrdered,
 } from 'lucide-react'
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/clientes', label: 'Clientes', icon: Building2 },
   { to: '/dvrs', label: 'DVRs', icon: Server },
   { to: '/cameras', label: 'Câmeras', icon: Camera },
+  { to: '/mapeamento', label: 'Mapeamento', icon: ListOrdered },
   { to: '/baluns', label: 'Power Baluns', icon: Cable },
   { to: '/switches', label: 'Switches', icon: Network },
   { to: '/credenciais', label: 'Credenciais', icon: KeyRound },
