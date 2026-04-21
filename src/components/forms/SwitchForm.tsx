@@ -1,9 +1,21 @@
 import { useState, type FormEvent } from 'react'
 import type { Switch } from '../../lib/types'
 import { STATUS_OPTIONS, POE_STANDARDS } from '../../lib/constants'
+import { useSwitchPorts } from '../../hooks/useSwitchPorts'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import { Plug } from 'lucide-react'
+
+const DEVICE_TYPES = [
+  { value: '', label: 'Desconectado' },
+  { value: 'camera', label: 'Câmera' },
+  { value: 'dvr', label: 'DVR' },
+  { value: 'balun', label: 'Power Balun' },
+  { value: 'switch', label: 'Switch' },
+  { value: 'router', label: 'Roteador' },
+  { value: 'other', label: 'Outro' },
+]
 
 interface SwitchFormProps {
   initialData?: Switch | null
@@ -25,6 +37,9 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const switchId = initialData?.id ?? null
+  const { ports, savePort } = useSwitchPorts(switchId)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -105,6 +120,48 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
       </div>
 
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
+
+      {/* Seção de Portas do Switch */}
+      {switchId && (
+        <div className="border border-slate-700 rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
+            <Plug className="w-4 h-4" />
+            Conexões das Portas
+          </h3>
+          <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto">
+            {Array.from({ length: totalPorts }, (_, i) => i + 1).map((portNum) => {
+              const port = ports.find((p) => p.port_number === portNum)
+              const deviceType = port?.device_type ?? ''
+              const deviceName = port?.device_name ?? ''
+              return (
+                <div key={portNum} className="flex items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2 flex-wrap">
+                  <span className="text-xs font-mono text-slate-400 w-16 shrink-0">Porta {portNum}</span>
+                  <div className="flex-1 min-w-[120px]">
+                    <Select
+                      value={deviceType}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        savePort({ port_number: portNum, device_type: val || null, device_name: val ? deviceName : null })
+                      }}
+                      options={DEVICE_TYPES}
+                    />
+                  </div>
+                  {deviceType && (
+                    <div className="flex-1 min-w-[150px]">
+                      <Input
+                        placeholder="Nome do dispositivo"
+                        value={deviceName}
+                        onChange={(e) => savePort({ port_number: portNum, device_type: deviceType, device_name: e.target.value })}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
         <Button type="submit" disabled={loading}>

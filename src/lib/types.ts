@@ -173,3 +173,28 @@ export interface EquipmentLog {
   user_id: string
   created_at: string
 }
+
+export interface BalunPort {
+  id: string
+  balun_id: string
+  port_number: number
+  camera_id: string | null
+  notes: string | null
+  user_id: string
+  created_at: string
+  updated_at: string
+  cameras?: { name: string; dvr_id: string | null; channel_number: number | null; dvrs?: { name: string } | null }
+}
+
+export interface SwitchPort {
+  id: string
+  switch_id: string
+  port_number: number
+  device_type: string | null
+  device_id: string | null
+  device_name: string | null
+  notes: string | null
+  user_id: string
+  created_at: string
+  updated_at: string
+}
