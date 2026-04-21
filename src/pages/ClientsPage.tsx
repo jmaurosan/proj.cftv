@@ -21,6 +21,7 @@ interface ClientFormData {
   notes: string
 }
 
+// Sistema de gerenciamento de clientes/projetos
 export default function ClientsPage() {
   const { clients, loading, error, createClient, updateClient, deleteClient } = useClients()
   const [searchQuery, setSearchQuery] = useState('')
