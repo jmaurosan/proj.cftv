@@ -23,7 +23,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-primary">
+    <div className="min-h-screen bg-bg-primary overflow-x-hidden">
       <Sidebar
         collapsed={sidebarCollapsed}
         mobileOpen={mobileOpen}
@@ -32,13 +32,13 @@ export default function AppLayout() {
       />
       {/* Content area - margin adjusts based on sidebar state on desktop */}
       <div
-        className={`transition-all duration-300 min-h-screen
+        className={`transition-all duration-300 min-h-screen flex flex-col
           ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-60'}
           ml-0
         `}
       >
         <Topbar onMenuClick={() => setMobileOpen(!mobileOpen)} />
-        <main className="p-4 sm:p-6">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 w-full">
           <Outlet />
         </main>
       </div>

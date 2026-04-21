@@ -99,84 +99,85 @@ export default function Dashboard() {
   const integrityGlow = integrity >= 80 ? 'shadow-success/20' : integrity >= 50 ? 'shadow-warning/20' : 'shadow-danger/20'
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h2 className="text-xl font-bold text-text-primary tracking-tight">Dashboard CFTV</h2>
-          <p className="text-text-muted text-sm mt-0.5 flex items-center gap-2">
-            <Activity className="w-3.5 h-3.5" />
-            Integridade do sistema: <span className={`font-semibold ${integrityColor}`}>{integrity}%</span>
+          <h2 className="text-lg sm:text-xl font-bold text-text-primary tracking-tight">Dashboard CFTV</h2>
+          <p className="text-text-muted text-xs sm:text-sm mt-0.5 flex items-center gap-2">
+            <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            Integridade: <span className={`font-semibold ${integrityColor}`}>{integrity}%</span>
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-text-muted">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bg-secondary border border-border-light">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-bg-secondary border border-border-light">
             <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-            SISTEMA ATIVO
+            <span className="hidden sm:inline">SISTEMA ATIVO</span>
+            <span className="sm:hidden">ATIVO</span>
           </span>
         </div>
       </div>
 
       {/* ============ ROW 1: Hero Stats ============ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Cameras */}
-        <div className="relative bg-bg-secondary border border-border-light rounded-xl p-5 overflow-hidden group hover:border-cyan-500/30 transition-all">
+        <div className="relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden group hover:border-cyan-500/30 transition-all">
           <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-cyan-500 to-cyan-500/0" />
           <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[11px] text-text-muted uppercase tracking-widest font-medium">Total de Cameras</p>
-              <p className="text-4xl font-bold text-text-primary mt-2 font-mono tracking-tight">{camStats.total}</p>
-              <p className="text-xs text-text-muted mt-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium truncate">Cameras</p>
+              <p className="text-2xl sm:text-4xl font-bold text-text-primary mt-1 sm:mt-2 font-mono tracking-tight">{camStats.total}</p>
+              <p className="text-xs text-text-muted mt-1 sm:mt-2">
                 <span className="text-cyan-400 font-medium">{camStats.ativo}</span> ativas
               </p>
             </div>
-            <div className="p-2.5 rounded-lg bg-cyan-500/10 text-cyan-400">
-              <Camera className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-lg bg-cyan-500/10 text-cyan-400 shrink-0">
+              <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="flex gap-3 mt-3 pt-3 border-t border-border-light/50">
-            <span className="text-[10px] text-text-muted">{camAnalog} Analogicas</span>
+          <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50">
+            <span className="text-[10px] text-text-muted">{camAnalog} Analog</span>
             <span className="text-[10px] text-text-muted">|</span>
             <span className="text-[10px] text-cyan-400">{camIP} IP</span>
           </div>
         </div>
 
         {/* DVRs */}
-        <div className="relative bg-bg-secondary border border-border-light rounded-xl p-5 overflow-hidden group hover:border-indigo-500/30 transition-all">
+        <div className="relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden group hover:border-indigo-500/30 transition-all">
           <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-indigo-500 to-indigo-500/0" />
           <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[11px] text-text-muted uppercase tracking-widest font-medium">DVRs</p>
-              <p className="text-4xl font-bold text-text-primary mt-2 font-mono tracking-tight">{dvrStats.total}</p>
-              <p className="text-xs text-text-muted mt-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium truncate">DVRs</p>
+              <p className="text-2xl sm:text-4xl font-bold text-text-primary mt-1 sm:mt-2 font-mono tracking-tight">{dvrStats.total}</p>
+              <p className="text-xs text-text-muted mt-1 sm:mt-2">
                 <span className="text-indigo-400 font-medium">{dvrStats.ativo}</span> ativos
               </p>
             </div>
-            <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400">
-              <Server className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
+              <Server className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="flex gap-3 mt-3 pt-3 border-t border-border-light/50">
+          <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50">
             <span className="text-[10px] text-text-muted">{totalChannels} Canais</span>
           </div>
         </div>
 
         {/* Switches */}
-        <div className="relative bg-bg-secondary border border-border-light rounded-xl p-5 overflow-hidden group hover:border-emerald-500/30 transition-all">
+        <div className="relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden group hover:border-emerald-500/30 transition-all">
           <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-emerald-500 to-emerald-500/0" />
           <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[11px] text-text-muted uppercase tracking-widest font-medium">Switches</p>
-              <p className="text-4xl font-bold text-text-primary mt-2 font-mono tracking-tight">{swStats.total}</p>
-              <p className="text-xs text-text-muted mt-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium truncate">Switches</p>
+              <p className="text-2xl sm:text-4xl font-bold text-text-primary mt-1 sm:mt-2 font-mono tracking-tight">{swStats.total}</p>
+              <p className="text-xs text-text-muted mt-1 sm:mt-2">
                 <span className="text-emerald-400 font-medium">{swStats.ativo}</span> ativos
               </p>
             </div>
-            <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-              <Network className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
+              <Network className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="flex gap-3 mt-3 pt-3 border-t border-border-light/50">
+          <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50">
             <span className="text-[10px] text-emerald-400">{poeSwitches.length} PoE</span>
             <span className="text-[10px] text-text-muted">|</span>
             <span className="text-[10px] text-text-muted">{totalPorts} Portas</span>
@@ -184,24 +185,23 @@ export default function Dashboard() {
         </div>
 
         {/* System Integrity */}
-        <div className={`relative bg-bg-secondary border border-border-light rounded-xl p-5 overflow-hidden hover:shadow-lg ${integrityGlow} transition-all`}>
+        <div className={`relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden hover:shadow-lg ${integrityGlow} transition-all`}>
           <div className={`absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r ${integrity >= 80 ? 'from-success to-success/0' : integrity >= 50 ? 'from-warning to-warning/0' : 'from-danger to-danger/0'}`} />
           <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[11px] text-text-muted uppercase tracking-widest font-medium">Integridade</p>
-              <p className={`text-4xl font-bold mt-2 font-mono tracking-tight ${integrityColor}`}>
-                {integrity}<span className="text-lg ml-0.5">%</span>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium truncate">Integridade</p>
+              <p className={`text-2xl sm:text-4xl font-bold mt-1 sm:mt-2 font-mono tracking-tight ${integrityColor}`}>
+                {integrity}<span className="text-base sm:text-lg ml-0.5">%</span>
               </p>
-              <p className="text-xs text-text-muted mt-2">
-                <span className={`font-medium ${integrityColor}`}>{activeDevices}</span> / {totalDevices} dispositivos
+              <p className="text-xs text-text-muted mt-1 sm:mt-2">
+                <span className={`font-medium ${integrityColor}`}>{activeDevices}</span> / {totalDevices} disp.
               </p>
             </div>
-            <div className={`p-2.5 rounded-lg ${integrity >= 80 ? 'bg-success/10 text-success' : integrity >= 50 ? 'bg-warning/10 text-warning' : 'bg-danger/10 text-danger'}`}>
-              <Shield className="w-5 h-5" />
+            <div className={`p-2 sm:p-2.5 rounded-lg ${integrity >= 80 ? 'bg-success/10 text-success' : integrity >= 50 ? 'bg-warning/10 text-warning' : 'bg-danger/10 text-danger'} shrink-0`}>
+              <Shield className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          {/* Mini status bar */}
-          <div className="mt-3 pt-3 border-t border-border-light/50">
+          <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50">
             <div className="w-full h-1.5 rounded-full bg-bg-tertiary/50 overflow-hidden flex">
               {totalDevices > 0 && (
                 <>
@@ -216,21 +216,21 @@ export default function Dashboard() {
       </div>
 
       {/* ============ ROW 2: Device Health + Infrastructure ============ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {/* Device Health - Donut */}
-        <div className="bg-bg-secondary border border-border-light rounded-xl p-5">
-          <h3 className="text-[11px] text-text-muted uppercase tracking-widest font-medium mb-5">Saude dos Dispositivos</h3>
-          <div className="flex items-center gap-8">
-            <DonutChart segments={healthSegments} size={150} thickness={18} />
-            <div className="flex-1 space-y-3">
+        <div className="bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5">
+          <h3 className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium mb-3 sm:mb-5">Saude dos Dispositivos</h3>
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8">
+            <DonutChart segments={healthSegments} size={120} thickness={16} />
+            <div className="flex-1 w-full space-y-2 sm:space-y-3">
               {healthSegments.map((seg) => (
                 <div key={seg.label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: seg.color, boxShadow: `0 0 6px ${seg.color}60` }} />
-                    <span className="text-sm text-text-secondary">{seg.label}</span>
+                  <div className="flex items-center gap-2 sm:gap-2.5">
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color, boxShadow: `0 0 6px ${seg.color}60` }} />
+                    <span className="text-xs sm:text-sm text-text-secondary">{seg.label}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-text-primary font-mono">{seg.value}</span>
+                    <span className="text-xs sm:text-sm font-bold text-text-primary font-mono">{seg.value}</span>
                     <span className="text-[10px] text-text-muted">
                       {totalDevices > 0 ? `${Math.round((seg.value / totalDevices) * 100)}%` : '0%'}
                     </span>
@@ -242,9 +242,9 @@ export default function Dashboard() {
         </div>
 
         {/* Infrastructure Breakdown */}
-        <div className="bg-bg-secondary border border-border-light rounded-xl p-5">
-          <h3 className="text-[11px] text-text-muted uppercase tracking-widest font-medium mb-5">Infraestrutura</h3>
-          <div className="space-y-4">
+        <div className="bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5">
+          <h3 className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium mb-3 sm:mb-5">Infraestrutura</h3>
+          <div className="space-y-3 sm:space-y-4">
             {[
               { label: 'Cameras', total: camStats.total, active: camStats.ativo, color: 'bg-cyan-500', icon: Camera },
               { label: 'DVRs', total: dvrStats.total, active: dvrStats.ativo, color: 'bg-indigo-500', icon: Server },
@@ -252,17 +252,17 @@ export default function Dashboard() {
               { label: 'Power Baluns', total: data.baluns.length, active: data.baluns.filter(b => b.status === 'ativo').length, color: 'bg-purple-500', icon: Cable },
             ].map((item) => (
               <div key={item.label}>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1 sm:mb-1.5">
                   <div className="flex items-center gap-2">
-                    <item.icon className="w-3.5 h-3.5 text-text-muted" />
-                    <span className="text-sm text-text-secondary">{item.label}</span>
+                    <item.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-text-muted shrink-0" />
+                    <span className="text-xs sm:text-sm text-text-secondary">{item.label}</span>
                   </div>
-                  <span className="text-sm font-mono text-text-primary">
+                  <span className="text-xs sm:text-sm font-mono text-text-primary">
                     <span className="font-bold">{item.active}</span>
                     <span className="text-text-muted"> / {item.total}</span>
                   </span>
                 </div>
-                <div className="w-full h-2 rounded-full bg-bg-tertiary/50 overflow-hidden">
+                <div className="w-full h-1.5 sm:h-2 rounded-full bg-bg-tertiary/50 overflow-hidden">
                   <div
                     className={`h-full rounded-full ${item.color} transition-all duration-700`}
                     style={{ width: item.total > 0 ? `${(item.active / item.total) * 100}%` : '0%' }}
@@ -275,15 +275,15 @@ export default function Dashboard() {
       </div>
 
       {/* ============ ROW 3: Inventory + Connection Metrics ============ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {/* Quick Inventory */}
-        <div className="bg-bg-secondary border border-border-light rounded-xl p-5">
-          <h3 className="text-[11px] text-text-muted uppercase tracking-widest font-medium mb-4">Inventario Rapido</h3>
+        <div className="bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden">
+          <h3 className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium mb-3 sm:mb-4">Inventario Rapido</h3>
           {recentDevices.length === 0 ? (
             <p className="text-sm text-text-muted text-center py-8">Nenhum dispositivo cadastrado</p>
           ) : (
-            <div className="space-y-1">
-              <div className="grid grid-cols-[auto_1fr_80px_60px] gap-3 px-3 py-1.5 text-[10px] text-text-muted uppercase tracking-wider">
+            <div className="space-y-1 min-w-0">
+              <div className="hidden sm:grid grid-cols-[auto_1fr_80px_60px] gap-3 px-3 py-1.5 text-[10px] text-text-muted uppercase tracking-wider">
                 <span />
                 <span>Dispositivo</span>
                 <span>Tipo</span>
@@ -292,22 +292,22 @@ export default function Dashboard() {
               {recentDevices.map((device, i) => (
                 <div
                   key={i}
-                  className="grid grid-cols-[auto_1fr_80px_60px] gap-3 items-center px-3 py-2 rounded-lg hover:bg-bg-tertiary/30 transition-colors"
+                  className="flex sm:grid sm:grid-cols-[auto_1fr_80px_60px] gap-2 sm:gap-3 items-center px-2 sm:px-3 py-2 rounded-lg hover:bg-bg-tertiary/30 transition-colors"
                 >
                   <CircleDot
-                    className={`w-3 h-3 ${
+                    className={`w-3 h-3 shrink-0 ${
                       device.status === 'ativo' ? 'text-success' : device.status === 'manutencao' ? 'text-warning' : 'text-danger'
                     }`}
                   />
-                  <div className="min-w-0">
-                    <p className="text-sm text-text-primary truncate">{device.name}</p>
-                    <p className="text-[10px] text-text-muted truncate">{device.detail}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm text-text-primary truncate">{device.name}</p>
+                    <p className="text-[10px] text-text-muted truncate hidden sm:block">{device.detail}</p>
                   </div>
-                  <span className="text-xs text-text-muted">{device.type}</span>
-                  <span className={`text-[10px] text-right font-medium uppercase ${
+                  <span className="text-xs text-text-muted hidden sm:block">{device.type}</span>
+                  <span className={`text-[10px] sm:text-[10px] text-right font-medium uppercase shrink-0 ${
                     device.status === 'ativo' ? 'text-success' : device.status === 'manutencao' ? 'text-warning' : 'text-danger'
                   }`}>
-                    {device.status === 'ativo' ? 'Online' : device.status === 'manutencao' ? 'Manut.' : 'Offline'}
+                    {device.status === 'ativo' ? 'On' : device.status === 'manutencao' ? 'Manut.' : 'Off'}
                   </span>
                 </div>
               ))}
@@ -316,23 +316,22 @@ export default function Dashboard() {
         </div>
 
         {/* Connection Metrics */}
-        <div className="bg-bg-secondary border border-border-light rounded-xl p-5">
-          <h3 className="text-[11px] text-text-muted uppercase tracking-widest font-medium mb-4">Metricas de Conexao</h3>
-          <div className="space-y-4">
-            {/* Metric items */}
+        <div className="bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5">
+          <h3 className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium mb-3 sm:mb-4">Metricas de Conexao</h3>
+          <div className="space-y-3 sm:space-y-4">
             {[
               { icon: MonitorCheck, label: 'Cameras Analogicas', value: String(camAnalog), color: 'text-slate-400' },
               { icon: Wifi, label: 'Cameras IP', value: String(camIP), color: 'text-cyan-400' },
               { icon: Zap, label: 'Cameras PoE', value: String(camPoe), color: 'text-amber-400' },
               { icon: Network, label: 'Switches PoE', value: `${poeSwitches.length} (${totalPoeBudget}W)`, color: 'text-emerald-400' },
-              { icon: Cable, label: 'Documentacao Cabeamento', value: `${cableCoverage}%`, color: 'text-purple-400' },
+              { icon: Cable, label: 'Doc. Cabeamento', value: `${cableCoverage}%`, color: 'text-purple-400' },
             ].map((metric) => (
-              <div key={metric.label} className="flex items-center justify-between py-2 border-b border-border-light/30 last:border-0">
-                <div className="flex items-center gap-3">
-                  <metric.icon className={`w-4 h-4 ${metric.color}`} />
-                  <span className="text-sm text-text-secondary">{metric.label}</span>
+              <div key={metric.label} className="flex items-center justify-between py-1.5 sm:py-2 border-b border-border-light/30 last:border-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <metric.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${metric.color} shrink-0`} />
+                  <span className="text-xs sm:text-sm text-text-secondary truncate">{metric.label}</span>
                 </div>
-                <span className={`text-sm font-bold font-mono ${metric.color}`}>{metric.value}</span>
+                <span className={`text-xs sm:text-sm font-bold font-mono ${metric.color} shrink-0 ml-2`}>{metric.value}</span>
               </div>
             ))}
           </div>

@@ -8,9 +8,9 @@ import CameraPlayer from '../components/ui/CameraPlayer'
 type GridLayout = '2x2' | '3x3' | '4x4'
 
 const gridCols: Record<GridLayout, string> = {
-  '2x2': 'grid-cols-2',
-  '3x3': 'grid-cols-3',
-  '4x4': 'grid-cols-4',
+  '2x2': 'grid-cols-1 sm:grid-cols-2',
+  '3x3': 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+  '4x4': 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4',
 }
 
 const DEFAULT_GO2RTC_URL = import.meta.env.VITE_GO2RTC_URL || 'http://localhost:1984'
@@ -43,11 +43,11 @@ export default function ViewerPage() {
   const cells = Array.from({ length: cellCount }, (_, i) => cameras[i] ?? null)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-text-primary">Visualização</h2>
-          <p className="text-text-muted text-sm mt-1">Monitoramento de câmeras em tempo real</p>
+          <h2 className="text-lg sm:text-xl font-bold text-text-primary">Visualização</h2>
+          <p className="text-text-muted text-xs sm:text-sm mt-0.5">Monitoramento de câmeras em tempo real</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -113,7 +113,7 @@ export default function ViewerPage() {
         </div>
       )}
 
-      <div className={`grid ${gridCols[layout]} gap-3`}>
+      <div className={`grid ${gridCols[layout]} gap-2 sm:gap-3`}>
         {cells.map((camera, index) => (
           <div
             key={camera?.id ?? `empty-${index}`}
@@ -121,14 +121,14 @@ export default function ViewerPage() {
             className="relative bg-bg-secondary border border-border-light rounded-xl aspect-video flex flex-col items-center justify-center overflow-hidden group"
           >
             {camera && (
-              <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
-                <span className="text-xs font-medium text-text-primary bg-black/50 px-2 py-0.5 rounded">
+              <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-10">
+                <span className="text-[10px] sm:text-xs font-medium text-text-primary bg-black/50 px-1.5 sm:px-2 py-0.5 rounded truncate max-w-[60%]">
                   {camera.name}
                 </span>
                 {camera.rtsp_url && (
-                  <span className="flex items-center gap-1.5 text-xs bg-black/50 px-2 py-0.5 rounded">
-                    <span className="w-2 h-2 rounded-full bg-danger animate-pulse" />
-                    <span className="text-danger font-medium">AO VIVO</span>
+                  <span className="flex items-center gap-1 text-[10px] sm:text-xs bg-black/50 px-1.5 sm:px-2 py-0.5 rounded">
+                    <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse" />
+                    <span className="text-danger font-medium hidden sm:inline">AO VIVO</span>
                   </span>
                 )}
               </div>
@@ -141,19 +141,19 @@ export default function ViewerPage() {
                 go2rtcUrl={go2rtcUrl}
               />
             ) : (
-              <div className="flex flex-col items-center gap-3 text-text-muted">
-                <Monitor className="w-10 h-10 opacity-30" />
-                <span className="text-xs text-center px-4">
+              <div className="flex flex-col items-center gap-2 sm:gap-3 text-text-muted">
+                <Monitor className="w-6 h-6 sm:w-10 sm:h-10 opacity-30" />
+                <span className="text-[10px] sm:text-xs text-center px-2 sm:px-4">
                   {camera
-                    ? 'Sem URL RTSP configurada'
-                    : 'Sem câmera atribuída'}
+                    ? 'Sem URL RTSP'
+                    : 'Sem câmera'}
                 </span>
               </div>
             )}
 
             {camera?.location && (
-              <div className="absolute bottom-3 left-3 z-10">
-                <span className="text-xs text-text-muted bg-black/50 px-2 py-0.5 rounded">
+              <div className="absolute bottom-2 left-2 z-10">
+                <span className="text-[10px] text-text-muted bg-black/50 px-1.5 py-0.5 rounded truncate max-w-[120px] sm:max-w-[200px] inline-block">
                   {camera.location}
                 </span>
               </div>
