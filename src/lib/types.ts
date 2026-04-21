@@ -1,12 +1,21 @@
 export interface Client {
   id: string
   name: string
+  person_type: 'PJ' | 'PF'
+  cnpj: string | null
+  cpf: string | null
   contact_name: string | null
   contact_phone: string | null
   contact_email: string | null
-  address: string | null
+  website: string | null
+  zipcode: string | null
+  street: string | null
+  number: string | null
+  complement: string | null
+  neighborhood: string | null
   city: string | null
   state: string | null
+  address: string | null
   notes: string | null
   is_active: boolean
   user_id: string
