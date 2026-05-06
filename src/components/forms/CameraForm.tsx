@@ -4,10 +4,11 @@ import { STATUS_OPTIONS, CAMERA_TYPES, RESOLUTION_OPTIONS, CONNECTION_TYPES } fr
 import { supabase } from '../../lib/supabase'
 import { uploadQRCodeImage, deleteQRCodeImage } from '../../services/storageService'
 import { useAuth } from '../../hooks/useAuth'
+import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
-import { CameraIcon, X, QrCode } from 'lucide-react'
+import { CameraIcon, X, QrCode, Package } from 'lucide-react'
 
 interface CameraFormProps {
   initialData?: Camera | null
@@ -47,6 +48,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [switches, setSwitches] = useState<Switch[]>([])
 
   const isIP = connectionType === 'ip'
+  const { models: cameraModels, saveModel } = useEquipmentModels('camera')
 
   useEffect(() => {
     supabase.from('dvrs').select('id, name').order('name').then(({ data }) => setDvrs((data as Dvr[]) || []))
@@ -61,6 +63,14 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       if (sw?.is_poe) setPoePowered(true)
     }
   }, [switchId, isIP, switches])
+
+  const handleModelSelect = (modelId: string) => {
+    const m = cameraModels.find((x) => x.id === modelId)
+    if (!m) return
+    if (m.brand) setBrand(m.brand)
+    if (m.model) setName(m.model)
+    if (m.resolution) setResolution(m.resolution)
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -87,7 +97,12 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       qr_code_url: qrCodeUrl || null,
       notes: notes || null,
     })
-    if (result.error) setError(result.error)
+    if (result.error) {
+      setError(result.error)
+    } else if (brand) {
+      // Salva no catálogo automaticamente
+      await saveModel({ type: 'camera', brand, model: name, resolution, channel_count: null, poe_standard: null, max_ports: null, is_poe: false, notes: null })
+    }
     setLoading(false)
   }
 
@@ -146,6 +161,24 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
           </button>
         ))}
       </div>
+
+      {/* Modelo do Catálogo */}
+      {cameraModels.length > 0 && (
+        <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3">
+          <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5 mb-2">
+            <Package className="w-3.5 h-3.5" />
+            Modelo do Catálogo (opcional)
+          </label>
+          <Select
+            value=""
+            onChange={(e) => handleModelSelect(e.target.value)}
+            options={[
+              { value: '', label: 'Selecione um modelo para preencher automaticamente' },
+              ...cameraModels.map((m) => ({ value: m.id, label: `${m.brand} ${m.model} ${m.resolution ? `(${m.resolution})` : ''}` })),
+            ]}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />

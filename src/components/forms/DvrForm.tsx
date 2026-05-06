@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import type { Dvr } from '../../lib/types'
 import { STATUS_OPTIONS, CHANNEL_OPTIONS } from '../../lib/constants'
+import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import { Package } from 'lucide-react'
 
 interface DvrFormProps {
   initialData?: Dvr | null
@@ -25,6 +27,16 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const { models: dvrModels, saveModel } = useEquipmentModels('dvr')
+
+  const handleModelSelect = (modelId: string) => {
+    const m = dvrModels.find((x) => x.id === modelId)
+    if (!m) return
+    if (m.brand) setBrand(m.brand)
+    if (m.model) { setModel(m.model); setName(m.model); }
+    if (m.channel_count) setTotalChannels(m.channel_count)
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -41,7 +53,11 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
       password: password || null,
       notes: notes || null,
     })
-    if (result.error) setError(result.error)
+    if (result.error) {
+      setError(result.error)
+    } else if (brand) {
+      await saveModel({ type: 'dvr', brand, model: name || model, channel_count: totalChannels, resolution: null, poe_standard: null, max_ports: null, is_poe: false, notes: null })
+    }
     setLoading(false)
   }
 
@@ -52,6 +68,24 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
           {error}
         </div>
       )}
+      {/* Modelo do Catálogo */}
+      {dvrModels.length > 0 && (
+        <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3">
+          <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5 mb-2">
+            <Package className="w-3.5 h-3.5" />
+            Modelo do Catálogo (opcional)
+          </label>
+          <Select
+            value=""
+            onChange={(e) => handleModelSelect(e.target.value)}
+            options={[
+              { value: '', label: 'Selecione um modelo para preencher automaticamente' },
+              ...dvrModels.map((m) => ({ value: m.id, label: `${m.brand} ${m.model} ${m.channel_count ? `(${m.channel_count} canais)` : ''}` })),
+            ]}
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
         <Input label="Endereço IP" value={ipAddress} onChange={(e) => setIpAddress(e.target.value)} required placeholder="192.168.1.100" />

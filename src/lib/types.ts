@@ -198,3 +198,19 @@ export interface SwitchPort {
   created_at: string
   updated_at: string
 }
+
+export interface EquipmentModel {
+  id: string
+  type: 'camera' | 'dvr' | 'switch' | 'balun' | 'router' | 'other'
+  brand: string
+  model: string
+  resolution: string | null
+  channel_count: number | null
+  poe_standard: string | null
+  max_ports: number | null
+  is_poe: boolean
+  notes: string | null
+  user_id: string
+  created_at: string
+  updated_at: string
+}

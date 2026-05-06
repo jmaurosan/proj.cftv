@@ -21,10 +21,10 @@ create index if not exists idx_balun_ports_camera on balun_ports(camera_id);
 
 alter table balun_ports enable row level security;
 
-create policy "balun_ports_select" on balun_ports for select using (auth.uid() = user_id);
-create policy "balun_ports_insert" on balun_ports for insert with check (auth.uid() = user_id);
-create policy "balun_ports_update" on balun_ports for update using (auth.uid() = user_id);
-create policy "balun_ports_delete" on balun_ports for delete using (auth.uid() = user_id);
+create policy if not exists "balun_ports_select" on balun_ports for select using (auth.uid() = user_id);
+create policy if not exists "balun_ports_insert" on balun_ports for insert with check (auth.uid() = user_id);
+create policy if not exists "balun_ports_update" on balun_ports for update using (auth.uid() = user_id);
+create policy if not exists "balun_ports_delete" on balun_ports for delete using (auth.uid() = user_id);
 
 create trigger balun_ports_updated_at
   before update on balun_ports
@@ -50,10 +50,10 @@ create index if not exists idx_switch_ports_device on switch_ports(device_type, 
 
 alter table switch_ports enable row level security;
 
-create policy "switch_ports_select" on switch_ports for select using (auth.uid() = user_id);
-create policy "switch_ports_insert" on switch_ports for insert with check (auth.uid() = user_id);
-create policy "switch_ports_update" on switch_ports for update using (auth.uid() = user_id);
-create policy "switch_ports_delete" on switch_ports for delete using (auth.uid() = user_id);
+create policy if not exists "switch_ports_select" on switch_ports for select using (auth.uid() = user_id);
+create policy if not exists "switch_ports_insert" on switch_ports for insert with check (auth.uid() = user_id);
+create policy if not exists "switch_ports_update" on switch_ports for update using (auth.uid() = user_id);
+create policy if not exists "switch_ports_delete" on switch_ports for delete using (auth.uid() = user_id);
 
 create trigger switch_ports_updated_at
   before update on switch_ports
