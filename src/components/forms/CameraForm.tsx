@@ -192,19 +192,17 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       {!isIP && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
-            label="DVR"
+            label="DVR (opcional)"
             value={dvrId}
             onChange={(e) => setDvrId(e.target.value)}
             options={dvrs.map((d) => ({ value: d.id, label: d.name }))}
             placeholder="Selecione o DVR"
-            required
           />
           <Select
             label="Canal"
             value={channelNumber}
             onChange={(e) => setChannelNumber(Number(e.target.value))}
             options={Array.from({ length: 16 }, (_, i) => ({ value: i + 1, label: `Canal ${i + 1}` }))}
-            required
           />
         </div>
       )}
@@ -213,10 +211,9 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       {isIP && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
-            label="Endereço IP"
+            label="Endereço IP (opcional)"
             value={ipAddress}
             onChange={(e) => setIpAddress(e.target.value)}
-            required
             placeholder="192.168.1.100"
           />
           <Input
@@ -258,32 +255,32 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         </div>
       )}
 
-      {/* Switch - available for both, but especially important for IP */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Select
-          label={isIP ? 'Switch PoE' : 'Switch (opcional)'}
-          value={switchId}
-          onChange={(e) => setSwitchId(e.target.value)}
-          options={(isIP ? poeSwitches.length > 0 ? poeSwitches : switches : switches).map((s) => ({
-            value: s.id,
-            label: `${s.name}${s.is_poe ? ' ⚡' : ''}`,
-          }))}
-          placeholder="Nenhum"
-          required={isIP}
-        />
-        <Select
-          label="Porta do Switch"
-          value={switchPort}
-          onChange={(e) => setSwitchPort(e.target.value)}
-          options={(() => {
-            const s = switches.find((x) => x.id === switchId)
-            const max = s?.total_ports ?? 24
-            return Array.from({ length: max }, (_, i) => ({ value: i + 1, label: `Porta ${i + 1}` }))
-          })()}
-          placeholder="Selecione"
-          required={isIP}
-        />
-      </div>
+      {/* Switch - apenas para câmeras IP */}
+      {isIP && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Select
+            label="Switch PoE (opcional)"
+            value={switchId}
+            onChange={(e) => setSwitchId(e.target.value)}
+            options={(poeSwitches.length > 0 ? poeSwitches : switches).map((s) => ({
+              value: s.id,
+              label: `${s.name}${s.is_poe ? ' ⚡' : ''}`,
+            }))}
+            placeholder="Nenhum"
+          />
+          <Select
+            label="Porta do Switch"
+            value={switchPort}
+            onChange={(e) => setSwitchPort(e.target.value)}
+            options={(() => {
+              const s = switches.find((x) => x.id === switchId)
+              const max = s?.total_ports ?? 24
+              return Array.from({ length: max }, (_, i) => ({ value: i + 1, label: `Porta ${i + 1}` }))
+            })()}
+            placeholder="Selecione"
+          />
+        </div>
+      )}
 
       {/* PoE checkbox for IP cameras */}
       {isIP && (
