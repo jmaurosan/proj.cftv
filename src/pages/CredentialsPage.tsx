@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Plus, Eye, EyeOff } from 'lucide-react'
 import { useCredentials } from '../hooks/useCredentials'
 import type { Credential } from '../lib/types'
@@ -33,17 +33,40 @@ export default function CredentialsPage() {
   const [editing, setEditing] = useState<Credential | null>(null)
   const [deleting, setDeleting] = useState<Credential | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [sortKey, setSortKey] = useState<string>('label')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      const aData = a as unknown as Record<string, unknown>
+      const bData = b as unknown as Record<string, unknown>
+      const aVal = aData[sortKey]?.toString() || ''
+      const bVal = bData[sortKey]?.toString() || ''
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [data, sortKey, sortDir])
 
   const deviceTypeLabel = (val: string) => DEVICE_TYPES.find((d) => d.value === val)?.label ?? val
 
   const columns: Column<Credential>[] = [
     { key: 'label', label: 'Rótulo', sortable: true },
-    { key: 'device_type', label: 'Tipo', render: (c) => deviceTypeLabel(c.device_type) },
-    { key: 'username', label: 'Usuário' },
+    { key: 'device_type', label: 'Tipo', sortable: true, render: (c) => deviceTypeLabel(c.device_type) },
+    { key: 'username', label: 'Usuário', sortable: true },
     { key: 'password', label: 'Senha', render: (c) => <PasswordCell password={c.password} /> },
-    { key: 'ip_address', label: 'IP', render: (c) => c.ip_address ?? '-' },
-    { key: 'port', label: 'Porta', render: (c) => c.port?.toString() ?? '-' },
-    { key: 'protocol', label: 'Protocolo', render: (c) => c.protocol?.toUpperCase() ?? '-' },
+    { key: 'ip_address', label: 'IP', sortable: true, render: (c) => c.ip_address ?? '-' },
+    { key: 'port', label: 'Porta', sortable: true, render: (c) => c.port?.toString() ?? '-' },
+    { key: 'protocol', label: 'Protocolo', sortable: true, render: (c) => c.protocol?.toUpperCase() ?? '-' },
   ]
 
   const handleSubmit = async (formData: Record<string, unknown>) => {
@@ -91,7 +114,10 @@ export default function CredentialsPage() {
       <div className="bg-bg-secondary border border-border-light rounded-xl overflow-hidden">
         <DataTable
           columns={columns}
-          data={data}
+          data={sortedData}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
           onEdit={(item) => { setEditing(item); setModalOpen(true) }}
           onDelete={(item) => setDeleting(item)}
         />

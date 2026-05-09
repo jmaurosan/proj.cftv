@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { useBaluns } from '../hooks/useBaluns'
 import type { PowerBalun } from '../lib/types'
@@ -18,12 +18,35 @@ export default function BalunsPage() {
   const [editing, setEditing] = useState<PowerBalun | null>(null)
   const [deleting, setDeleting] = useState<PowerBalun | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [sortKey, setSortKey] = useState<string>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      const aData = a as unknown as Record<string, unknown>
+      const bData = b as unknown as Record<string, unknown>
+      const aVal = aData[sortKey]?.toString() || ''
+      const bVal = bData[sortKey]?.toString() || ''
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [data, sortKey, sortDir])
 
   const columns: Column<PowerBalun>[] = [
     { key: 'name', label: 'Nome', sortable: true },
-    { key: 'location', label: 'Localização' },
-    { key: 'total_ports', label: 'Portas', render: (b) => `${b.total_ports} portas` },
-    { key: 'status', label: 'Status', render: (b) => <Badge status={b.status} /> },
+    { key: 'location', label: 'Localização', sortable: true },
+    { key: 'total_ports', label: 'Portas', sortable: true, render: (b) => `${b.total_ports} portas` },
+    { key: 'status', label: 'Status', sortable: true, render: (b) => <Badge status={b.status} /> },
   ]
 
   const handleSubmit = async (formData: Record<string, unknown>) => {
@@ -71,7 +94,10 @@ export default function BalunsPage() {
       <div className="bg-bg-secondary border border-border-light rounded-xl overflow-hidden">
         <DataTable
           columns={columns}
-          data={data}
+          data={sortedData}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
           onEdit={(item) => { setEditing(item); setModalOpen(true) }}
           onDelete={(item) => setDeleting(item)}
         />

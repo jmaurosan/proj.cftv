@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { useSwitches } from '../hooks/useSwitches'
 import type { Switch } from '../lib/types'
@@ -18,13 +18,36 @@ export default function SwitchesPage() {
   const [editing, setEditing] = useState<Switch | null>(null)
   const [deleting, setDeleting] = useState<Switch | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [sortKey, setSortKey] = useState<string>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      const aData = a as unknown as Record<string, unknown>
+      const bData = b as unknown as Record<string, unknown>
+      const aVal = aData[sortKey]?.toString() || ''
+      const bVal = bData[sortKey]?.toString() || ''
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [data, sortKey, sortDir])
 
   const columns: Column<Switch>[] = [
     { key: 'name', label: 'Nome', sortable: true },
-    { key: 'ip_address', label: 'IP' },
-    { key: 'model', label: 'Modelo' },
-    { key: 'location', label: 'Localização' },
-    { key: 'total_ports', label: 'Portas', render: (s) => `${s.total_ports} portas` },
+    { key: 'ip_address', label: 'IP', sortable: true },
+    { key: 'model', label: 'Modelo', sortable: true },
+    { key: 'location', label: 'Localização', sortable: true },
+    { key: 'total_ports', label: 'Portas', sortable: true, render: (s) => `${s.total_ports} portas` },
     {
       key: 'is_poe',
       label: 'PoE',
@@ -85,7 +108,10 @@ export default function SwitchesPage() {
       <div className="bg-bg-secondary border border-border-light rounded-xl overflow-hidden">
         <DataTable
           columns={columns}
-          data={data}
+          data={sortedData}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
           onEdit={(item) => { setEditing(item); setModalOpen(true) }}
           onDelete={(item) => setDeleting(item)}
         />

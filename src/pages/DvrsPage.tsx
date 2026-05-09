@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { useDvrs } from '../hooks/useDvrs'
 import type { Dvr } from '../lib/types'
@@ -18,14 +18,50 @@ export default function DvrsPage() {
   const [editing, setEditing] = useState<Dvr | null>(null)
   const [deleting, setDeleting] = useState<Dvr | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [sortKey, setSortKey] = useState<string>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      let aVal: string | number = ''
+      let bVal: string | number = ''
+      const aData = a as unknown as Record<string, unknown>
+      const bData = b as unknown as Record<string, unknown>
+
+      if (sortKey === 'ip_address') {
+        // Ordena IPs numericamente (por último octeto)
+        aVal = parseInt(aData.ip_address?.toString().split('.').pop() || '0')
+        bVal = parseInt(bData.ip_address?.toString().split('.').pop() || '0')
+      } else if (sortKey === 'total_channels') {
+        aVal = (aData.total_channels as number) || 0
+        bVal = (bData.total_channels as number) || 0
+      } else {
+        aVal = aData[sortKey]?.toString() || ''
+        bVal = bData[sortKey]?.toString() || ''
+      }
+
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [data, sortKey, sortDir])
 
   const columns: Column<Dvr>[] = [
     { key: 'name', label: 'Nome', sortable: true },
-    { key: 'ip_address', label: 'IP' },
-    { key: 'model', label: 'Modelo' },
-    { key: 'location', label: 'Localização' },
-    { key: 'total_channels', label: 'Canais', render: (d) => `${d.total_channels} ch` },
-    { key: 'status', label: 'Status', render: (d) => <Badge status={d.status} /> },
+    { key: 'ip_address', label: 'IP', sortable: true },
+    { key: 'model', label: 'Modelo', sortable: true },
+    { key: 'location', label: 'Localização', sortable: true },
+    { key: 'total_channels', label: 'Canais', sortable: true, render: (d) => `${d.total_channels} ch` },
+    { key: 'status', label: 'Status', sortable: true, render: (d) => <Badge status={d.status} /> },
   ]
 
   const handleSubmit = async (formData: Record<string, unknown>) => {
@@ -76,7 +112,10 @@ export default function DvrsPage() {
       <div className="bg-bg-secondary border border-border-light rounded-xl overflow-hidden">
         <DataTable
           columns={columns}
-          data={data}
+          data={sortedData}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
           onEdit={(item) => { setEditing(item); setModalOpen(true) }}
           onDelete={(item) => setDeleting(item)}
         />

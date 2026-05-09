@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Plus, Cable, QrCode } from 'lucide-react'
 import { useCameras } from '../hooks/useCameras'
 import type { Camera } from '../lib/types'
@@ -24,6 +24,41 @@ export default function CamerasPage() {
   const [cableCamera, setCableCamera] = useState<Camera | null>(null)
   const [qrCamera, setQrCamera] = useState<Camera | null>(null)
   const [cableTypes, setCableTypes] = useState<Record<string, string>>({})
+  const [sortKey, setSortKey] = useState<string>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      const aData = a as unknown as Record<string, unknown>
+      const bData = b as unknown as Record<string, unknown>
+      let aVal: string | number = ''
+      let bVal: string | number = ''
+
+      if (sortKey === 'ip_address') {
+        aVal = aData.ip_address?.toString() || ''
+        bVal = bData.ip_address?.toString() || ''
+      } else if (sortKey === 'channel_number') {
+        aVal = (aData.channel_number as number) || 0
+        bVal = (bData.channel_number as number) || 0
+      } else {
+        aVal = aData[sortKey]?.toString() || ''
+        bVal = bData[sortKey]?.toString() || ''
+      }
+
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [data, sortKey, sortDir])
 
   // Fetch cable types for all cameras to show badge
   const fetchCableTypes = async () => {
@@ -67,8 +102,8 @@ export default function CamerasPage() {
           ? c.ip_address ?? '-'
           : c.dvrs?.name ?? '-',
     },
-    { key: 'channel_number', label: 'Canal', render: (c) => c.channel_number ?? '-' },
-    { key: 'location', label: 'Localização' },
+    { key: 'channel_number', label: 'Canal', sortable: true, render: (c) => c.channel_number ?? '-' },
+    { key: 'location', label: 'Localização', sortable: true },
     { key: 'type', label: 'Tipo', render: (c) => c.type.charAt(0).toUpperCase() + c.type.slice(1) },
     {
       key: 'cable',
@@ -148,7 +183,10 @@ export default function CamerasPage() {
       <div className="bg-bg-secondary border border-border-light rounded-xl overflow-hidden">
         <DataTable
           columns={columns}
-          data={data}
+          data={sortedData}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
           onEdit={(item) => { setEditing(item); setModalOpen(true) }}
           onDelete={(item) => setDeleting(item)}
           extraActions={(item) => (
