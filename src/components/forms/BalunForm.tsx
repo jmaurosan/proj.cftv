@@ -2,12 +2,13 @@ import { useState, type FormEvent } from 'react'
 import type { PowerBalun } from '../../lib/types'
 import { STATUS_OPTIONS } from '../../lib/constants'
 import { useBalunPorts } from '../../hooks/useBalunPorts'
+import { useBalun4x1Outputs, get4x1Outputs } from '../../hooks/useBalun4x1Outputs'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import { useCameras } from '../../hooks/useCameras'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
-import { Plug, Camera, Package } from 'lucide-react'
+import { Plug, Camera, Package, Layers } from 'lucide-react'
 
 interface BalunFormProps {
   initialData?: PowerBalun | null
@@ -27,8 +28,12 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
 
   const balunId = initialData?.id ?? null
   const { ports, savePort } = useBalunPorts(balunId)
+  const { outputs: outputs4x1, saveOutput } = useBalun4x1Outputs(balunId)
   const { data: cameras } = useCameras()
   const { models: balunModels, saveModel } = useEquipmentModels('balun')
+  
+  // Calcula as saídas 4x1 baseado no total de portas
+  const expectedOutputs = get4x1Outputs(totalPorts)
 
   const handleModelSelect = (modelId: string) => {
     const m = balunModels.find((x) => x.id === modelId)
@@ -72,6 +77,11 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
     await savePort({ port_number: portNumber, camera_id: ports.find(p => p.port_number === portNumber)?.camera_id || null, notes })
   }
 
+  // Função para encontrar a saída 4x1 de uma porta
+  const getOutputForPort = (portNumber: number) => {
+    return outputs4x1.find(o => portNumber >= o.channel_start && portNumber <= o.channel_end)
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
@@ -108,12 +118,63 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
       </div>
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
 
+      {/* Seção de Saídas 4x1 */}
+      {balunId && totalPorts >= 4 && (
+        <div className="border border-blue-800 rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
+            <Layers className="w-4 h-4" />
+            Saídas 4x1 ({expectedOutputs.length} saída${expectedOutputs.length !== 1 ? 's' : ''})
+          </h3>
+          <p className="text-xs text-text-muted">
+            Agrupe 4 câmeras por saída 4x1. Cada saída conecta as câmeras ao DVR por um único cabo UTP.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {expectedOutputs.map((output) => {
+              const outputData = outputs4x1.find(o => o.output_number === output.output_number)
+              const camerasInOutput = cameras.filter(c => {
+                const port = ports.find(p => p.camera_id === c.id)
+                return port && port.port_number >= output.channel_start && port.port_number <= output.channel_end
+              })
+              return (
+                <div key={output.output_number} className="bg-slate-800/50 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-blue-400">
+                      4x1 - Saída {output.output_number}
+                    </span>
+                    <span className="text-xs text-text-muted">
+                      Portas {output.channel_start}-{output.channel_end}
+                    </span>
+                  </div>
+                  <div className="text-xs text-text-muted mb-2">
+                    {camerasInOutput.length > 0 
+                      ? camerasInOutput.map(c => c.name).join(', ')
+                      : 'Nenhuma câmera conectada'
+                    }
+                  </div>
+                  <Input
+                    placeholder="Observações da saída (opcional)"
+                    value={outputData?.notes ?? ''}
+                    onChange={(e) => saveOutput({ 
+                      output_number: output.output_number,
+                      channel_start: output.channel_start,
+                      channel_end: output.channel_end,
+                      notes: e.target.value 
+                    })}
+                    className="text-xs"
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Seção de Portas do Balun */}
       {balunId && (
         <div className="border border-slate-700 rounded-lg p-4 space-y-3">
           <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
             <Plug className="w-4 h-4" />
-            Conexões das Portas
+            Conexões das Portas ({totalPorts} portas)
           </h3>
           <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto">
             {Array.from({ length: totalPorts }, (_, i) => i + 1).map((portNum) => {
@@ -122,9 +183,15 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
               const isActive = port?.is_active ?? true
               const portNotes = port?.notes ?? ''
               const currentNotes = editingNotes[portNum] !== undefined ? editingNotes[portNum] : portNotes
+              const outputInfo = getOutputForPort(portNum)
               return (
                 <div key={portNum} className={`flex flex-wrap items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2 ${!isActive ? 'opacity-50' : ''}`}>
                   <span className="text-xs font-mono text-slate-400 w-16 shrink-0">Porta {portNum}</span>
+                  {outputInfo && (
+                    <span className="text-xs px-2 py-0.5 bg-blue-900/30 text-blue-400 rounded shrink-0">
+                      4x1-{outputInfo.output_number}
+                    </span>
+                  )}
                   <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
                     <input
                       type="checkbox"

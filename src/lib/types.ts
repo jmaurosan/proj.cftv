@@ -82,6 +82,18 @@ export interface PowerBalun {
   updated_at: string
 }
 
+export interface Balun4x1Output {
+  id: string
+  balun_id: string
+  output_number: number
+  channel_start: number
+  channel_end: number
+  notes: string | null
+  user_id: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Switch {
   id: string
   name: string
