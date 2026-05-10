@@ -11,6 +11,7 @@ import DvrsPage from './pages/DvrsPage'
 import CamerasPage from './pages/CamerasPage'
 import BalunsPage from './pages/BalunsPage'
 import SwitchesPage from './pages/SwitchesPage'
+import RoutersPage from './pages/RoutersPage'
 import CredentialsPage from './pages/CredentialsPage'
 import ViewerPage from './pages/ViewerPage'
 import ClientsPage from './pages/ClientsPage'
@@ -35,6 +36,7 @@ export default function App() {
                 <Route path="/mapeamento" element={<ChannelMappingPage />} />
                 <Route path="/baluns" element={<BalunsPage />} />
                 <Route path="/switches" element={<SwitchesPage />} />
+                <Route path="/roteadores" element={<RoutersPage />} />
                 <Route path="/credenciais" element={<CredentialsPage />} />
                 <Route path="/visualizacao" element={<ViewerPage />} />
                 <Route path="/relatorios" element={<Suspense fallback={<LoadingSpinner />}><ReportsPage /></Suspense>} />

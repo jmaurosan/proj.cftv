@@ -214,3 +214,58 @@ export interface EquipmentModel {
   created_at: string
   updated_at: string
 }
+
+export interface Router {
+  id: string
+  name: string
+  brand: string | null
+  model: string | null
+  device_type: string
+  location: string | null
+  ip_address: string | null
+  username: string | null
+  password: string | null
+  status: string
+  notes: string | null
+  client_id: string | null
+  user_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface InternetConnection {
+  id: string
+  router_id: string | null
+  operator_name: string
+  connection_type: string
+  ip_type: string
+  ip_address: string | null
+  subnet_mask: string | null
+  gateway_ip: string | null
+  dhcp_enabled: boolean
+  speed_down_mbps: number | null
+  speed_up_mbps: number | null
+  monthly_cost: number | null
+  contract_number: string | null
+  is_active: boolean
+  notes: string | null
+  client_id: string | null
+  user_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface NetworkSegment {
+  id: string
+  name: string
+  description: string | null
+  network_ip: string | null
+  subnet_mask: string | null
+  gateway_ip: string | null
+  vlan_id: number | null
+  router_id: string | null
+  client_id: string | null
+  user_id: string
+  created_at: string
+  updated_at: string
+}

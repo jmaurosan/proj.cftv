@@ -115,3 +115,30 @@ export const WIRE_COLORS = [
   { value: 'Marrom', label: 'Marrom' },
   { value: 'Branco-Marrom', label: 'Branco do Marrom' },
 ] as const
+
+// ============================================
+// Roteadores e Internet
+// ============================================
+
+export const ROUTER_TYPES = [
+  { value: 'edge_router', label: 'Edge Router' },
+  { value: 'mikrotik', label: 'MikroTik' },
+  { value: 'load_balancer', label: 'Load Balancer' },
+  { value: 'generic', label: 'Roteador Genérico' },
+] as const
+
+export const CONNECTION_TYPES_INTERNET = [
+  { value: 'fiber', label: 'Fibra Óptica' },
+  { value: 'adsl', label: 'ADSL' },
+  { value: 'wireless', label: 'Wireless' },
+  { value: '4g', label: '4G/LTE' },
+  { value: '5g', label: '5G' },
+  { value: 'cable', label: 'Cable/Coaxial' },
+  { value: 'other', label: 'Outro' },
+] as const
+
+export const IP_TYPE_OPTIONS = [
+  { value: 'dynamic', label: 'DHCP (Dinâmico)' },
+  { value: 'static', label: 'IP Fixo (Privado)' },
+  { value: 'public_static', label: 'IP Público Fixo' },
+] as const
