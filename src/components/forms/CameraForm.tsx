@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent, useRef } from 'react'
+import { useState, useEffect, useMemo, type FormEvent, useRef } from 'react'
 import type { Camera, Dvr, PowerBalun, Switch } from '../../lib/types'
 import { STATUS_OPTIONS, CAMERA_TYPES, RESOLUTION_OPTIONS, CONNECTION_TYPES } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
@@ -49,6 +49,13 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
   const isIP = connectionType === 'ip'
   const { models: cameraModels, saveModel } = useEquipmentModels('camera')
+  
+  // Extrai marcas únicas dos modelos cadastrados
+  const brandOptions = useMemo(() => {
+    const brands = new Set<string>()
+    cameraModels.forEach((m) => { if (m.brand) brands.add(m.brand) })
+    return Array.from(brands).sort().map((b) => ({ value: b, label: b }))
+  }, [cameraModels])
 
   useEffect(() => {
     supabase.from('dvrs').select('id, name').order('name').then(({ data }) => setDvrs((data as Dvr[]) || []))
@@ -68,8 +75,9 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
     const m = cameraModels.find((x) => x.id === modelId)
     if (!m) return
     if (m.brand) setBrand(m.brand)
-    if (m.model) setName(m.model)
     if (m.resolution) setResolution(m.resolution)
+    // Não preenche name - é o identificador da câmera específica
+    // Não preenche model - é diferente do name da câmera
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -181,9 +189,34 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
-        <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: Intelbras, Hikvision" />
+        <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ex: Camera Hall Principal" />
+        {brandOptions.length > 0 ? (
+          <Select
+            label="Marca"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            options={[
+              { value: '', label: 'Selecione ou digite uma marca' },
+              ...brandOptions,
+              { value: '__other__', label: 'Outra (digitar)' }
+            ]}
+          />
+        ) : (
+          <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: Intelbras, Hikvision" />
+        )}
       </div>
+      {/* Campo para digitar nova marca quando selecionar "Outra" */}
+      {brand === '__other__' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Digite a marca"
+            value=""
+            onChange={(e) => setBrand(e.target.value)}
+            placeholder="Ex: Intelbras"
+            autoFocus
+          />
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Estacionamento" />
       </div>

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useMemo, type FormEvent } from 'react'
 import type { Dvr } from '../../lib/types'
 import { STATUS_OPTIONS, CHANNEL_OPTIONS } from '../../lib/constants'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
@@ -28,13 +28,21 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
   const [error, setError] = useState<string | null>(null)
 
   const { models: dvrModels, saveModel } = useEquipmentModels('dvr')
+  
+  // Extrai marcas únicas dos modelos cadastrados
+  const brandOptions = useMemo(() => {
+    const brands = new Set<string>()
+    dvrModels.forEach((m) => { if (m.brand) brands.add(m.brand) })
+    return Array.from(brands).sort().map((b) => ({ value: b, label: b }))
+  }, [dvrModels])
 
   const handleModelSelect = (modelId: string) => {
     const m = dvrModels.find((x) => x.id === modelId)
     if (!m) return
     if (m.brand) setBrand(m.brand)
-    if (m.model) { setModel(m.model); setName(m.model); }
+    if (m.model) setModel(m.model)
     if (m.channel_count) setTotalChannels(m.channel_count)
+    // Não preenche name - é o identificador do DVR específico
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -87,13 +95,38 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ex: DVR Portaria" />
         <Input label="Endereço IP" value={ipAddress} onChange={(e) => setIpAddress(e.target.value)} required placeholder="192.168.1.100" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: Intelbras" />
+        {brandOptions.length > 0 ? (
+          <Select
+            label="Marca"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            options={[
+              { value: '', label: 'Selecione ou digite uma marca' },
+              ...brandOptions,
+              { value: '__other__', label: 'Outra (digitar)' }
+            ]}
+          />
+        ) : (
+          <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: Intelbras" />
+        )}
         <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: MHDX 3116" />
       </div>
+      {/* Campo para digitar nova marca quando selecionar "Outra" */}
+      {brand === '__other__' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Digite a marca"
+            value=""
+            onChange={(e) => setBrand(e.target.value)}
+            placeholder="Ex: Intelbras"
+            autoFocus
+          />
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Sala de TI" />
       </div>

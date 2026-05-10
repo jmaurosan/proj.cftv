@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useMemo, type FormEvent } from 'react'
 import type { Switch } from '../../lib/types'
 import { STATUS_OPTIONS, POE_STANDARDS } from '../../lib/constants'
 import { useSwitchPorts } from '../../hooks/useSwitchPorts'
@@ -42,15 +42,23 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
   const switchId = initialData?.id ?? null
   const { ports, savePort } = useSwitchPorts(switchId)
   const { models: switchModels, saveModel } = useEquipmentModels('switch')
+  
+  // Extrai marcas únicas dos modelos cadastrados
+  const brandOptions = useMemo(() => {
+    const brands = new Set<string>()
+    switchModels.forEach((m) => { if (m.brand) brands.add(m.brand) })
+    return Array.from(brands).sort().map((b) => ({ value: b, label: b }))
+  }, [switchModels])
 
   const handleModelSelect = (modelId: string) => {
     const m = switchModels.find((x) => x.id === modelId)
     if (!m) return
     if (m.brand) setBrand(m.brand)
-    if (m.model) { setModel(m.model); setName(m.model); }
+    if (m.model) setModel(m.model)
     if (m.max_ports) setTotalPorts(m.max_ports)
-    if (m.is_poe) setIsPoe(m.is_poe)
+    if (m.is_poe) setIsPoe(true)
     if (m.poe_standard) setPoeStandard(m.poe_standard)
+    // Não preenche name - é o identificador do Switch específico
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -105,13 +113,38 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ex: Switch Sala Técnica" />
         <Input label="Endereço IP" value={ipAddress} onChange={(e) => setIpAddress(e.target.value)} required placeholder="192.168.1.1" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: TP-Link" />
+        {brandOptions.length > 0 ? (
+          <Select
+            label="Marca"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            options={[
+              { value: '', label: 'Selecione ou digite uma marca' },
+              ...brandOptions,
+              { value: '__other__', label: 'Outra (digitar)' }
+            ]}
+          />
+        ) : (
+          <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: TP-Link" />
+        )}
         <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: TL-SG1016" />
       </div>
+      {/* Campo para digitar nova marca quando selecionar "Outra" */}
+      {brand === '__other__' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Digite a marca"
+            value=""
+            onChange={(e) => setBrand(e.target.value)}
+            placeholder="Ex: TP-Link"
+            autoFocus
+          />
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required />
       </div>
