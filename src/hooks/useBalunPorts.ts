@@ -20,7 +20,7 @@ export function useBalunPorts(balunId: string | null) {
 
   useEffect(() => { fetch() }, [fetch])
 
-  const savePort = async (port: { port_number: number; camera_id?: string | null; notes?: string }) => {
+  const savePort = async (port: { port_number: number; camera_id?: string | null; is_active?: boolean; notes?: string }) => {
     if (!balunId) return { error: 'Sem balun' }
     const { data: existing } = await supabase
       .from('balun_ports')
@@ -32,6 +32,7 @@ export function useBalunPorts(balunId: string | null) {
     if (existing) {
       const { error } = await supabase.from('balun_ports').update({
         camera_id: port.camera_id || null,
+        is_active: port.is_active ?? true,
         notes: port.notes || null,
       }).eq('id', existing.id)
       if (error) return { error: error.message }
@@ -40,6 +41,7 @@ export function useBalunPorts(balunId: string | null) {
         balun_id: balunId,
         port_number: port.port_number,
         camera_id: port.camera_id || null,
+        is_active: port.is_active ?? true,
         notes: port.notes || null,
       })
       if (error) return { error: error.message }

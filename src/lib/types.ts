@@ -177,12 +177,24 @@ export interface BalunPort {
   id: string
   balun_id: string
   port_number: number
+  is_active: boolean
   camera_id: string | null
   notes: string | null
   user_id: string
   created_at: string
   updated_at: string
   cameras?: { name: string; dvr_id: string | null; channel_number: number | null; dvrs?: { name: string } | null }
+}
+
+export interface DvrChannel {
+  id: string
+  dvr_id: string
+  channel_number: number
+  is_active: boolean
+  notes: string | null
+  user_id: string
+  created_at: string
+  updated_at: string
 }
 
 export interface SwitchPort {

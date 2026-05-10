@@ -23,6 +23,7 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [editingNotes, setEditingNotes] = useState<Record<number, string>>({})
 
   const balunId = initialData?.id ?? null
   const { ports, savePort } = useBalunPorts(balunId)
@@ -58,6 +59,17 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
   const handlePortChange = async (portNumber: number, cameraId: string) => {
     if (!balunId) return
     await savePort({ port_number: portNumber, camera_id: cameraId || null })
+  }
+
+  const handlePortActiveToggle = async (portNumber: number, isActive: boolean) => {
+    if (!balunId) return
+    await savePort({ port_number: portNumber, camera_id: ports.find(p => p.port_number === portNumber)?.camera_id || null, is_active: isActive })
+  }
+
+  const handlePortNotesSave = async (portNumber: number) => {
+    if (!balunId) return
+    const notes = editingNotes[portNumber] ?? ''
+    await savePort({ port_number: portNumber, camera_id: ports.find(p => p.port_number === portNumber)?.camera_id || null, notes })
   }
 
   return (
@@ -107,9 +119,21 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
             {Array.from({ length: totalPorts }, (_, i) => i + 1).map((portNum) => {
               const port = ports.find((p) => p.port_number === portNum)
               const cameraId = port?.camera_id ?? ''
+              const isActive = port?.is_active ?? true
+              const portNotes = port?.notes ?? ''
+              const currentNotes = editingNotes[portNum] !== undefined ? editingNotes[portNum] : portNotes
               return (
-                <div key={portNum} className="flex items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2">
+                <div key={portNum} className={`flex flex-wrap items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2 ${!isActive ? 'opacity-50' : ''}`}>
                   <span className="text-xs font-mono text-slate-400 w-16 shrink-0">Porta {portNum}</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={(e) => handlePortActiveToggle(portNum, e.target.checked)}
+                      className="w-4 h-4 rounded border-border accent-accent"
+                    />
+                    <span className="text-xs text-text-secondary">Ativa</span>
+                  </label>
                   <Select
                     value={cameraId}
                     onChange={(e) => handlePortChange(portNum, e.target.value)}
@@ -120,12 +144,25 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
                         label: `${c.name} ${c.dvrs?.name ? `(${c.dvrs.name} CH${c.channel_number || '?'})` : ''}`,
                       })),
                     ]}
+                    className="flex-1 min-w-[150px]"
                   />
                   {port?.cameras?.name && (
                     <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0">
                       <Camera className="w-3 h-3" />
                       {port.cameras.dvrs?.name} CH{port.cameras.channel_number || '?'}
                     </span>
+                  )}
+                  {isActive && (
+                    <div className="w-full flex gap-2 mt-1">
+                      <input
+                        type="text"
+                        value={currentNotes}
+                        onChange={(e) => setEditingNotes((prev) => ({ ...prev, [portNum]: e.target.value }))}
+                        onBlur={() => handlePortNotesSave(portNum)}
+                        placeholder="Observações da porta (problemas, manutenções...)"
+                        className="flex-1 px-2 py-1 text-xs bg-bg-tertiary border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      />
+                    </div>
                   )}
                 </div>
               )

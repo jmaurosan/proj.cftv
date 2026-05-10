@@ -2,10 +2,11 @@ import { useState, useMemo, type FormEvent } from 'react'
 import type { Dvr } from '../../lib/types'
 import { STATUS_OPTIONS, CHANNEL_OPTIONS } from '../../lib/constants'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
+import { useDvrChannels } from '../../hooks/useDvrChannels'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
-import { Package } from 'lucide-react'
+import { Package, Cpu } from 'lucide-react'
 
 interface DvrFormProps {
   initialData?: Dvr | null
@@ -28,6 +29,8 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
   const [error, setError] = useState<string | null>(null)
 
   const { models: dvrModels, saveModel } = useEquipmentModels('dvr')
+  const dvrId = initialData?.id ?? null
+  const { channels, saveChannel } = useDvrChannels(dvrId)
   
   // Extrai marcas únicas dos modelos cadastrados
   const brandOptions = useMemo(() => {
@@ -67,6 +70,16 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
       await saveModel({ type: 'dvr', brand, model: name || model, channel_count: totalChannels, resolution: null, poe_standard: null, max_ports: null, is_poe: false, notes: null })
     }
     setLoading(false)
+  }
+
+  const handleChannelActiveToggle = async (channelNumber: number, isActive: boolean) => {
+    if (!dvrId) return
+    await saveChannel({ channel_number: channelNumber, is_active: isActive, notes: channels.find(c => c.channel_number === channelNumber)?.notes || undefined })
+  }
+
+  const handleChannelNotesSave = async (channelNumber: number, notes: string) => {
+    if (!dvrId) return
+    await saveChannel({ channel_number: channelNumber, is_active: channels.find(c => c.channel_number === channelNumber)?.is_active ?? true, notes })
   }
 
   return (
@@ -149,6 +162,57 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
         <Input label="Senha de Acesso" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas adicionais..." />
+
+      {/* Seção de Canais do DVR */}
+      {dvrId && (
+        <div className="border border-slate-700 rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
+            <Cpu className="w-4 h-4" />
+            Canais do DVR ({totalChannels})
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-[300px] overflow-y-auto">
+            {Array.from({ length: totalChannels }, (_, i) => i + 1).map((chNum) => {
+              const channel = channels.find((c) => c.channel_number === chNum)
+              const isActive = channel?.is_active ?? true
+              const channelNotes = channel?.notes ?? ''
+              return (
+                <div key={chNum} className={`bg-slate-800/50 rounded-lg p-2 ${!isActive ? 'opacity-50' : ''}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-mono text-slate-400">CH {chNum}</span>
+                    <label className="flex items-center gap-1 cursor-pointer ml-auto">
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={(e) => handleChannelActiveToggle(chNum, e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-border accent-accent"
+                      />
+                      <span className="text-xs text-text-secondary">OK</span>
+                    </label>
+                  </div>
+                  {isActive && (
+                    <input
+                      type="text"
+                      value={channelNotes}
+                      onChange={(e) => handleChannelNotesSave(chNum, e.target.value)}
+                      placeholder="Notas..."
+                      className="w-full px-2 py-1 text-xs bg-bg-tertiary border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  )}
+                  {!isActive && (
+                    <input
+                      type="text"
+                      value={channelNotes}
+                      onChange={(e) => handleChannelNotesSave(chNum, e.target.value)}
+                      placeholder="Motivo da desativação..."
+                      className="w-full px-2 py-1 text-xs bg-danger/10 border border-danger/30 rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-danger/50"
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
         <Button type="submit" disabled={loading}>
