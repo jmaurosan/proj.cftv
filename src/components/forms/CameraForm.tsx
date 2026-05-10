@@ -42,6 +42,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { user } = useAuth()
+  const [otherBrandMode, setOtherBrandMode] = useState(false)
 
   const [dvrs, setDvrs] = useState<Dvr[]>([])
   const [baluns, setBaluns] = useState<PowerBalun[]>([])
@@ -193,8 +194,17 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         {brandOptions.length > 0 ? (
           <Select
             label="Marca"
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
+            value={otherBrandMode ? '__other__' : brand}
+            onChange={(e) => {
+              const val = e.target.value
+              if (val === '__other__') {
+                setOtherBrandMode(true)
+                setBrand('')
+              } else {
+                setOtherBrandMode(false)
+                setBrand(val)
+              }
+            }}
             options={[
               { value: '', label: 'Selecione ou digite uma marca' },
               ...brandOptions,
@@ -206,11 +216,11 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         )}
       </div>
       {/* Campo para digitar nova marca quando selecionar "Outra" */}
-      {brand === '__other__' && (
+      {otherBrandMode && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Digite a marca"
-            value=""
+            value={brand}
             onChange={(e) => setBrand(e.target.value)}
             placeholder="Ex: Intelbras"
             autoFocus

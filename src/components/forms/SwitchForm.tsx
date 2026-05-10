@@ -37,6 +37,7 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [otherBrandMode, setOtherBrandMode] = useState(false)
 
   const switchId = initialData?.id ?? null
   const { ports, savePort } = useSwitchPorts(switchId)
@@ -118,8 +119,17 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
         {brandOptions.length > 0 ? (
           <Select
             label="Marca"
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
+            value={otherBrandMode ? '__other__' : brand}
+            onChange={(e) => {
+              const val = e.target.value
+              if (val === '__other__') {
+                setOtherBrandMode(true)
+                setBrand('')
+              } else {
+                setOtherBrandMode(false)
+                setBrand(val)
+              }
+            }}
             options={[
               { value: '', label: 'Selecione ou digite uma marca' },
               ...brandOptions,
@@ -132,11 +142,11 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
         <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: TL-SG1016" />
       </div>
       {/* Campo para digitar nova marca quando selecionar "Outra" */}
-      {brand === '__other__' && (
+      {otherBrandMode && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Digite a marca"
-            value=""
+            value={brand}
             onChange={(e) => setBrand(e.target.value)}
             placeholder="Ex: TP-Link"
             autoFocus
