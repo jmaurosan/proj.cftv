@@ -293,9 +293,9 @@ export function generateReport(data: ReportData) {
 
     autoTable(doc, {
       startY: y,
-      head: [['Nome', 'IP', 'Modelo', 'Portas', 'PoE', 'Local', 'Status']],
+      head: [['Nome', 'Marca', 'Modelo', 'Portas', 'PoE', 'Local', 'Status']],
       body: data.switches.map(s => [
-        s.name, s.ip_address, s.model || '-', String(s.total_ports),
+        s.name, s.brand || '-', s.model || '-', String(s.total_ports),
         s.is_poe ? `${s.poe_standard || 'Sim'}${s.poe_budget_watts ? ` (${s.poe_budget_watts}W)` : ''}` : 'Nao',
         s.location, s.status.toUpperCase()
       ]),

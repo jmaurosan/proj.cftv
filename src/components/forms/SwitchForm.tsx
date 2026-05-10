@@ -27,7 +27,6 @@ interface SwitchFormProps {
 export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFormProps) {
   const [name, setName] = useState(initialData?.name ?? '')
   const [brand, setBrand] = useState(initialData?.brand ?? '')
-  const [ipAddress, setIpAddress] = useState(initialData?.ip_address ?? '')
   const [model, setModel] = useState(initialData?.model ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [totalPorts, setTotalPorts] = useState(initialData?.total_ports ?? 8)
@@ -68,7 +67,6 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
     const result = await onSubmit({
       name,
       brand: brand || null,
-      ip_address: ipAddress,
       model: model || null,
       location,
       total_ports: totalPorts,
@@ -114,7 +112,7 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Ex: Switch Sala Técnica" />
-        <Input label="Endereço IP" value={ipAddress} onChange={(e) => setIpAddress(e.target.value)} required placeholder="192.168.1.1" />
+        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {brandOptions.length > 0 ? (
@@ -146,11 +144,8 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Rack Sala Técnica" />
         <Input label="Total de Portas" type="number" value={totalPorts.toString()} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />
-        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} />
       </div>
 
       {/* PoE Section */}
@@ -201,25 +196,35 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
               const port = ports.find((p) => p.port_number === portNum)
               const deviceType = port?.device_type ?? ''
               const deviceName = port?.device_name ?? ''
+              const isActive = port?.is_active ?? true
               return (
-                <div key={portNum} className="flex items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2 flex-wrap">
+                <div key={portNum} className={`flex items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2 flex-wrap ${!isActive ? 'opacity-50' : ''}`}>
                   <span className="text-xs font-mono text-slate-400 w-16 shrink-0">Porta {portNum}</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={(e) => savePort({ port_number: portNum, device_type: deviceType, device_name: deviceName, is_active: e.target.checked })}
+                      className="w-4 h-4 rounded border-border accent-accent"
+                    />
+                    <span className="text-xs text-text-secondary">Ativa</span>
+                  </label>
                   <div className="flex-1 min-w-[120px]">
                     <Select
                       value={deviceType}
                       onChange={(e) => {
                         const val = e.target.value
-                        savePort({ port_number: portNum, device_type: val || null, device_name: val ? deviceName : null })
+                        savePort({ port_number: portNum, device_type: val || null, device_name: val ? deviceName : null, is_active: isActive })
                       }}
                       options={DEVICE_TYPES}
                     />
                   </div>
-                  {deviceType && (
+                  {deviceType && isActive && (
                     <div className="flex-1 min-w-[150px]">
                       <Input
                         placeholder="Nome do dispositivo"
                         value={deviceName}
-                        onChange={(e) => savePort({ port_number: portNum, device_type: deviceType, device_name: e.target.value })}
+                        onChange={(e) => savePort({ port_number: portNum, device_type: deviceType, device_name: e.target.value, is_active: isActive })}
                       />
                     </div>
                   )}

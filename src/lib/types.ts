@@ -86,7 +86,6 @@ export interface Switch {
   id: string
   name: string
   brand: string | null
-  ip_address: string
   model: string | null
   location: string
   total_ports: number
@@ -193,6 +192,7 @@ export interface SwitchPort {
   device_type: string | null
   device_id: string | null
   device_name: string | null
+  is_active: boolean
   notes: string | null
   user_id: string
   created_at: string
