@@ -25,6 +25,7 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingNotes, setEditingNotes] = useState<Record<number, string>>({})
+  const [editingOutputNotes, setEditingOutputNotes] = useState<Record<number, string>>({})
 
   const balunId = initialData?.id ?? null
   const { ports, savePort } = useBalunPorts(balunId)
@@ -151,17 +152,26 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
                       : 'Nenhuma câmera conectada'
                     }
                   </div>
-                  <Input
-                    placeholder="Observações da saída (opcional)"
-                    value={outputData?.notes ?? ''}
-                    onChange={(e) => saveOutput({ 
-                      output_number: output.output_number,
-                      channel_start: output.channel_start,
-                      channel_end: output.channel_end,
-                      notes: e.target.value 
-                    })}
-                    className="text-xs"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={editingOutputNotes[output.output_number] !== undefined 
+                        ? editingOutputNotes[output.output_number] 
+                        : (outputData?.notes ?? '')}
+                      onChange={(e) => setEditingOutputNotes((prev) => ({ ...prev, [output.output_number]: e.target.value }))}
+                      onBlur={() => {
+                        const notes = editingOutputNotes[output.output_number] ?? ''
+                        saveOutput({ 
+                          output_number: output.output_number,
+                          channel_start: output.channel_start,
+                          channel_end: output.channel_end,
+                          notes 
+                        })
+                      }}
+                      placeholder="Observações da saída (opcional)"
+                      className="flex-1 px-2 py-1 text-xs bg-bg-tertiary border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  </div>
                 </div>
               )
             })}
