@@ -194,6 +194,11 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
               const portNotes = port?.notes ?? ''
               const currentNotes = editingNotes[portNum] !== undefined ? editingNotes[portNum] : portNotes
               const outputInfo = getOutputForPort(portNum)
+                                
+              // Verifica se a câmera existe na lista de opções
+              const cameraExists = cameraId && cameras.some(c => c.id === cameraId)
+              const selectValue = cameraExists ? cameraId : ''
+                                
               return (
                 <div key={portNum} className={`flex flex-wrap items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2 ${!isActive ? 'opacity-50' : ''}`}>
                   <span className="text-xs font-mono text-slate-400 w-16 shrink-0">Porta {portNum}</span>
@@ -212,7 +217,7 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
                     <span className="text-xs text-text-secondary">Ativa</span>
                   </label>
                   <Select
-                    value={cameraId}
+                    value={selectValue}
                     onChange={(e) => handlePortChange(portNum, e.target.value)}
                     options={[
                       { value: '', label: 'Desconectado' },
@@ -223,8 +228,8 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
                     ]}
                     className="flex-1 min-w-[150px]"
                   />
-                  {port?.cameras?.name && (
-                    <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0">
+                  {cameraExists && port?.cameras?.name && (
+                    <span className="text-xs text-success flex items-center gap-1 shrink-0">
                       <Camera className="w-3 h-3" />
                       {port.cameras.dvrs?.name} CH{port.cameras.channel_number || '?'}
                     </span>
