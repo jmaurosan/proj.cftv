@@ -194,11 +194,10 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
               const portNotes = port?.notes ?? ''
               const currentNotes = editingNotes[portNum] !== undefined ? editingNotes[portNum] : portNotes
               const outputInfo = getOutputForPort(portNum)
-                                
-              // Verifica se a câmera existe na lista de opções
-              const cameraExists = cameraId && cameras.some(c => c.id === cameraId)
-              const selectValue = cameraExists ? cameraId : ''
-                                
+              
+              // Encontra a câmera na lista para exibir o label correto
+              const selectedCamera = cameras.find(c => c.id === cameraId)
+              
               return (
                 <div key={portNum} className={`flex flex-wrap items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2 ${!isActive ? 'opacity-50' : ''}`}>
                   <span className="text-xs font-mono text-slate-400 w-16 shrink-0">Porta {portNum}</span>
@@ -216,22 +215,22 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
                     />
                     <span className="text-xs text-text-secondary">Ativa</span>
                   </label>
-                  <Select
-                    value={selectValue}
+                  <select
+                    value={cameraId}
                     onChange={(e) => handlePortChange(portNum, e.target.value)}
-                    options={[
-                      { value: '', label: 'Desconectado' },
-                      ...cameras.map((c) => ({
-                        value: c.id,
-                        label: `${c.name} ${c.dvrs?.name ? `(${c.dvrs.name} CH${c.channel_number || '?'})` : ''}`,
-                      })),
-                    ]}
-                    className="flex-1 min-w-[150px]"
-                  />
-                  {cameraExists && port?.cameras?.name && (
+                    className="flex-1 min-w-[150px] px-3 py-2 bg-bg-primary border rounded-lg text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors text-sm"
+                  >
+                    <option value="">Desconectado</option>
+                    {cameras.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.dvrs?.name ? `(${c.dvrs.name} CH${c.channel_number || '?'})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedCamera && (
                     <span className="text-xs text-success flex items-center gap-1 shrink-0">
                       <Camera className="w-3 h-3" />
-                      {port.cameras.dvrs?.name} CH{port.cameras.channel_number || '?'}
+                      {selectedCamera.dvrs?.name} CH{selectedCamera.channel_number || '?'}
                     </span>
                   )}
                   {isActive && (
