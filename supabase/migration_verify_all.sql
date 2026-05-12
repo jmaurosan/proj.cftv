@@ -289,6 +289,10 @@ BEGIN
         unique(balun_id, port_number)
       )';
     ALTER TABLE balun_ports ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "balun_ports_select" ON balun_ports;
+    DROP POLICY IF EXISTS "balun_ports_insert" ON balun_ports;
+    DROP POLICY IF EXISTS "balun_ports_update" ON balun_ports;
+    DROP POLICY IF EXISTS "balun_ports_delete" ON balun_ports;
     CREATE POLICY "balun_ports_select" ON balun_ports FOR SELECT USING (auth.uid() = user_id);
     CREATE POLICY "balun_ports_insert" ON balun_ports FOR INSERT WITH CHECK (auth.uid() = user_id);
     CREATE POLICY "balun_ports_update" ON balun_ports FOR UPDATE USING (auth.uid() = user_id);
@@ -320,6 +324,10 @@ BEGIN
         unique(switch_id, port_number)
       )';
     ALTER TABLE switch_ports ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "switch_ports_select" ON switch_ports;
+    DROP POLICY IF EXISTS "switch_ports_insert" ON switch_ports;
+    DROP POLICY IF EXISTS "switch_ports_update" ON switch_ports;
+    DROP POLICY IF EXISTS "switch_ports_delete" ON switch_ports;
     CREATE POLICY "switch_ports_select" ON switch_ports FOR SELECT USING (auth.uid() = user_id);
     CREATE POLICY "switch_ports_insert" ON switch_ports FOR INSERT WITH CHECK (auth.uid() = user_id);
     CREATE POLICY "switch_ports_update" ON switch_ports FOR UPDATE USING (auth.uid() = user_id);
