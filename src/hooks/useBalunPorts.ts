@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { BalunPort } from '../lib/types'
+import { useAuth } from './useAuth'
 
 export function useBalunPorts(balunId: string | null) {
+  const { user } = useAuth()
   const [ports, setPorts] = useState<BalunPort[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -21,10 +23,10 @@ export function useBalunPorts(balunId: string | null) {
   useEffect(() => { fetch() }, [fetch])
 
   const savePort = async (port: { port_number: number; camera_id?: string | null; is_active?: boolean; notes?: string }) => {
-    if (!balunId) return { error: 'Sem balun' }
+    if (!balunId || !user) return { error: 'Sem balun ou usuário' }
     const { data: existing } = await supabase
       .from('balun_ports')
-      .select('id')
+      .select('id, user_id')
       .eq('balun_id', balunId)
       .eq('port_number', port.port_number)
       .single()
@@ -43,6 +45,7 @@ export function useBalunPorts(balunId: string | null) {
         camera_id: port.camera_id || null,
         is_active: port.is_active ?? true,
         notes: port.notes || null,
+        user_id: user.id,
       })
       if (error) return { error: error.message }
     }
