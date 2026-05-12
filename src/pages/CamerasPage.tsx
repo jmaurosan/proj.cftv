@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Cable, QrCode } from 'lucide-react'
+import { Plus, Cable, QrCode, HardDrive, Wifi, LayoutGrid } from 'lucide-react'
 import { useCameras } from '../hooks/useCameras'
+import { useDvrs } from '../hooks/useDvrs'
 import type { Camera } from '../lib/types'
 import { CABLE_TYPE_LABELS } from '../lib/constants'
 import { supabase } from '../lib/supabase'
@@ -16,6 +17,7 @@ import { useToast } from '../components/ui/Toast'
 
 export default function CamerasPage() {
   const { data, loading, create, update, remove } = useCameras()
+  const { data: dvrs } = useDvrs()
   const { toast } = useToast()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Camera | null>(null)
@@ -26,6 +28,8 @@ export default function CamerasPage() {
   const [cableTypes, setCableTypes] = useState<Record<string, string>>({})
   const [sortKey, setSortKey] = useState<string>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  // activeTab: 'all' = todas; 'ip' = IP sem DVR; ou id do DVR
+  const [activeTab, setActiveTab] = useState<string>('all')
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -59,6 +63,27 @@ export default function CamerasPage() {
       return 0
     })
   }, [data, sortKey, sortDir])
+
+  // Dados filtrados pela aba ativa
+  const filteredData = useMemo(() => {
+    if (activeTab === 'all') return sortedData
+    if (activeTab === 'ip') return sortedData.filter((c) => c.connection_type === 'ip' && !c.dvr_id)
+    return sortedData.filter((c) => c.dvr_id === activeTab)
+  }, [sortedData, activeTab])
+
+  // Contagens por aba
+  const counts = useMemo(() => {
+    const byDvr: Record<string, number> = {}
+    let ipOnly = 0
+    for (const c of data) {
+      if (c.dvr_id) {
+        byDvr[c.dvr_id] = (byDvr[c.dvr_id] ?? 0) + 1
+      } else if (c.connection_type === 'ip') {
+        ipOnly++
+      }
+    }
+    return { byDvr, ipOnly, total: data.length }
+  }, [data])
 
   // Fetch cable types for all cameras to show badge
   const fetchCableTypes = async () => {
@@ -173,17 +198,79 @@ export default function CamerasPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-text-primary">Câmeras</h2>
-          <p className="text-text-muted text-sm mt-1">{data.length} registro(s)</p>
+          <p className="text-text-muted text-sm mt-1">
+            {activeTab === 'all'
+              ? `${data.length} registro(s)`
+              : `${filteredData.length} de ${data.length} registro(s)`}
+          </p>
         </div>
         <Button onClick={() => { setEditing(null); setModalOpen(true) }}>
           <Plus className="w-4 h-4" /> Nova Câmera
         </Button>
       </div>
 
+      {/* Abas por DVR */}
+      <div className="flex flex-wrap gap-2 border-b border-border-light pb-1">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+            activeTab === 'all'
+              ? 'bg-accent/15 text-accent border-b-2 border-accent'
+              : 'text-text-muted hover:text-text-primary hover:bg-bg-secondary'
+          }`}
+        >
+          <LayoutGrid className="w-4 h-4" />
+          Todas
+          <span className="px-1.5 py-0.5 rounded-full bg-bg-primary text-xs">
+            {counts.total}
+          </span>
+        </button>
+
+        {dvrs.map((dvr) => {
+          const used = counts.byDvr[dvr.id] ?? 0
+          const isActive = activeTab === dvr.id
+          return (
+            <button
+              key={dvr.id}
+              onClick={() => setActiveTab(dvr.id)}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-accent/15 text-accent border-b-2 border-accent'
+                  : 'text-text-muted hover:text-text-primary hover:bg-bg-secondary'
+              }`}
+              title={`${dvr.location ?? ''}`}
+            >
+              <HardDrive className="w-4 h-4" />
+              {dvr.name}
+              <span className="px-1.5 py-0.5 rounded-full bg-bg-primary text-xs">
+                {used}/{dvr.total_channels}
+              </span>
+            </button>
+          )
+        })}
+
+        {counts.ipOnly > 0 && (
+          <button
+            onClick={() => setActiveTab('ip')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+              activeTab === 'ip'
+                ? 'bg-accent/15 text-accent border-b-2 border-accent'
+                : 'text-text-muted hover:text-text-primary hover:bg-bg-secondary'
+            }`}
+          >
+            <Wifi className="w-4 h-4" />
+            IP (sem DVR)
+            <span className="px-1.5 py-0.5 rounded-full bg-bg-primary text-xs">
+              {counts.ipOnly}
+            </span>
+          </button>
+        )}
+      </div>
+
       <div className="bg-bg-secondary border border-border-light rounded-xl overflow-hidden">
         <DataTable
           columns={columns}
-          data={sortedData}
+          data={filteredData}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}
