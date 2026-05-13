@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Balun4x1Output } from '../lib/types'
+import { translateError } from '../lib/errorTranslator'
 
 // Calcula as saídas 4x1 baseado no total de portas
 export function get4x1Outputs(totalPorts: number): Array<{ output_number: number; channel_start: number; channel_end: number }> {
@@ -50,7 +51,7 @@ export function useBalun4x1Outputs(balunId: string | null) {
       const { error } = await supabase.from('balun_4x1_outputs').update({
         notes: output.notes || null,
       }).eq('id', existing.id)
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     } else {
       const { error } = await supabase.from('balun_4x1_outputs').insert({
         balun_id: balunId,
@@ -59,7 +60,7 @@ export function useBalun4x1Outputs(balunId: string | null) {
         channel_end: output.channel_end,
         notes: output.notes || null,
       })
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     }
     await fetch()
     return { error: null }
@@ -72,7 +73,7 @@ export function useBalun4x1Outputs(balunId: string | null) {
       .delete()
       .eq('balun_id', balunId)
       .eq('output_number', outputNumber)
-    if (error) return { error: error.message }
+    if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }

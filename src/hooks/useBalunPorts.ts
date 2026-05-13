@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { BalunPort } from '../lib/types'
 import { useAuth } from './useAuth'
+import { translateError } from '../lib/errorTranslator'
 
 export function useBalunPorts(balunId: string | null) {
   const { user } = useAuth()
@@ -37,7 +38,7 @@ export function useBalunPorts(balunId: string | null) {
         is_active: port.is_active ?? true,
         notes: port.notes || null,
       }).eq('id', existing.id)
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     } else {
       const { error } = await supabase.from('balun_ports').insert({
         balun_id: balunId,
@@ -47,7 +48,7 @@ export function useBalunPorts(balunId: string | null) {
         notes: port.notes || null,
         user_id: user.id,
       })
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     }
     await fetch()
     return { error: null }

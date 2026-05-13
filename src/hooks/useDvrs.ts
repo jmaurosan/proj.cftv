@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Dvr, DvrInsert, DvrUpdate } from '../lib/types'
 import { useAuth } from './useAuth'
+import { translateError } from '../lib/errorTranslator'
 
 export function useDvrs() {
   const { user } = useAuth()
@@ -15,7 +16,7 @@ export function useDvrs() {
       .from('dvrs')
       .select('*')
       .order('created_at', { ascending: false })
-    if (error) setError(error.message)
+    if (error) setError(translateError(error))
     else setData(data as Dvr[])
     setLoading(false)
   }, [])
@@ -25,21 +26,21 @@ export function useDvrs() {
   const create = async (payload: Omit<DvrInsert, 'user_id'>) => {
     if (!user) return { error: 'Não autenticado' }
     const { error } = await supabase.from('dvrs').insert({ ...payload, user_id: user.id })
-    if (error) return { error: error.message }
+    if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }
 
   const update = async (id: string, payload: DvrUpdate) => {
     const { error } = await supabase.from('dvrs').update(payload).eq('id', id)
-    if (error) return { error: error.message }
+    if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }
 
   const remove = async (id: string) => {
     const { error } = await supabase.from('dvrs').delete().eq('id', id)
-    if (error) return { error: error.message }
+    if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }

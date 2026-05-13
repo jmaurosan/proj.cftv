@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { SwitchPort } from '../lib/types'
+import { translateError } from '../lib/errorTranslator'
 
 export function useSwitchPorts(switchId: string | null) {
   const [ports, setPorts] = useState<SwitchPort[]>([])
@@ -36,7 +37,7 @@ export function useSwitchPorts(switchId: string | null) {
         is_active: port.is_active ?? true,
         notes: port.notes || null,
       }).eq('id', existing.id)
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     } else {
       const { error } = await supabase.from('switch_ports').insert({
         switch_id: switchId,
@@ -46,7 +47,7 @@ export function useSwitchPorts(switchId: string | null) {
         is_active: port.is_active ?? true,
         notes: port.notes || null,
       })
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     }
     await fetch()
     return { error: null }

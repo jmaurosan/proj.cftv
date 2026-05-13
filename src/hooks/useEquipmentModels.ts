@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { EquipmentModel } from '../lib/types'
 import { useAuth } from './useAuth'
+import { translateError } from '../lib/errorTranslator'
 
 export function useEquipmentModels(type?: string) {
   const { user } = useAuth()
@@ -33,10 +34,10 @@ export function useEquipmentModels(type?: string) {
 
     if (existing) {
       const { error } = await supabase.from('equipment_models').update(model).eq('id', existing.id)
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     } else {
       const { error } = await supabase.from('equipment_models').insert({ ...model, user_id: user.id })
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     }
     await fetch()
     return { error: null }

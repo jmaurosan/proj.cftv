@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Credential, CredentialInsert, CredentialUpdate } from '../lib/types'
 import { useAuth } from './useAuth'
+import { translateError } from '../lib/errorTranslator'
 
 export function useCredentials() {
   const { user } = useAuth()
@@ -15,7 +16,7 @@ export function useCredentials() {
       .from('credentials')
       .select('*')
       .order('created_at', { ascending: false })
-    if (error) setError(error.message)
+    if (error) setError(translateError(error))
     else setData(data as Credential[])
     setLoading(false)
   }, [])
@@ -25,21 +26,21 @@ export function useCredentials() {
   const create = async (payload: Omit<CredentialInsert, 'user_id'>) => {
     if (!user) return { error: 'Não autenticado' }
     const { error } = await supabase.from('credentials').insert({ ...payload, user_id: user.id })
-    if (error) return { error: error.message }
+    if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }
 
   const update = async (id: string, payload: CredentialUpdate) => {
     const { error } = await supabase.from('credentials').update(payload).eq('id', id)
-    if (error) return { error: error.message }
+    if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }
 
   const remove = async (id: string) => {
     const { error } = await supabase.from('credentials').delete().eq('id', id)
-    if (error) return { error: error.message }
+    if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }

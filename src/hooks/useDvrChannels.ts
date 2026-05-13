@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { DvrChannel } from '../lib/types'
+import { translateError } from '../lib/errorTranslator'
 
 export function useDvrChannels(dvrId: string | null) {
   const [channels, setChannels] = useState<DvrChannel[]>([])
@@ -34,7 +35,7 @@ export function useDvrChannels(dvrId: string | null) {
         is_active: channel.is_active ?? true,
         notes: channel.notes || null,
       }).eq('id', existing.id)
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     } else {
       const { error } = await supabase.from('dvr_channels').insert({
         dvr_id: dvrId,
@@ -42,7 +43,7 @@ export function useDvrChannels(dvrId: string | null) {
         is_active: channel.is_active ?? true,
         notes: channel.notes || null,
       })
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     }
     await fetch()
     return { error: null }

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { CableConnection } from '../lib/types'
 import { useAuth } from './useAuth'
+import { translateError } from '../lib/errorTranslator'
 
 export function useCableConnection(cameraId: string) {
   const { user } = useAuth()
@@ -28,13 +29,13 @@ export function useCableConnection(cameraId: string) {
         .from('cable_connections')
         .update(payload)
         .eq('id', data.id)
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     } else {
       // Insert new
       const { error } = await supabase
         .from('cable_connections')
         .insert({ ...payload, camera_id: cameraId, user_id: user.id })
-      if (error) return { error: error.message }
+      if (error) return { error: translateError(error) }
     }
     await fetch()
     return { error: null }
@@ -46,7 +47,7 @@ export function useCableConnection(cameraId: string) {
       .from('cable_connections')
       .delete()
       .eq('id', data.id)
-    if (error) return { error: error.message }
+    if (error) return { error: translateError(error) }
     setData(null)
     return { error: null }
   }
