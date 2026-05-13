@@ -10,6 +10,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import BalunForm from '../components/forms/BalunForm'
 import { useToast } from '../components/ui/Toast'
+import ClientFilterBanner from '../components/ui/ClientFilterBanner'
 
 export default function BalunsPage() {
   const { data, loading, create, update, remove } = useBaluns()
@@ -81,6 +82,7 @@ export default function BalunsPage() {
 
   return (
     <div className="space-y-6">
+      <ClientFilterBanner />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-text-primary">Power Baluns</h2>

@@ -10,6 +10,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import CredentialForm from '../components/forms/CredentialForm'
 import { useToast } from '../components/ui/Toast'
+import ClientFilterBanner from '../components/ui/ClientFilterBanner'
 
 function PasswordCell({ password }: { password: string }) {
   const [visible, setVisible] = useState(false)
@@ -101,6 +102,7 @@ export default function CredentialsPage() {
 
   return (
     <div className="space-y-6">
+      <ClientFilterBanner />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-text-primary">Credenciais</h2>
