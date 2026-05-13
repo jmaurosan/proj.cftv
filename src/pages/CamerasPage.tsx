@@ -71,6 +71,13 @@ export default function CamerasPage() {
     return sortedData.filter((c) => c.dvr_id === activeTab)
   }, [sortedData, activeTab])
 
+  // DVRs ordenados alfanumericamente (DVR 1, DVR 2, ... DVR 10) — menor para maior
+  const sortedDvrs = useMemo(() => {
+    return [...dvrs].sort((a, b) =>
+      a.name.localeCompare(b.name, 'pt-BR', { numeric: true, sensitivity: 'base' })
+    )
+  }, [dvrs])
+
   // Contagens por aba
   const counts = useMemo(() => {
     const byDvr: Record<string, number> = {}
@@ -226,7 +233,7 @@ export default function CamerasPage() {
           </span>
         </button>
 
-        {dvrs.map((dvr) => {
+        {sortedDvrs.map((dvr) => {
           const used = counts.byDvr[dvr.id] ?? 0
           const isActive = activeTab === dvr.id
           return (
