@@ -89,8 +89,8 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       name,
       brand: brand || null,
       connection_type: connectionType,
-      dvr_id: !isIP && dvrId ? dvrId : null,
-      channel_number: !isIP && channelNumber ? channelNumber : null,
+      dvr_id: dvrId || null,
+      channel_number: dvrId && channelNumber ? channelNumber : null,
       ip_address: isIP && ipAddress ? ipAddress : null,
       mac_address: isIP && macAddress ? macAddress : null,
       poe_powered: isIP ? poePowered : false,
@@ -252,20 +252,38 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
       {/* IP: Endereço IP + MAC */}
       {isIP && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Endereço IP (opcional)"
-            value={ipAddress}
-            onChange={(e) => setIpAddress(e.target.value)}
-            placeholder="192.168.1.100"
-          />
-          <Input
-            label="MAC Address (opcional)"
-            value={macAddress}
-            onChange={(e) => setMacAddress(e.target.value)}
-            placeholder="AA:BB:CC:DD:EE:FF"
-          />
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Endereço IP (opcional)"
+              value={ipAddress}
+              onChange={(e) => setIpAddress(e.target.value)}
+              placeholder="192.168.1.100"
+            />
+            <Input
+              label="MAC Address (opcional)"
+              value={macAddress}
+              onChange={(e) => setMacAddress(e.target.value)}
+              placeholder="AA:BB:CC:DD:EE:FF"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="DVR/NVR (opcional)"
+              value={dvrId}
+              onChange={(e) => setDvrId(e.target.value)}
+              options={dvrs.map((d) => ({ value: d.id, label: d.name }))}
+              placeholder="Nenhum"
+            />
+            <Select
+              label="Canal"
+              value={channelNumber}
+              onChange={(e) => setChannelNumber(Number(e.target.value))}
+              options={Array.from({ length: 16 }, (_, i) => ({ value: i + 1, label: `Canal ${i + 1}` }))}
+              disabled={!dvrId}
+            />
+          </div>
+        </>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
