@@ -737,6 +737,10 @@ export default function ClientsPage() {
         open={!!confirmAssignClient}
         onClose={() => setConfirmAssignClient(null)}
         onConfirm={handleAssignOrphans}
+        loading={!!assigningClientId}
+        confirmLabel="Vincular"
+        loadingLabel="Vinculando..."
+        confirmVariant="primary"
         title="Vincular dados sem cliente"
         message={`Todos os DVRs, câmeras, baluns, switches, credenciais e demais equipamentos atualmente sem cliente serão vinculados a "${confirmAssignClient?.name ?? ''}". Esta ação não afeta registros já vinculados a outros clientes. Deseja continuar?`}
       />
