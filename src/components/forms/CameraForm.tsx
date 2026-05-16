@@ -8,7 +8,7 @@ import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
-import { CameraIcon, X, QrCode, Package, MapPin } from 'lucide-react'
+import { CameraIcon, X, QrCode, Package, MapPin, Monitor } from 'lucide-react'
 
 interface CameraFormProps {
   initialData?: Camera | null
@@ -33,7 +33,8 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [balunPort, setBalunPort] = useState(initialData?.balun_port ?? '')
   const [switchId, setSwitchId] = useState(initialData?.switch_id ?? '')
   const [switchPort, setSwitchPort] = useState(initialData?.switch_port ?? '')
-  const [rtspUrl, setRtspUrl] = useState(initialData?.rtsp_url ?? '')
+  const [streamUrl, setStreamUrl] = useState(initialData?.rtsp_url ?? '')
+  const [streamMode, setStreamMode] = useState<'auto' | 'manual'>('auto')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [qrCodeUrl, setQrCodeUrl] = useState(initialData?.qr_code_url ?? '')
   const [installationPhotoUrl, setInstallationPhotoUrl] = useState(initialData?.installation_photo_url ?? '')
@@ -105,7 +106,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       balun_port: !isIP && balunPort ? Number(balunPort) : null,
       switch_id: switchId || null,
       switch_port: switchPort ? Number(switchPort) : null,
-      rtsp_url: rtspUrl || null,
+      rtsp_url: streamUrl || null,
       qr_code_url: qrCodeUrl || null,
       installation_photo_url: installationPhotoUrl || null,
       notes: notes || null,
@@ -387,12 +388,80 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         </label>
       )}
 
-      <Input
-        label="URL RTSP (opcional)"
-        value={rtspUrl}
-        onChange={(e) => setRtspUrl(e.target.value)}
-        placeholder="rtsp://usuario:senha@192.168.1.100:554/stream1"
-      />
+      {/* ── Visualização ao vivo ── */}
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
+          <Monitor className="w-3.5 h-3.5" />
+          Visualização ao Vivo
+        </label>
+
+        <div className="flex gap-2 p-1 bg-bg-tertiary rounded-lg w-fit">
+          <button
+            type="button"
+            onClick={() => setStreamMode('auto')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              streamMode === 'auto'
+                ? 'bg-accent text-white shadow-sm'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+          >
+            Auto (DVR)
+          </button>
+          <button
+            type="button"
+            onClick={() => setStreamMode('manual')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              streamMode === 'manual'
+                ? 'bg-accent text-white shadow-sm'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+          >
+            Manual
+          </button>
+        </div>
+
+        {streamMode === 'auto' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Input
+              label="IP do DVR/NVR ou Câmera"
+              value={ipAddress || ''}
+              onChange={(e) => setIpAddress(e.target.value)}
+              placeholder="192.168.1.100"
+              required={streamMode === 'auto'}
+            />
+            <Select
+              label="Marca"
+              value={brand || ''}
+              onChange={(e) => setBrand(e.target.value)}
+              options={[
+                { value: '', label: 'Selecione a marca' },
+                { value: 'Hikvision', label: 'Hikvision' },
+                { value: 'Intelbras', label: 'Intelbras' },
+                { value: 'Dahua', label: 'Dahua' },
+              ]}
+            />
+            <Select
+              label="Canal"
+              value={channelNumber}
+              onChange={(e) => setChannelNumber(Number(e.target.value))}
+              options={Array.from({ length: 16 }, (_, i) => ({ value: i + 1, label: `Canal ${i + 1}` }))}
+            />
+          </div>
+        ) : (
+          <Input
+            label="URL de Streaming (MJPEG, HLS ou Snapshot)"
+            value={streamUrl}
+            onChange={(e) => setStreamUrl(e.target.value)}
+            placeholder="http://192.168.1.100/ISAPI/Streaming/channels/101/httpPreview"
+          />
+        )}
+
+        <p className="text-xs text-text-muted">
+          {streamMode === 'auto'
+            ? 'O sistema monta a URL automaticamente com base na marca e canal do DVR.'
+            : 'Cole a URL direta de streaming (MJPEG, HLS ou snapshot) do seu dispositivo.'}
+        </p>
+      </div>
       {/* ── QR Code / Foto de acesso ── */}
       <div className="space-y-2">
         <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
