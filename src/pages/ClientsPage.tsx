@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, Trash2, Globe, User, Loader2 } from 'lucide-react'
+import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, Trash2, Globe, User, Loader2, Link2 } from 'lucide-react'
 import { useClients } from '../hooks/useClients'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -119,7 +119,7 @@ const inputClass =
 
 // Sistema de gerenciamento de clientes/projetos
 export default function ClientsPage() {
-  const { clients, loading, error, createClient, updateClient, deleteClient } = useClients()
+  const { clients, loading, error, createClient, updateClient, deleteClient, assignOrphansToClient } = useClients()
   const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -127,6 +127,8 @@ export default function ClientsPage() {
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null)
   const [formData, setFormData] = useState<ClientFormData>(emptyForm)
   const [submitting, setSubmitting] = useState(false)
+  const [assigningClientId, setAssigningClientId] = useState<string | null>(null)
+  const [confirmAssignClient, setConfirmAssignClient] = useState<Client | null>(null)
 
   // Loading states para APIs externas
   const [loadingCNPJ, setLoadingCNPJ] = useState(false)
@@ -293,6 +295,24 @@ export default function ClientsPage() {
     setDeleteClientId(null)
   }
 
+  const handleAssignOrphans = async () => {
+    if (!confirmAssignClient) return
+    setAssigningClientId(confirmAssignClient.id)
+    const result = await assignOrphansToClient(confirmAssignClient.id)
+    setAssigningClientId(null)
+    if (result.error) {
+      toast(result.error, 'error')
+    } else {
+      const total = Object.values(result.counts).reduce((acc: number, n) => acc + (n as number), 0)
+      if (total === 0) {
+        toast('Nenhum equipamento sem cliente foi encontrado.')
+      } else {
+        toast(`${total} registro(s) vinculado(s) a ${confirmAssignClient.name}`)
+      }
+    }
+    setConfirmAssignClient(null)
+  }
+
   // ─── Filtro de busca ───────────────────────────────────────────────────────
 
   const filteredClients = useMemo(() => {
@@ -442,6 +462,25 @@ export default function ClientsPage() {
                   Selecionar
                 </Button>
               </div>
+              <button
+                type="button"
+                onClick={() => setConfirmAssignClient(client)}
+                disabled={assigningClientId === client.id}
+                className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs text-text-muted hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors py-1.5 border border-border-light hover:border-primary/50 rounded-lg"
+                title="Vincular equipamentos sem cliente a este cliente"
+              >
+                {assigningClientId === client.id ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Vinculando...
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="w-3 h-3" />
+                    Vincular dados sem cliente
+                  </>
+                )}
+              </button>
             </Card>
           ))}
         </div>
@@ -691,6 +730,15 @@ export default function ClientsPage() {
         onConfirm={handleDelete}
         title="Excluir Cliente"
         message="Tem certeza que deseja excluir este cliente? Todos os equipamentos associados serão removidos."
+      />
+
+      {/* Confirmação de vincular dados sem cliente */}
+      <ConfirmDialog
+        open={!!confirmAssignClient}
+        onClose={() => setConfirmAssignClient(null)}
+        onConfirm={handleAssignOrphans}
+        title="Vincular dados sem cliente"
+        message={`Todos os DVRs, câmeras, baluns, switches, credenciais e demais equipamentos atualmente sem cliente serão vinculados a "${confirmAssignClient?.name ?? ''}". Esta ação não afeta registros já vinculados a outros clientes. Deseja continuar?`}
       />
     </div>
   )
