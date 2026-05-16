@@ -20,7 +20,7 @@ export default function ViewerPage() {
   useEffect(() => {
     supabase
       .from('cameras')
-      .select('id, name, location, status, rtsp_url, brand, ip_address, channel_number')
+      .select('id, name, location, status, rtsp_url, brand, ip_address, channel_number, streaming_user, streaming_password')
       .eq('status', 'ativo')
       .order('name')
       .then(({ data }) => setCameras((data as Camera[]) || []))
@@ -92,6 +92,8 @@ export default function ViewerPage() {
                 deviceIp={camera.ip_address}
                 channelNumber={camera.channel_number}
                 dvrBrand={camera.brand}
+                streamUser={camera.streaming_user}
+                streamPass={camera.streaming_password}
               />
             ) : (
               <div className="flex flex-col items-center gap-2 sm:gap-3 text-text-muted">

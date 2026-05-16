@@ -35,6 +35,8 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [switchPort, setSwitchPort] = useState(initialData?.switch_port ?? '')
   const [streamUrl, setStreamUrl] = useState(initialData?.rtsp_url ?? '')
   const [streamMode, setStreamMode] = useState<'auto' | 'manual'>('auto')
+  const [streamUser, setStreamUser] = useState('')
+  const [streamPass, setStreamPass] = useState('')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [qrCodeUrl, setQrCodeUrl] = useState(initialData?.qr_code_url ?? '')
   const [installationPhotoUrl, setInstallationPhotoUrl] = useState(initialData?.installation_photo_url ?? '')
@@ -107,6 +109,8 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       switch_id: switchId || null,
       switch_port: switchPort ? Number(switchPort) : null,
       rtsp_url: streamUrl || null,
+      streaming_user: streamUser || null,
+      streaming_password: streamPass || null,
       qr_code_url: qrCodeUrl || null,
       installation_photo_url: installationPhotoUrl || null,
       notes: notes || null,
@@ -455,6 +459,23 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
             placeholder="http://192.168.1.100/ISAPI/Streaming/channels/101/httpPreview"
           />
         )}
+
+        {/* Credenciais de streaming */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Usuário do DVR"
+            value={streamUser}
+            onChange={(e) => setStreamUser(e.target.value)}
+            placeholder="admin"
+          />
+          <Input
+            label="Senha do DVR"
+            type="password"
+            value={streamPass}
+            onChange={(e) => setStreamPass(e.target.value)}
+            placeholder="••••••••"
+          />
+        </div>
 
         <p className="text-xs text-text-muted">
           {streamMode === 'auto'

@@ -56,6 +56,8 @@ export interface Camera {
   status: string
   resolution: string | null
   rtsp_url: string | null
+  streaming_user: string | null
+  streaming_password: string | null
   balun_id: string | null
   balun_port: number | null
   switch_id: string | null

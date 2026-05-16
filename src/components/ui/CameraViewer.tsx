@@ -35,6 +35,10 @@ interface CameraViewerProps {
   channelNumber?: number | null
   /** Marca do DVR: hikvision, intelbras, dahua ou outra */
   dvrBrand?: string | null
+  /** Usuário para autenticação HTTP Basic */
+  streamUser?: string | null
+  /** Senha para autenticação HTTP Basic */
+  streamPass?: string | null
 }
 
 type ViewerMode = 'mjpeg' | 'snapshot' | 'hls' | 'iframe' | 'error' | 'connecting'
@@ -45,6 +49,8 @@ export default function CameraViewer({
   deviceIp,
   channelNumber,
   dvrBrand,
+  streamUser,
+  streamPass,
 }: CameraViewerProps) {
   const [mode, setMode] = useState<ViewerMode>('connecting')
   const [snapshotKey, setSnapshotKey] = useState(0)
@@ -63,6 +69,24 @@ export default function CameraViewer({
     if (urls.hls) return { url: urls.hls, type: 'hls' }
     return { url: '', type: null }
   }, [deviceIp, channelNumber, dvrBrand])
+
+  // Injeta credenciais na URL se houver usuário/senha
+  const injectAuth = useCallback((url: string): string => {
+    if (!url || !streamUser || !streamPass) return url
+    try {
+      const urlObj = new URL(url)
+      urlObj.username = streamUser
+      urlObj.password = streamPass
+      return urlObj.toString()
+    } catch {
+      // Se a URL não for válida, injeta manualmente
+      const protocolEnd = url.indexOf('://')
+      if (protocolEnd === -1) return url
+      const protocol = url.substring(0, protocolEnd + 3)
+      const rest = url.substring(protocolEnd + 3)
+      return `${protocol}${streamUser}:${encodeURIComponent(streamPass)}@${rest}`
+    }
+  }, [streamUser, streamPass])
 
   // Snapshot polling para DVRs sem MJPEG contínuo
   useEffect(() => {
@@ -112,8 +136,9 @@ export default function CameraViewer({
   const renderContent = () => {
     // MJPEG stream (contínuo via <img>)
     if (mode === 'mjpeg') {
-      const url = streamUrl || autoUrl().url
-      if (!url) return <NoSignal />
+      const rawUrl = streamUrl || autoUrl().url
+      if (!rawUrl) return <NoSignal />
+      const url = injectAuth(rawUrl)
       return (
         <img
           ref={imgRef}
@@ -128,8 +153,9 @@ export default function CameraViewer({
 
     // Snapshot polling (atualiza a cada 1s)
     if (mode === 'snapshot') {
-      const url = streamUrl || autoUrl().url
-      if (!url) return <NoSignal />
+      const rawUrl = streamUrl || autoUrl().url
+      if (!rawUrl) return <NoSignal />
+      const url = injectAuth(rawUrl)
       return (
         <img
           ref={imgRef}
@@ -144,8 +170,9 @@ export default function CameraViewer({
 
     // HLS ou iframe genérico
     if (mode === 'iframe') {
-      const url = streamUrl || autoUrl().url
-      if (!url) return <NoSignal />
+      const rawUrl = streamUrl || autoUrl().url
+      if (!rawUrl) return <NoSignal />
+      const url = injectAuth(rawUrl)
       return (
         <iframe
           ref={iframeRef}
