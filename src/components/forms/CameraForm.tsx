@@ -2,13 +2,13 @@ import { useState, useEffect, useMemo, type FormEvent, useRef } from 'react'
 import type { Camera, Dvr, PowerBalun, Switch } from '../../lib/types'
 import { STATUS_OPTIONS, CAMERA_TYPES, RESOLUTION_OPTIONS, CONNECTION_TYPES } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
-import { uploadQRCodeImage, deleteQRCodeImage } from '../../services/storageService'
+import { uploadQRCodeImage, deleteQRCodeImage, uploadInstallationPhoto, deleteInstallationPhoto } from '../../services/storageService'
 import { useAuth } from '../../hooks/useAuth'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
-import { CameraIcon, X, QrCode, Package } from 'lucide-react'
+import { CameraIcon, X, QrCode, Package, MapPin } from 'lucide-react'
 
 interface CameraFormProps {
   initialData?: Camera | null
@@ -36,11 +36,14 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [rtspUrl, setRtspUrl] = useState(initialData?.rtsp_url ?? '')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [qrCodeUrl, setQrCodeUrl] = useState(initialData?.qr_code_url ?? '')
+  const [installationPhotoUrl, setInstallationPhotoUrl] = useState(initialData?.installation_photo_url ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploadingQr, setUploadingQr] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const { user } = useAuth()
   const [otherBrandMode, setOtherBrandMode] = useState(false)
 
@@ -104,6 +107,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       switch_port: switchPort ? Number(switchPort) : null,
       rtsp_url: rtspUrl || null,
       qr_code_url: qrCodeUrl || null,
+      installation_photo_url: installationPhotoUrl || null,
       notes: notes || null,
     })
     if (result.error) {
@@ -143,6 +147,33 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       await deleteQRCodeImage(qrCodeUrl)
     }
     setQrCodeUrl('')
+  }
+
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+    setUploadingPhoto(true)
+
+    if (installationPhotoUrl && installationPhotoUrl !== initialData?.installation_photo_url) {
+      await deleteInstallationPhoto(installationPhotoUrl)
+    }
+
+    const result = await uploadInstallationPhoto(file, user.id, initialData?.id)
+    if (result.error) {
+      setError('Erro ao fazer upload da foto: ' + result.error)
+    } else if (result.url) {
+      setInstallationPhotoUrl(result.url)
+      setError(null)
+    }
+    setUploadingPhoto(false)
+    e.target.value = ''
+  }
+
+  const handleRemovePhoto = async () => {
+    if (installationPhotoUrl && installationPhotoUrl !== initialData?.installation_photo_url) {
+      await deleteInstallationPhoto(installationPhotoUrl)
+    }
+    setInstallationPhotoUrl('')
   }
 
   return (
@@ -422,6 +453,69 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
         <p className="text-xs text-text-muted">
           Bata uma foto do QR Code do app da câmera para acessar de outro dispositivo.
+        </p>
+      </div>
+
+      {/* ── Foto do local de instalação ── */}
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
+          <MapPin className="w-3.5 h-3.5" />
+          Foto do Local de Instalação
+        </label>
+
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handlePhotoFileChange}
+          className="hidden"
+        />
+
+        {installationPhotoUrl ? (
+          <div className="relative w-fit group">
+            <img
+              src={installationPhotoUrl}
+              alt="Foto do local de instalação"
+              className="w-64 h-48 object-cover border border-border-light rounded-lg bg-bg-primary"
+            />
+            <button
+              type="button"
+              onClick={handleRemovePhoto}
+              className="absolute -top-2 -right-2 w-7 h-7 bg-danger text-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Remover foto"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              className="absolute bottom-1 right-1 px-2 py-1 bg-bg-tertiary/90 backdrop-blur-sm text-text-primary text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              Substituir
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={uploadingPhoto}
+            className="w-full sm:w-auto flex items-center gap-2 px-4 py-8 border-2 border-dashed border-border-light rounded-lg text-text-muted hover:border-accent hover:text-accent transition-colors"
+          >
+            {uploadingPhoto ? (
+              <span className="animate-pulse">Enviando...</span>
+            ) : (
+              <>
+                <CameraIcon className="w-5 h-5" />
+                <span>Tirar foto do local</span>
+                <span className="text-xs opacity-60">(ou selecionar arquivo)</span>
+              </>
+            )}
+          </button>
+        )}
+
+        <p className="text-xs text-text-muted">
+          Registre uma foto de onde a câmera está instalada para conferência física futura.
         </p>
       </div>
 

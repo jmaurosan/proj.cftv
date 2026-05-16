@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Cable, QrCode, HardDrive, Wifi, LayoutGrid } from 'lucide-react'
+import { Plus, Cable, QrCode, HardDrive, Wifi, LayoutGrid, MapPin } from 'lucide-react'
 import { useCameras } from '../hooks/useCameras'
 import { useDvrs } from '../hooks/useDvrs'
 import type { Camera } from '../lib/types'
@@ -26,6 +26,7 @@ export default function CamerasPage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [cableCamera, setCableCamera] = useState<Camera | null>(null)
   const [qrCamera, setQrCamera] = useState<Camera | null>(null)
+  const [photoCamera, setPhotoCamera] = useState<Camera | null>(null)
   const [cableTypes, setCableTypes] = useState<Record<string, string>>({})
   const [sortKey, setSortKey] = useState<string>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -162,6 +163,22 @@ export default function CamerasPage() {
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
           >
             <QrCode className="w-3 h-3" />
+            Ver
+          </button>
+        ) : (
+          <span className="text-text-muted text-xs">-</span>
+        ),
+    },
+    {
+      key: 'installation_photo',
+      label: 'Foto Local',
+      render: (c) =>
+        c.installation_photo_url ? (
+          <button
+            onClick={() => setPhotoCamera(c)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-colors"
+          >
+            <MapPin className="w-3 h-3" />
             Ver
           </button>
         ) : (
@@ -349,6 +366,40 @@ export default function CamerasPage() {
               variant="secondary"
               size="sm"
               onClick={() => setQrCamera(null)}
+            >
+              Fechar
+            </Button>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal de visualização da Foto do Local de Instalação */}
+      <Modal
+        open={!!photoCamera}
+        onClose={() => setPhotoCamera(null)}
+        title={`Foto do Local - ${photoCamera?.name ?? ''}`}
+        size="md"
+      >
+        {photoCamera?.installation_photo_url && (
+          <div className="flex flex-col items-center gap-4">
+            <img
+              src={photoCamera.installation_photo_url}
+              alt={`Foto do local da câmera ${photoCamera.name}`}
+              className="max-w-full max-h-[70vh] rounded-lg border border-border-light"
+            />
+            {photoCamera.location && (
+              <p className="text-sm text-text-secondary text-center flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5" />
+                {photoCamera.location}
+              </p>
+            )}
+            <p className="text-xs text-text-muted text-center">
+              Referência visual para conferência física do local de instalação.
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPhotoCamera(null)}
             >
               Fechar
             </Button>

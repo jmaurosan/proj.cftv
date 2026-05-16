@@ -61,6 +61,7 @@ export interface Camera {
   switch_id: string | null
   switch_port: number | null
   qr_code_url: string | null
+  installation_photo_url: string | null
   notes: string | null
   client_id: string | null
   user_id: string
