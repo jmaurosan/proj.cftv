@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, type FormEvent, useRef } from 'react'
 import type { Camera, Dvr, PowerBalun, Switch } from '../../lib/types'
-import { STATUS_OPTIONS, CAMERA_TYPES, RESOLUTION_OPTIONS, CONNECTION_TYPES } from '../../lib/constants'
+import { STATUS_OPTIONS, CAMERA_TYPES, RESOLUTION_OPTIONS } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import { uploadQRCodeImage, deleteQRCodeImage, uploadInstallationPhoto, deleteInstallationPhoto } from '../../services/storageService'
 import { useAuth } from '../../hooks/useAuth'
@@ -57,7 +57,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [baluns, setBaluns] = useState<PowerBalun[]>([])
   const [switches, setSwitches] = useState<Switch[]>([])
 
-  const isIP = connectionType === 'ip'
+  const isIP = connectionType === 'ip' || connectionType === 'wifi'
   const { models: cameraModels, saveModel } = useEquipmentModels('camera')
   
   // Extrai marcas únicas dos modelos cadastrados
@@ -217,20 +217,42 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
       {/* Connection Type Toggle */}
       <div className="flex gap-2 p-1 bg-bg-tertiary rounded-lg w-fit">
-        {CONNECTION_TYPES.map((ct) => (
-          <button
-            key={ct.value}
-            type="button"
-            onClick={() => setConnectionType(ct.value)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              connectionType === ct.value
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-text-muted hover:text-text-primary'
-            }`}
-          >
-            {ct.label}
-          </button>
-        ))}
+        <button
+          key="analogica"
+          type="button"
+          onClick={() => setConnectionType('analogica')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            connectionType === 'analogica'
+              ? 'bg-accent text-white shadow-sm'
+              : 'text-text-muted hover:text-text-primary'
+          }`}
+        >
+          Analógica (DVR)
+        </button>
+        <button
+          key="ip"
+          type="button"
+          onClick={() => setConnectionType('ip')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            connectionType === 'ip'
+              ? 'bg-accent text-white shadow-sm'
+              : 'text-text-muted hover:text-text-primary'
+          }`}
+        >
+          IP (Rede)
+        </button>
+        <button
+          key="wifi"
+          type="button"
+          onClick={() => setConnectionType('wifi')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            connectionType === 'wifi'
+              ? 'bg-accent text-white shadow-sm'
+              : 'text-text-muted hover:text-text-primary'
+          }`}
+        >
+          Wi-Fi
+        </button>
       </div>
 
       {/* Modelo do Catálogo */}
@@ -312,7 +334,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         </div>
       )}
 
-      {/* IP: Endereço IP + MAC */}
+      {/* IP/Wi-Fi: Endereço IP + MAC */}
       {isIP && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
