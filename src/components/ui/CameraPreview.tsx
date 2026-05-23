@@ -95,19 +95,39 @@ export default function CameraPreview({
     const url = injectAuth(rawUrl)
     setImageUrl(url)
 
-    // Tenta carregar a imagem como snapshot
+    // Tenta carregar a imagem como snapshot com timeout
     const img = new Image()
+    let loaded = false
+    
     img.onload = () => {
-      setStatus('success')
+      if (!loaded) {
+        loaded = true
+        setStatus('success')
+      }
     }
+    
     img.onerror = () => {
-      // Para MJPEG contínuo, o onload pode não disparar, então consideramos sucesso após um tempo
-      setTimeout(() => {
-        if (status === 'loading') {
-          setStatus('success')
-        }
-      }, 2000)
+      if (!loaded) {
+        loaded = true
+        // Timeout curto para MJPEG, depois assume erro
+        setTimeout(() => {
+          if (status === 'loading' && !loaded) {
+            setStatus('error')
+            setError('Não foi possível carregar a imagem. Verifique:\n• IP e porta corretos\n• Câmera ligada na rede\n• Credenciais válidas\n• CORS permitido na câmera\n\nDica: Use o app IP Cam Viewer com a URL RTSP abaixo.')
+          }
+        }, 3000)
+      }
     }
+    
+    // Timeout geral de 8 segundos
+    setTimeout(() => {
+      if (!loaded && status === 'loading') {
+        loaded = true
+        setStatus('error')
+        setError('Timeout ao conectar. Verifique:\n• Câmera acessível na rede (ping 192.168.0.29)\n• Porta HTTP aberta (80)\n• Credenciais admin/senha corretas\n• Navegador permite HTTP (não HTTPS)\n\nAlternativa: Use a URL RTSP em app externo.')
+      }
+    }, 8000)
+    
     img.src = url
   }
 
@@ -147,7 +167,8 @@ export default function CameraPreview({
         {status === 'loading' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-text-muted bg-bg-primary/80">
             <Loader2 className="w-8 h-8 text-accent animate-spin mb-2" />
-            <span className="text-xs">Conectando ao DVR...</span>
+            <span className="text-xs">Conectando... (máx. 8s)</span>
+            <span className="text-[10px] text-text-muted mt-1">{imageUrl || 'Gerando URL...'}</span>
           </div>
         )}
 
@@ -166,7 +187,7 @@ export default function CameraPreview({
         {status === 'error' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-danger text-center px-4">
             <EyeOff className="w-8 h-8 opacity-60 mb-2" />
-            <span className="text-xs">{error}</span>
+            <span className="text-xs whitespace-pre-line">{error}</span>
           </div>
         )}
       </div>
@@ -235,6 +256,14 @@ export default function CameraPreview({
           </p>
         </div>
       )}
+
+      {/* Alerta sobre limitações do preview HTTP */}
+      <div className="mt-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-md">
+        <p className="text-[10px] text-amber-200">
+          ️ <strong>Nota:</strong> O preview HTTP pode não funcionar em alguns navegadores devido a restrições de CORS e autenticação. 
+          Para teste confiável, use a URL RTSP acima em apps como <strong>IP Cam Viewer</strong> (Android/iOS) ou <strong>VLC</strong> (desktop).
+        </p>
+      </div>
     </div>
   )
 }
