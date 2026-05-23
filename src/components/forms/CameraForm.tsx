@@ -466,6 +466,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
                 { value: 'Hikvision', label: 'Hikvision' },
                 { value: 'Intelbras', label: 'Intelbras' },
                 { value: 'Dahua', label: 'Dahua' },
+                { value: 'Amcrest', label: 'Amcrest' },
               ]}
             />
             <Select

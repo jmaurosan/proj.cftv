@@ -39,11 +39,32 @@ export default function CameraPreview({
           return `http://${deviceIp}/cgi-bin/snapshot.cgi?ch=${channelNumber}&subtype=1`
         case 'dahua':
           return `http://${deviceIp}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${channelNumber}`
+        case 'amcrest':
+          return `http://${deviceIp}/cgi-bin/snapshot.cgi?ch=${channelNumber}&subtype=1`
         default:
           return ''
       }
     }
     return ''
+  }
+
+  const buildRtspUrl = (): string => {
+    if (!deviceIp || !channelNumber || !dvrBrand) return ''
+    const brand = dvrBrand.toLowerCase()
+    const port = 554
+    
+    switch (brand) {
+      case 'hikvision':
+        return `rtsp://${deviceIp}:${port}/Streaming/Channels/${channelNumber}01`
+      case 'intelbras':
+        return `rtsp://${deviceIp}:${port}/cam${channelNumber}/h264`
+      case 'dahua':
+        return `rtsp://${deviceIp}:${port}/cam/realmonitor?channel=${channelNumber}&subtype=1`
+      case 'amcrest':
+        return `rtsp://${deviceIp}:${port}/cam/realmonitor?channel=${channelNumber}&subtype=1`
+      default:
+        return ''
+    }
   }
 
   const injectAuth = (url: string): string => {
@@ -156,6 +177,36 @@ export default function CameraPreview({
         <p className="text-xs text-green-400 mt-2 text-center">
           ✓ Stream configurado com sucesso
         </p>
+      )}
+
+      {/* URL RTSP para uso em apps externos */}
+      {buildRtspUrl() && (
+        <div className="mt-3 pt-3 border-t border-border-light">
+          <label className="text-xs font-medium text-text-secondary mb-1 block">
+            URL RTSP (para apps externos):
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              readOnly
+              value={buildRtspUrl()}
+              className="flex-1 px-2 py-1.5 bg-bg-primary border border-border-light rounded text-xs text-text-primary font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(buildRtspUrl())
+              }}
+              className="px-2.5 py-1.5 bg-bg-tertiary hover:bg-bg-secondary text-text-primary text-xs rounded transition-colors"
+              title="Copiar URL"
+            >
+              Copiar
+            </button>
+          </div>
+          <p className="text-[10px] text-text-muted mt-1">
+            Use esta URL em apps como IP Cam Viewer, VLC ou outros players RTSP.
+          </p>
+        </div>
       )}
     </div>
   )

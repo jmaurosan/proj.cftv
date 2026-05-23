@@ -1,7 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Loader2, WifiOff, EyeOff } from 'lucide-react'
 
-/** URLs por marca do DVR/NVR — mapeamento direto para streaming HTTP */
+/** URLs RTSP por marca do DVR/NVR */
+const RTSP_URLS: Record<string, (ip: string, port: number, channel: number, stream?: 'main' | 'sub') => string> = {
+  hikvision: (ip, port = 554, ch, stream = 'main') => {
+    const streamType = stream === 'sub' ? '2' : '1'
+    return `rtsp://${ip}:${port}/Streaming/Channels/${ch}0${streamType}`
+  },
+  intelbras: (ip, port = 554, ch) => {
+    return `rtsp://${ip}:${port}/cam${ch}/h264`
+  },
+  dahua: (ip, port = 554, ch, stream = 'main') => {
+    const streamType = stream === 'sub' ? '2' : '1'
+    return `rtsp://${ip}:${port}/cam/realmonitor?channel=${ch}&subtype=${streamType}`
+  },
+  amcrest: (ip, port = 554, ch, stream = 'main') => {
+    const streamType = stream === 'sub' ? '2' : '1'
+    return `rtsp://${ip}:${port}/cam/realmonitor?channel=${ch}&subtype=${streamType}`
+  },
+}
+
+/** URLs HTTP por marca do DVR/NVR */
 const DVR_URLS: Record<string, (ip: string, channel: number, subtype?: 'main' | 'sub') => { mjpeg?: string; snapshot?: string; hls?: string }> = {
   hikvision: (ip, ch, _sub = 'main') => {
     const streamCh = ch === 1 ? '101' : `${ch}01`
@@ -21,6 +40,11 @@ const DVR_URLS: Record<string, (ip: string, channel: number, subtype?: 'main' | 
       mjpeg: `http://${ip}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${ch}`,
       snapshot: `http://${ip}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${ch}`,
       hls: `http://${ip}/cgi-bin/stream.cgi?action=getHls&channel=${ch}`,
+    }
+  },
+  amcrest: (ip, ch) => {
+    return {
+      snapshot: `http://${ip}/cgi-bin/snapshot.cgi?ch=${ch}&subtype=1`,
     }
   },
 }
@@ -58,15 +82,25 @@ export default function CameraViewer({
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   // Gera URL automática a partir do IP/canal/marca
-  const autoUrl = useCallback((): { url: string; type: 'mjpeg' | 'snapshot' | 'hls' | null } => {
+  const autoUrl = useCallback((): { url: string; type: 'mjpeg' | 'snapshot' | 'hls' | 'rtsp' | null } => {
     if (!deviceIp || !channelNumber) return { url: '', type: null }
     const brand = (dvrBrand || '').toLowerCase()
+    
+    // Tenta HTTP primeiro
     const resolver = DVR_URLS[brand]
-    if (!resolver) return { url: '', type: null }
-    const urls = resolver(deviceIp, channelNumber)
-    if (urls.mjpeg) return { url: urls.mjpeg, type: 'mjpeg' }
-    if (urls.snapshot) return { url: urls.snapshot, type: 'snapshot' }
-    if (urls.hls) return { url: urls.hls, type: 'hls' }
+    if (resolver) {
+      const urls = resolver(deviceIp, channelNumber)
+      if (urls.mjpeg) return { url: urls.mjpeg, type: 'mjpeg' }
+      if (urls.snapshot) return { url: urls.snapshot, type: 'snapshot' }
+      if (urls.hls) return { url: urls.hls, type: 'hls' }
+    }
+    
+    // Fallback para RTSP
+    const rtspResolver = RTSP_URLS[brand]
+    if (rtspResolver) {
+      return { url: rtspResolver(deviceIp, 554, channelNumber), type: 'rtsp' }
+    }
+    
     return { url: '', type: null }
   }, [deviceIp, channelNumber, dvrBrand])
 
