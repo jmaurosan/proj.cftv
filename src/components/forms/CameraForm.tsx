@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { uploadQRCodeImage, deleteQRCodeImage, uploadInstallationPhoto, deleteInstallationPhoto } from '../../services/storageService'
 import { useAuth } from '../../hooks/useAuth'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
+import { useToast } from '../ui/Toast'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
@@ -49,6 +50,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const fileInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const { user } = useAuth()
+  const { toast } = useToast()
   const [otherBrandMode, setOtherBrandMode] = useState(false)
 
   const [dvrs, setDvrs] = useState<Dvr[]>([])
@@ -648,6 +650,46 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
+        {!initialData && (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={async () => {
+              // Monta o payload manualmente
+              const formData = {
+                name,
+                brand: brand || null,
+                connection_type: connectionType,
+                dvr_id: dvrId || null,
+                channel_number: dvrId && channelNumber ? channelNumber : null,
+                ip_address: isIP && ipAddress ? ipAddress : null,
+                mac_address: isIP && macAddress ? macAddress : null,
+                poe_powered: isIP ? poePowered : false,
+                location,
+                type,
+                status,
+                resolution,
+                balun_id: !isIP && balunId ? balunId : null,
+                balun_port: !isIP && balunPort ? Number(balunPort) : null,
+                switch_id: switchId || null,
+                switch_port: switchPort ? Number(switchPort) : null,
+                rtsp_url: streamUrl || null,
+                streaming_user: streamUser || null,
+                streaming_password: streamPass || null,
+                qr_code_url: qrCodeUrl || null,
+                installation_photo_url: installationPhotoUrl || null,
+                notes: notes || null,
+              }
+              const result = await onSubmit(formData)
+              if (!result.error) {
+                toast('Câmera salva! Agora teste o streaming.')
+              }
+            }}
+            disabled={loading}
+          >
+            Salvar e Testar
+          </Button>
+        )}
         <Button type="submit" disabled={loading}>
           {loading ? 'Salvando...' : initialData ? 'Atualizar' : 'Criar'}
         </Button>
