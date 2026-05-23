@@ -79,6 +79,29 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
     }
   }, [switchId, isIP, switches])
 
+  // Preenche URL manual automaticamente quando muda marca/IP/canal
+  useEffect(() => {
+    if (streamMode !== 'manual') return
+    if (!ipAddress || !channelNumber || !brand) return
+    const brandLower = brand.toLowerCase()
+    const streamCh = channelNumber === 1 ? '101' : `${channelNumber}01`
+    let url = ''
+    switch (brandLower) {
+      case 'hikvision':
+        url = `http://${ipAddress}/ISAPI/Streaming/channels/${streamCh}/httpPreview`
+        break
+      case 'intelbras':
+        url = `http://${ipAddress}/cgi-bin/snapshot.cgi?ch=${channelNumber}&subtype=1`
+        break
+      case 'dahua':
+        url = `http://${ipAddress}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${channelNumber}`
+        break
+    }
+    if (url && url !== streamUrl) {
+      setStreamUrl(url)
+    }
+  }, [brand, ipAddress, channelNumber, streamMode])
+
   const handleModelSelect = (modelId: string) => {
     const m = cameraModels.find((x) => x.id === modelId)
     if (!m) return
