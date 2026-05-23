@@ -8,6 +8,7 @@ import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import CameraPreview from '../ui/CameraPreview'
 import { CameraIcon, X, QrCode, Package, MapPin, Monitor } from 'lucide-react'
 
 interface CameraFormProps {
@@ -482,6 +483,17 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
             ? 'O sistema monta a URL automaticamente com base na marca e canal do DVR.'
             : 'Cole a URL direta de streaming (MJPEG, HLS ou snapshot) do seu dispositivo.'}
         </p>
+
+        {/* Preview ao vivo */}
+        <CameraPreview
+          streamUrl={streamUrl}
+          streamUser={streamUser}
+          streamPass={streamPass}
+          deviceIp={ipAddress}
+          channelNumber={channelNumber}
+          dvrBrand={brand}
+          streamMode={streamMode}
+        />
       </div>
       {/* ── QR Code / Foto de acesso ── */}
       <div className="space-y-2">
