@@ -35,7 +35,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [switchId, setSwitchId] = useState(initialData?.switch_id ?? '')
   const [switchPort, setSwitchPort] = useState(initialData?.switch_port ?? '')
   const [streamUrl, setStreamUrl] = useState(initialData?.rtsp_url ?? '')
-  const [streamMode, setStreamMode] = useState<'auto' | 'manual'>('auto')
+  const [streamMode, setStreamMode] = useState<'auto' | 'manual'>('manual')
   const [streamUser, setStreamUser] = useState('')
   const [streamPass, setStreamPass] = useState('')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
@@ -403,17 +403,6 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         <div className="flex gap-2 p-1 bg-bg-tertiary rounded-lg w-fit">
           <button
             type="button"
-            onClick={() => setStreamMode('auto')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              streamMode === 'auto'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-text-muted hover:text-text-primary'
-            }`}
-          >
-            Auto (DVR)
-          </button>
-          <button
-            type="button"
             onClick={() => setStreamMode('manual')}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
               streamMode === 'manual'
@@ -422,6 +411,17 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
             }`}
           >
             Manual
+          </button>
+          <button
+            type="button"
+            onClick={() => setStreamMode('auto')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              streamMode === 'auto'
+                ? 'bg-accent text-white shadow-sm'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+          >
+            Auto (DVR)
           </button>
         </div>
 
