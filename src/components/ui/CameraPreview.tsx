@@ -24,49 +24,6 @@ export default function CameraPreview({
   const [imageUrl, setImageUrl] = useState<string>('')
   const [error, setError] = useState<string>('')
 
-  const buildUrl = (): string => {
-    if (streamMode === 'manual' && streamUrl) {
-      return streamUrl
-    }
-    if (streamMode === 'auto' && deviceIp && channelNumber && dvrBrand) {
-      const brand = dvrBrand.toLowerCase()
-      const streamCh = channelNumber === 1 ? '101' : `${channelNumber}01`
-      
-      switch (brand) {
-        case 'hikvision':
-          return `http://${deviceIp}/ISAPI/Streaming/channels/${streamCh}/httpPreview`
-        case 'intelbras':
-          return `http://${deviceIp}/cgi-bin/snapshot.cgi?ch=${channelNumber}&subtype=1`
-        case 'dahua':
-          return `http://${deviceIp}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${channelNumber}`
-        case 'amcrest':
-          return `http://${deviceIp}/cgi-bin/snapshot.cgi?ch=${channelNumber}&subtype=1`
-        default:
-          return ''
-      }
-    }
-    return ''
-  }
-
-  const buildRtspUrl = (): string => {
-    if (!deviceIp || !channelNumber || !dvrBrand) return ''
-    const brand = dvrBrand.toLowerCase()
-    const port = 554
-    
-    switch (brand) {
-      case 'hikvision':
-        return `rtsp://${deviceIp}:${port}/Streaming/Channels/${channelNumber}01`
-      case 'intelbras':
-        return `rtsp://${deviceIp}:${port}/cam${channelNumber}/h264`
-      case 'dahua':
-        return `rtsp://${deviceIp}:${port}/cam/realmonitor?channel=${channelNumber}&subtype=1`
-      case 'amcrest':
-        return `rtsp://${deviceIp}:${port}/cam/realmonitor?channel=${channelNumber}&subtype=1`
-      default:
-        return ''
-    }
-  }
-
   const injectAuth = (url: string): string => {
     if (!url || !streamUser || !streamPass) return url
     try {
@@ -84,10 +41,51 @@ export default function CameraPreview({
   }
 
   const testStream = async () => {
-    const rawUrl = buildUrl()
+    // Tenta primeiro com modo Auto (IP/marca/canal)
+    let rawUrl = ''
+    if (deviceIp && channelNumber && dvrBrand) {
+      const brand = dvrBrand.toLowerCase()
+      const streamCh = channelNumber === 1 ? '101' : `${channelNumber}01`
+      
+      switch (brand) {
+        case 'hikvision':
+          rawUrl = `http://${deviceIp}/ISAPI/Streaming/channels/${streamCh}/httpPreview`
+          break
+        case 'intelbras':
+        case 'amcrest':
+          rawUrl = `http://${deviceIp}/cgi-bin/snapshot.cgi?ch=${channelNumber}&subtype=1`
+          break
+        case 'dahua':
+          rawUrl = `http://${deviceIp}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${channelNumber}`
+          break
+      }
+    }
+    
+    // Se não tem dados Auto, usa o modo Manual
+    if (!rawUrl && streamMode === 'manual' && streamUrl) {
+      rawUrl = streamUrl.trim()
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(rawUrl) && dvrBrand && channelNumber) {
+        const brand = dvrBrand.toLowerCase()
+        const streamCh = channelNumber === 1 ? '101' : `${channelNumber}01`
+        
+        switch (brand) {
+          case 'hikvision':
+            rawUrl = `http://${rawUrl}/ISAPI/Streaming/channels/${streamCh}/httpPreview`
+            break
+          case 'intelbras':
+          case 'amcrest':
+            rawUrl = `http://${rawUrl}/cgi-bin/snapshot.cgi?ch=${channelNumber}&subtype=1`
+            break
+          case 'dahua':
+            rawUrl = `http://${rawUrl}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${channelNumber}`
+            break
+        }
+      }
+    }
+    
     if (!rawUrl) {
       setStatus('error')
-      setError('Preencha IP, marca e canal ou insira uma URL manual')
+      setError('Preencha IP, marca e canal ou insira uma URL completa')
       return
     }
 
@@ -179,8 +177,8 @@ export default function CameraPreview({
         </p>
       )}
 
-      {/* URL RTSP para uso em apps externos */}
-      {buildRtspUrl() && (
+      {/* URL RTSP para apps externos */}
+      {deviceIp && channelNumber && dvrBrand && (
         <div className="mt-3 pt-3 border-t border-border-light">
           <label className="text-xs font-medium text-text-secondary mb-1 block">
             URL RTSP (para apps externos):
@@ -189,13 +187,42 @@ export default function CameraPreview({
             <input
               type="text"
               readOnly
-              value={buildRtspUrl()}
+              value={(() => {
+                const brand = dvrBrand.toLowerCase()
+                const port = 554
+                switch (brand) {
+                  case 'hikvision':
+                    return `rtsp://${deviceIp}:${port}/Streaming/Channels/${channelNumber}01`
+                  case 'intelbras':
+                    return `rtsp://${deviceIp}:${port}/cam${channelNumber}/h264`
+                  case 'dahua':
+                  case 'amcrest':
+                    return `rtsp://${deviceIp}:${port}/cam/realmonitor?channel=${channelNumber}&subtype=1`
+                  default:
+                    return ''
+                }
+              })()}
               className="flex-1 px-2 py-1.5 bg-bg-primary border border-border-light rounded text-xs text-text-primary font-mono"
             />
             <button
               type="button"
               onClick={() => {
-                navigator.clipboard.writeText(buildRtspUrl())
+                const brand = (dvrBrand || '').toLowerCase()
+                const port = 554
+                let url = ''
+                switch (brand) {
+                  case 'hikvision':
+                    url = `rtsp://${deviceIp}:${port}/Streaming/Channels/${channelNumber}01`
+                    break
+                  case 'intelbras':
+                    url = `rtsp://${deviceIp}:${port}/cam${channelNumber}/h264`
+                    break
+                  case 'dahua':
+                  case 'amcrest':
+                    url = `rtsp://${deviceIp}:${port}/cam/realmonitor?channel=${channelNumber}&subtype=1`
+                    break
+                }
+                if (url) navigator.clipboard.writeText(url)
               }}
               className="px-2.5 py-1.5 bg-bg-tertiary hover:bg-bg-secondary text-text-primary text-xs rounded transition-colors"
               title="Copiar URL"
