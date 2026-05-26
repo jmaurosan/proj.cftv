@@ -17,6 +17,7 @@ import ViewerPage from './pages/ViewerPage'
 import ClientsPage from './pages/ClientsPage'
 import ChannelMappingPage from './pages/ChannelMappingPage'
 import LoadingSpinner from './components/ui/LoadingSpinner'
+import CrimpPage from './pages/CrimpPage'
 
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="/roteadores" element={<RoutersPage />} />
                 <Route path="/credenciais" element={<CredentialsPage />} />
                 <Route path="/visualizacao" element={<ViewerPage />} />
+                <Route path="/crimpagem" element={<CrimpPage />} />
                 <Route path="/relatorios" element={<Suspense fallback={<LoadingSpinner />}><ReportsPage /></Suspense>} />
               </Route>
             </Routes>

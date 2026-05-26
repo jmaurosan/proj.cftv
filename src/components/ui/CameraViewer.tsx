@@ -32,19 +32,19 @@ const DVR_URLS: Record<string, (ip: string, channel: number, subtype?: 'main' | 
   },
   intelbras: (ip, ch) => {
     return {
-      snapshot: `http://${ip}/cgi-bin/snapshot.cgi?ch=${ch}&subtype=1`,
+      snapshot: `http://${ip}/cgi-bin/snapshot.cgi?channel=${ch}`,
     }
   },
   dahua: (ip, ch) => {
     return {
-      mjpeg: `http://${ip}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${ch}`,
-      snapshot: `http://${ip}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${ch}`,
+      mjpeg: `http://${ip}/cgi-bin/snapshot.cgi?channel=${ch}`,
+      snapshot: `http://${ip}/cgi-bin/snapshot.cgi?channel=${ch}`,
       hls: `http://${ip}/cgi-bin/stream.cgi?action=getHls&channel=${ch}`,
     }
   },
   amcrest: (ip, ch) => {
     return {
-      snapshot: `http://${ip}/cgi-bin/snapshot.cgi?ch=${ch}&subtype=1`,
+      snapshot: `http://${ip}/cgi-bin/snapshot.cgi?channel=${ch}`,
     }
   },
 }
@@ -240,6 +240,20 @@ export default function CameraViewer({
                 <span className="text-[10px] text-text-muted">
                   {dvrBrand} ch{channelNumber}
                 </span>
+              )}
+              {deviceIp && channelNumber && (
+                <a
+                  href={(() => {
+                    const raw = streamUrl || autoUrl().url
+                    return injectAuth(raw)
+                  })()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 px-3 py-1.5 bg-accent hover:opacity-90 text-[10px] font-bold text-white rounded cursor-pointer uppercase text-center block z-20 pointer-events-auto shadow-md"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Autenticar no DVR 🔗
+                </a>
               )}
             </>
           )}
