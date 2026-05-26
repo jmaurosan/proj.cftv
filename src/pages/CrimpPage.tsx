@@ -1,15 +1,6 @@
 import React from 'react';
-import { Cable, ShieldCheck, Info, Sparkles, BookOpen } from 'lucide-react';
+import { ShieldCheck, Info, Sparkles, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-
-interface Wire {
-  pin: number;
-  name: string;
-  colorClass: string;
-  colorText: string;
-  bgHex: string;
-  stripeHex?: string;
-}
 
 const WIRE_COLORS = {
   greenStripe: { text: 'Branco / Verde', bg: '#ffffff', stripe: '#16a34a' },
