@@ -14,12 +14,16 @@ import {
 import { supabase } from '../lib/supabase'
 import DonutChart from '../components/ui/DonutChart'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
+import { useClient } from '../contexts/ClientContext'
+import ClientFilterBanner from '../components/ui/ClientFilterBanner'
+import PingStatusCard from '../components/ui/PingStatusCard'
 
 interface DashData {
   dvrs: { id: string; name: string; status: string; ip_address: string; total_channels: number }[]
   cameras: { id: string; name: string; status: string; connection_type: string; poe_powered: boolean; type: string; location: string }[]
-  switches: { id: string; name: string; status: string; is_poe: boolean; poe_standard: string | null; poe_budget_watts: number | null; total_ports: number }[]
+  switches: { id: string; name: string; status: string; is_poe: boolean; poe_standard: string | null; poe_budget_watts: number | null; total_ports: number; ip_address?: string | null }[]
   baluns: { id: string; status: string }[]
+  routers?: { id: string; name: string; status: string; ip_address: string | null }[]
   cableCount: number
 }
 
@@ -33,29 +37,49 @@ function countStatus(items: { status: string }[]) {
 }
 
 export default function Dashboard() {
+  const { selectedClientId } = useClient()
   const [data, setData] = useState<DashData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [dvrs, cameras, switches, baluns, cables] = await Promise.all([
-        supabase.from('dvrs').select('id, name, status, ip_address, total_channels').order('name'),
-        supabase.from('cameras').select('id, name, status, connection_type, poe_powered, type, location').order('name'),
-        supabase.from('switches').select('id, name, status, is_poe, poe_standard, poe_budget_watts, total_ports').order('name'),
-        supabase.from('power_baluns').select('id, status'),
-        supabase.from('cable_connections').select('id'),
+      let dvrsQuery = supabase.from('dvrs').select('id, name, status, ip_address, total_channels').order('name')
+      let camerasQuery = supabase.from('cameras').select('id, name, status, connection_type, poe_powered, type, location').order('name')
+      let switchesQuery = supabase.from('switches').select('id, name, status, is_poe, poe_standard, poe_budget_watts, total_ports, ip_address').order('name')
+      let balunsQuery = supabase.from('power_baluns').select('id, status')
+      let cablesQuery = supabase.from('cable_connections').select('id')
+      let routersQuery = supabase.from('routers').select('id, name, status, ip_address').order('name')
+
+      if (selectedClientId) {
+        dvrsQuery = dvrsQuery.eq('client_id', selectedClientId)
+        camerasQuery = camerasQuery.eq('client_id', selectedClientId)
+        switchesQuery = switchesQuery.eq('client_id', selectedClientId)
+        balunsQuery = balunsQuery.eq('client_id', selectedClientId)
+        cablesQuery = cablesQuery.eq('client_id', selectedClientId)
+        routersQuery = routersQuery.eq('client_id', selectedClientId)
+      }
+
+      const [dvrs, cameras, switches, baluns, cables, routers] = await Promise.all([
+        dvrsQuery,
+        camerasQuery,
+        switchesQuery,
+        balunsQuery,
+        cablesQuery,
+        routersQuery
       ])
+
       setData({
         dvrs: (dvrs.data || []) as DashData['dvrs'],
         cameras: (cameras.data || []) as DashData['cameras'],
         switches: (switches.data || []) as DashData['switches'],
         baluns: (baluns.data || []) as DashData['baluns'],
+        routers: (routers.data || []) as DashData['routers'],
         cableCount: cables.data?.length ?? 0,
       })
       setLoading(false)
     }
     load()
-  }, [])
+  }, [selectedClientId])
 
   if (loading) return <LoadingSpinner />
   if (!data) return null
@@ -98,8 +122,30 @@ export default function Dashboard() {
   const integrityColor = integrity >= 80 ? 'text-success' : integrity >= 50 ? 'text-warning' : 'text-danger'
   const integrityGlow = integrity >= 80 ? 'shadow-success/20' : integrity >= 50 ? 'shadow-warning/20' : 'shadow-danger/20'
 
+  // Monta a lista de equipamentos para testar conectividade
+  const pingDevices: { id: string; name: string; type: 'DVR' | 'Switch' | 'Roteador'; ip: string }[] = []
+  if (data) {
+    data.dvrs.forEach((d) => {
+      if (d.ip_address) pingDevices.push({ id: d.id, name: d.name, type: 'DVR' as const, ip: d.ip_address })
+    })
+    data.switches.forEach((s) => {
+      if (s.ip_address) pingDevices.push({ id: s.id, name: s.name, type: 'Switch' as const, ip: s.ip_address })
+    })
+    data.routers?.forEach((r) => {
+      if (r.ip_address) pingDevices.push({ id: r.id, name: r.name, type: 'Roteador' as const, ip: r.ip_address })
+    })
+  }
+
   return (
     <div className="space-y-4 sm:space-y-5">
+      {/* Filtro do Cliente */}
+      <ClientFilterBanner />
+
+      {/* Diagnóstico de Rede Local */}
+      {selectedClientId && pingDevices.length > 0 && (
+        <PingStatusCard devices={pingDevices} />
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>

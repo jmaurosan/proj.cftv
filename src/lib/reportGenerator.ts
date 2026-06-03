@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import type { Dvr, Camera, Switch, PowerBalun, CableConnection } from './types'
+import type { Dvr, Camera, Switch, PowerBalun, CableConnection, Router, Credential } from './types'
 import { CABLE_TYPE_LABELS } from './constants'
 
 interface ReportData {
@@ -8,6 +8,8 @@ interface ReportData {
   cameras: Camera[]
   switches: Switch[]
   baluns: PowerBalun[]
+  routers: Router[]
+  credentials: Credential[]
   cables: (CableConnection & { camera_name: string })[]
   userEmail: string
   clientName: string
@@ -36,9 +38,9 @@ function formatDate(date: Date): string {
 }
 
 function countByStatus<T extends { status: string }>(items: T[]) {
-  const ativos = items.filter(i => i.status === 'ativo').length
-  const inativos = items.filter(i => i.status === 'inativo').length
-  const manutencao = items.filter(i => i.status === 'manutencao').length
+  const ativos = items.filter(i => i.status === 'ativo' || i.status === 'online').length
+  const inativos = items.filter(i => i.status === 'inativo' || i.status === 'offline').length
+  const manutencao = items.filter(i => i.status === 'manutencao' || i.status === 'warning').length
   return { ativos, inativos, manutencao, total: items.length }
 }
 
@@ -78,7 +80,7 @@ function addPageFooter(doc: jsPDF, pageNum: number, totalPages: number) {
   doc.setFontSize(7)
   doc.setTextColor(...COLORS.muted)
   doc.text('Gerado pelo Sistema CFTV', 14, y)
-  doc.text(`Pagina ${pageNum} de ${totalPages}`, 196, y, { align: 'right' })
+  doc.text(`Página ${pageNum} de ${totalPages}`, 196, y, { align: 'right' })
 }
 
 function addSectionTitle(doc: jsPDF, y: number, num: string, title: string): number {
@@ -97,7 +99,7 @@ function drawStatusBar(doc: jsPDF, x: number, y: number, w: number, stats: { ati
   doc.setTextColor(...COLORS.text)
   doc.text(label, x, y - 2)
 
-  const h = 6
+  const h = 5
   const total = stats.total || 1
 
   // Background
@@ -132,7 +134,7 @@ function drawStatusBar(doc: jsPDF, x: number, y: number, w: number, stats: { ati
   doc.setTextColor(...COLORS.muted)
   doc.text(
     `${stats.ativos} ativo(s)  |  ${stats.manutencao} manut.  |  ${stats.inativos} inativo(s)  —  Total: ${stats.total}`,
-    x, y + h + 5
+    x, y + h + 4.5
   )
 }
 
@@ -159,18 +161,60 @@ function drawSummaryBox(doc: jsPDF, x: number, y: number, w: number, h: number, 
   doc.text(label, x + w / 2, y + 20, { align: 'center' })
 }
 
-export function generateReport(data: ReportData) {
+// Auxiliar para carregar imagem remota e converter para base64
+function loadImageBase64(url: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'Anonymous'
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(img, 0, 0)
+          resolve(canvas.toDataURL('image/jpeg'))
+        } else {
+          resolve(null)
+        }
+      } catch (e) {
+        console.error('Falha ao processar canvas para base64:', e)
+        resolve(null)
+      }
+    }
+    img.onerror = () => {
+      resolve(null)
+    }
+    img.src = url
+  })
+}
+
+export async function generateReport(data: ReportData) {
   const doc = new jsPDF('p', 'mm', 'a4')
   const now = new Date()
   const headerSubtitle = `${data.clientName} — ${data.projectName}`
 
-  // We'll track pages, then add headers/footers at the end
+  // 1. Pré-carregar todas as fotos de câmeras e QR codes em base64 para evitar bloqueios assíncronos no loop
+  const cameraImages = await Promise.all(
+    data.cameras.map(async (c) => {
+      const qrBase64 = c.qr_code_url ? await loadImageBase64(c.qr_code_url) : null
+      const photoBase64 = c.installation_photo_url ? await loadImageBase64(c.installation_photo_url) : null
+      return {
+        id: c.id,
+        qrBase64,
+        photoBase64
+      }
+    })
+  )
+  const imageMap = new Map(cameraImages.map((img) => [img.id, img]))
+
   let y = 0
 
   // =========================================================
   // PAGE 1 — Cover + Infrastructure Summary
   // =========================================================
-  addPageHeader(doc, 'Relatorio de Infraestrutura', headerSubtitle)
+  addPageHeader(doc, 'Relatório de Infraestrutura', headerSubtitle)
   y = 36
 
   // Client + Project info
@@ -199,91 +243,67 @@ export function generateReport(data: ReportData) {
   const camIP = data.cameras.filter(c => c.connection_type === 'ip').length
   const poeSwitches = data.switches.filter(s => s.is_poe).length
 
-  const boxW = 35
+  // Layout responsivo com 5 caixas
+  const boxW = 32
   const boxH = 24
-  const gap = 6
+  const gap = 5
   const startX = 14
-  drawSummaryBox(doc, startX, y, boxW, boxH, String(data.cameras.length), `Cameras (${camAnalog} anal. / ${camIP} IP)`, COLORS.primary)
+  drawSummaryBox(doc, startX, y, boxW, boxH, String(data.cameras.length), `Câmeras (${camAnalog}a/${camIP}IP)`, COLORS.primary)
   drawSummaryBox(doc, startX + boxW + gap, y, boxW, boxH, String(data.dvrs.length), 'DVRs', [99, 102, 241])
   drawSummaryBox(doc, startX + (boxW + gap) * 2, y, boxW, boxH, String(data.switches.length), `Switches (${poeSwitches} PoE)`, COLORS.success)
-  drawSummaryBox(doc, startX + (boxW + gap) * 3, y, boxW, boxH, String(data.baluns.length), 'Power Baluns', [168, 85, 247])
+  drawSummaryBox(doc, startX + (boxW + gap) * 3, y, boxW, boxH, String(data.routers.length), 'Roteadores', [245, 158, 11])
+  drawSummaryBox(doc, startX + (boxW + gap) * 4, y, boxW, boxH, String(data.baluns.length), 'Power Baluns', [168, 85, 247])
 
   y += boxH + 14
 
-  // Section 4: Status de Integridade (placed here for visual flow)
+  // Section 2: Integridade
   y = addSectionTitle(doc, y, '2', 'Status de Integridade')
 
   const camStats = countByStatus(data.cameras)
   const dvrStats = countByStatus(data.dvrs)
   const swStats = countByStatus(data.switches)
+  const rtStats = countByStatus(data.routers)
 
-  drawStatusBar(doc, 14, y, 182, camStats, 'Cameras')
-  y += 20
+  drawStatusBar(doc, 14, y, 182, camStats, 'Câmeras')
+  y += 18
   drawStatusBar(doc, 14, y, 182, dvrStats, 'DVRs')
-  y += 20
+  y += 18
   drawStatusBar(doc, 14, y, 182, swStats, 'Switches')
-  y += 24
+  y += 18
+  drawStatusBar(doc, 14, y, 182, rtStats, 'Roteadores')
 
   // =========================================================
-  // PAGE 2 — Equipment Inventory
+  // PAGE 2 — Rede, Roteadores & Switches
   // =========================================================
   doc.addPage()
-  addPageHeader(doc, 'Inventario de Equipamentos', headerSubtitle)
+  addPageHeader(doc, 'Topologia de Rede & Equipamentos', headerSubtitle)
   y = 36
 
-  y = addSectionTitle(doc, y, '3', 'Inventario de Equipamentos')
+  y = addSectionTitle(doc, y, '3', 'Infraestrutura de Rede')
 
-  // DVRs Table
-  if (data.dvrs.length > 0) {
+  // Roteadores
+  if (data.routers.length > 0) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
     doc.setTextColor(...COLORS.text)
-    doc.text('DVRs', 14, y)
+    doc.text('Roteadores', 14, y)
     y += 2
 
     autoTable(doc, {
       startY: y,
-      head: [['Nome', 'IP', 'Modelo', 'Canais', 'Local', 'Status']],
-      body: data.dvrs.map(d => [
-        d.name, d.ip_address, d.model || '-', String(d.total_channels), d.location, d.status.toUpperCase()
+      head: [['Nome', 'IP LAN', 'Marca', 'Modelo', 'Local', 'Status']],
+      body: data.routers.map(r => [
+        r.name, r.ip_address || '-', r.brand || '-', r.model || '-', r.location || '-', r.status.toUpperCase()
       ]),
       margin: { left: 14, right: 14 },
       styles: { fontSize: 7, cellPadding: 2, textColor: COLORS.text },
       headStyles: { fillColor: COLORS.headerBg, textColor: COLORS.white, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: COLORS.rowAlt },
     })
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
   }
 
-  // Cameras Table
-  if (data.cameras.length > 0) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(...COLORS.text)
-    doc.text('Cameras', 14, y)
-    y += 2
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Nome', 'Conexao', 'DVR/IP', 'Canal', 'Tipo', 'Local', 'Status']],
-      body: data.cameras.map(c => [
-        c.name,
-        c.connection_type === 'ip' ? `IP${c.poe_powered ? ' (PoE)' : ''}` : 'Analogica',
-        c.connection_type === 'ip' ? (c.ip_address || '-') : (c.dvrs?.name || '-'),
-        c.channel_number != null ? String(c.channel_number) : '-',
-        c.type,
-        c.location,
-        c.status.toUpperCase()
-      ]),
-      margin: { left: 14, right: 14 },
-      styles: { fontSize: 7, cellPadding: 2, textColor: COLORS.text },
-      headStyles: { fillColor: COLORS.headerBg, textColor: COLORS.white, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: COLORS.rowAlt },
-    })
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
-  }
-
-  // Switches Table
+  // Switches
   if (data.switches.length > 0) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9)
@@ -293,106 +313,261 @@ export function generateReport(data: ReportData) {
 
     autoTable(doc, {
       startY: y,
-      head: [['Nome', 'Marca', 'Modelo', 'Portas', 'PoE', 'Local', 'Status']],
+      head: [['Nome', 'IP', 'Marca', 'Modelo', 'Portas', 'PoE', 'Status']],
       body: data.switches.map(s => [
-        s.name, s.brand || '-', s.model || '-', String(s.total_ports),
-        s.is_poe ? `${s.poe_standard || 'Sim'}${s.poe_budget_watts ? ` (${s.poe_budget_watts}W)` : ''}` : 'Nao',
-        s.location, s.status.toUpperCase()
+        s.name, (s as any).ip_address || '-', s.brand || '-', s.model || '-', String(s.total_ports),
+        s.is_poe ? `Sim (${s.poe_budget_watts || '0'}W)` : 'Não', s.status.toUpperCase()
       ]),
       margin: { left: 14, right: 14 },
       styles: { fontSize: 7, cellPadding: 2, textColor: COLORS.text },
       headStyles: { fillColor: COLORS.headerBg, textColor: COLORS.white, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: COLORS.rowAlt },
     })
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
+  }
+
+  // Credenciais de Dispositivos (Mascarado para Segurança)
+  if (data.credentials.length > 0) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...COLORS.text)
+    doc.text('Credenciais de Dispositivos', 14, y)
+    y += 2
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Dispositivo', 'IP / Destino', 'Usuário', 'Senha', 'Porta', 'Protocolo']],
+      body: data.credentials.map(c => [
+        c.label, c.ip_address || '-', c.username, '********', c.port ? String(c.port) : '-', c.protocol || '-'
+      ]),
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 7, cellPadding: 2, textColor: COLORS.text },
+      headStyles: { fillColor: COLORS.headerBg, textColor: COLORS.white, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: COLORS.rowAlt },
+    })
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
   }
 
   // =========================================================
-  // PAGE 3+ — Cable Connectivity
+  // PAGE 3 — Gravadores (DVRs) & Power Baluns
   // =========================================================
-  if (data.cables.length > 0) {
+  doc.addPage()
+  addPageHeader(doc, 'Infraestrutura de Gravação & Conexões', headerSubtitle)
+  y = 36
+
+  y = addSectionTitle(doc, y, '4', 'Gravadores & Distribuidores')
+
+  // DVRs
+  if (data.dvrs.length > 0) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...COLORS.text)
+    doc.text('DVRs (Gravadores de Vídeo)', 14, y)
+    y += 2
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Nome', 'Endereço IP', 'Marca', 'Modelo', 'Canais', 'Localização', 'Status']],
+      body: data.dvrs.map(d => [
+        d.name, d.ip_address, d.brand || '-', d.model || '-', String(d.total_channels), d.location, d.status.toUpperCase()
+      ]),
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 7, cellPadding: 2, textColor: COLORS.text },
+      headStyles: { fillColor: COLORS.headerBg, textColor: COLORS.white, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: COLORS.rowAlt },
+    })
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
+  }
+
+  // Power Baluns
+  if (data.baluns.length > 0) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...COLORS.text)
+    doc.text('Power Baluns / Distribuidores Analógicos', 14, y)
+    y += 2
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Nome', 'Canais/Portas', 'Localização', 'Status', 'Notas']],
+      body: data.baluns.map(b => [
+        b.name, String(b.total_ports), b.location, b.status.toUpperCase(), b.notes || '-'
+      ]),
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 7, cellPadding: 2, textColor: COLORS.text },
+      headStyles: { fillColor: COLORS.headerBg, textColor: COLORS.white, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: COLORS.rowAlt },
+    })
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
+  }
+
+  // =========================================================
+  // PAGE 4+ — Fichas Técnicas das Câmeras (Premium Card Layout)
+  // =========================================================
+  if (data.cameras.length > 0) {
     doc.addPage()
-    addPageHeader(doc, 'Ficha de Conectividade', headerSubtitle)
+    addPageHeader(doc, 'Fichas Individuais de Câmeras', headerSubtitle)
     y = 36
 
-    y = addSectionTitle(doc, y, '4', 'Ficha de Conectividade')
+    y = addSectionTitle(doc, y, '5', 'Fichas Técnicas das Câmeras')
 
-    for (const cable of data.cables) {
-      // Check if we need a new page
-      if (y > 230) {
+    // Mapeamento de cabeamento indexado por câmera
+    const cableMap = new Map(data.cables.map(c => [c.camera_id, c]))
+
+    for (let i = 0; i < data.cameras.length; i++) {
+      const cam = data.cameras[i]
+      const imgData = imageMap.get(cam.id)
+      const cable = cableMap.get(cam.id)
+
+      // Se y estourar o limite da página para caber o bloco (precisamos de pelo menos 75mm), adiciona nova página
+      if (y > 200) {
         doc.addPage()
-        addPageHeader(doc, 'Ficha de Conectividade', headerSubtitle)
+        addPageHeader(doc, 'Fichas Individuais de Câmeras', headerSubtitle)
         y = 36
       }
 
-      // Camera name header
-      doc.setFillColor(241, 245, 249) // slate-100
-      doc.roundedRect(14, y, 182, 8, 1, 1, 'F')
+      // 1. Desenhar Cabeçalho do Card
+      doc.setFillColor(...COLORS.headerBg)
+      doc.rect(14, y, 182, 7, 'F')
+      doc.setFillColor(...COLORS.primary)
+      doc.rect(14, y + 7, 182, 0.5, 'F')
+
+      // Nome da Câmera
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(...COLORS.text)
-      doc.text(cable.camera_name, 17, y + 5.5)
+      doc.setFontSize(8)
+      doc.setTextColor(...COLORS.white)
+      doc.text(cam.name.toUpperCase(), 18, y + 5)
 
-      const cableLabel = CABLE_TYPE_LABELS[cable.cable_type] || cable.cable_type
-      doc.setFont('helvetica', 'normal')
+      // Status Badge
+      const statusText = cam.status.toUpperCase()
+      const isOnline = cam.status === 'ativo' || cam.status === 'online'
+      doc.setFillColor(...(isOnline ? COLORS.success : COLORS.danger))
+      doc.roundedRect(170, y + 1.5, 22, 4, 0.5, 0.5, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6)
+      doc.setTextColor(...COLORS.white)
+      doc.text(statusText, 181, y + 4.3, { align: 'center' })
+
+      // Conteúdo do Card - Bordas
+      doc.setDrawColor(...COLORS.border)
+      doc.setLineWidth(0.3)
+      doc.line(14, y + 7.5, 14, y + 75)
+      doc.line(196, y + 7.5, 196, y + 75)
+      doc.line(14, y + 75, 196, y + 75)
+
+      // 2. Coluna Esquerda: Detalhes Técnicos da Câmera
+      doc.setFont('helvetica', 'bold')
       doc.setFontSize(7)
-      doc.setTextColor(...COLORS.muted)
-      doc.text(`Cabo: ${cableLabel}  |  Padrao: ${cable.wiring_standard || '-'}  |  Comprimento: ${cable.cable_length_meters ? cable.cable_length_meters + 'm' : '-'}`, 80, y + 5.5)
-      y += 12
+      doc.setTextColor(...COLORS.text)
+      
+      let cy = y + 13
+      doc.text('Dados de Rede & Conexão:', 18, cy)
+      doc.setFont('helvetica', 'normal')
+      cy += 4.5
+      doc.text(`Conexão: ${cam.connection_type === 'ip' ? 'IP / Rede' : 'Analógica'}`, 18, cy)
+      cy += 4
+      doc.text(`IP / Destino: ${cam.connection_type === 'ip' ? (cam.ip_address || 'DHCP') : (cam.dvrs?.name || 'Não associado')}`, 18, cy)
+      cy += 4
+      doc.text(`Canal/Porta: ${cam.channel_number != null ? 'Canal ' + cam.channel_number : (cam.switch_port ? 'Porta Switch ' + cam.switch_port : '-')}`, 18, cy)
+      cy += 4
+      doc.text(`Localização: ${cam.location || '-'}`, 18, cy)
+      cy += 4
+      doc.text(`Marca/Resolução: ${cam.brand || '-'} ${cam.resolution || ''}`, 18, cy)
 
-      // Pairs table
-      autoTable(doc, {
-        startY: y,
-        head: [['Par', 'Funcao', 'Cores']],
-        body: [
-          ['Par 1', cable.pair1_function, cable.pair1_colors],
-          ['Par 2', cable.pair2_function, cable.pair2_colors],
-          ['Par 3', cable.pair3_function, cable.pair3_colors],
-          ['Par 4', cable.pair4_function, cable.pair4_colors],
-        ],
-        margin: { left: 14, right: 14 },
-        styles: { fontSize: 7, cellPadding: 2, textColor: COLORS.text },
-        headStyles: { fillColor: COLORS.primary, textColor: COLORS.white, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: COLORS.rowAlt },
-        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 20 }, 1: { cellWidth: 35 } },
-      })
-      y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 3
-
-      // Extra info line
-      const extras: string[] = []
-      if (cable.has_splice) extras.push(`Emenda: ${cable.splice_location || 'Sim'}`)
-      if (cable.has_external_power) extras.push(`Alim. externa: ${cable.power_source_info || 'Sim'}`)
-      if (extras.length > 0) {
+      // Detalhes de Cabeamento
+      cy += 7
+      doc.setFont('helvetica', 'bold')
+      doc.text('Especificações de Cabo:', 18, cy)
+      doc.setFont('helvetica', 'normal')
+      if (cable) {
+        cy += 4.5
+        const cableLabel = CABLE_TYPE_LABELS[cable.cable_type] || cable.cable_type
+        doc.text(`Tipo de Cabo: ${cableLabel}`, 18, cy)
+        cy += 4
+        doc.text(`Padrão Crimp: ${cable.wiring_standard || '-'}`, 18, cy)
+        cy += 4
+        doc.text(`Comprimento: ${cable.cable_length_meters ? cable.cable_length_meters + ' metros' : '-'}`, 18, cy)
+        cy += 4
+        doc.text(`Pares (1/2): ${cable.pair1_colors.slice(0, 12)} | ${cable.pair2_colors.slice(0, 12)}`, 18, cy)
+      } else {
+        cy += 5
         doc.setFont('helvetica', 'italic')
-        doc.setFontSize(7)
         doc.setTextColor(...COLORS.muted)
-        doc.text(extras.join('  |  '), 14, y + 2)
-        y += 6
+        doc.text('Ficha de cabeamento não preenchida.', 18, cy)
+        doc.setTextColor(...COLORS.text)
       }
-      y += 6
+
+      // 3. Coluna Direita: Imagens (Foto e QR Code)
+      const imageX = 105
+      const imageY = y + 12
+
+      // Desenhar QR Code da Câmera (28x28mm)
+      doc.setDrawColor(220, 225, 230)
+      doc.rect(imageX, imageY, 28, 28)
+      if (imgData?.qrBase64) {
+        try {
+          doc.addImage(imgData.qrBase64, 'JPEG', imageX + 0.5, imageY + 0.5, 27, 27)
+        } catch (e) {
+          doc.setFont('helvetica', 'italic')
+          doc.setFontSize(6)
+          doc.text('Erro QR', imageX + 14, imageY + 15, { align: 'center' })
+        }
+      } else {
+        doc.setFont('helvetica', 'italic')
+        doc.setFontSize(6)
+        doc.setTextColor(...COLORS.muted)
+        doc.text('Sem QR Code', imageX + 14, imageY + 15, { align: 'center' })
+        doc.setTextColor(...COLORS.text)
+      }
+
+      // Desenhar Foto do Local da Câmera (52x28mm)
+      const photoX = imageX + 33
+      doc.rect(photoX, imageY, 48, 28)
+      if (imgData?.photoBase64) {
+        try {
+          doc.addImage(imgData.photoBase64, 'JPEG', photoX + 0.5, imageY + 0.5, 47, 27)
+        } catch (e) {
+          doc.setFont('helvetica', 'italic')
+          doc.setFontSize(6)
+          doc.text('Erro Imagem', photoX + 24, imageY + 15, { align: 'center' })
+        }
+      } else {
+        doc.setFont('helvetica', 'italic')
+        doc.setFontSize(6)
+        doc.setTextColor(...COLORS.muted)
+        doc.text('Sem Foto do Local', photoX + 24, imageY + 15, { align: 'center' })
+        doc.setTextColor(...COLORS.text)
+      }
+
+      // Legendas das fotos
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6)
+      doc.text('CÓDIGO DE ACESSO QR', imageX + 14, imageY + 32, { align: 'center' })
+      doc.text('FOTO DE INSTALAÇÃO DO LOCAL', photoX + 24, imageY + 32, { align: 'center' })
+
+      y += 82
     }
   }
 
   // =========================================================
-  // LAST PAGE — Installation Log
+  // LAST PAGE — Installation Log & Signatures
   // =========================================================
   doc.addPage()
-  addPageHeader(doc, 'Log de Instalacao', headerSubtitle)
+  addPageHeader(doc, 'Log de Entrega Técnica', headerSubtitle)
   y = 36
 
-  y = addSectionTitle(doc, y, '5', 'Log de Instalacao / Entrega')
+  y = addSectionTitle(doc, y, '6', 'Log de Entrega Técnica & Aceite')
 
-  // Log info
   const logItems = [
-    ['Data/Hora do Relatorio', formatDate(now)],
-    ['Gerado por', data.userEmail],
-    ['Cliente', data.clientName],
-    ['Projeto', data.projectName],
-    ['Total de Cameras', `${data.cameras.length} (${countByStatus(data.cameras).ativos} ativas)`],
+    ['Data/Hora de Geração', formatDate(now)],
+    ['Responsável Técnico', data.userEmail],
+    ['Cliente Contratante', data.clientName],
+    ['Nome do Projeto', data.projectName],
+    ['Total de Câmeras', `${data.cameras.length} (${countByStatus(data.cameras).ativos} ativas)`],
     ['Total de DVRs', `${data.dvrs.length} (${countByStatus(data.dvrs).ativos} ativos)`],
     ['Total de Switches', `${data.switches.length} (${countByStatus(data.switches).ativos} ativos)`],
-    ['Total de Power Baluns', `${data.baluns.length} (${countByStatus(data.baluns).ativos} ativos)`],
-    ['Fichas de Cabeamento', `${data.cables.length} registros`],
+    ['Total de Roteadores', `${data.routers.length} (${countByStatus(data.routers).ativos} ativos)`],
+    ['Fichas de Cabeamento', `${data.cables.length} cadastradas`],
   ]
 
   autoTable(doc, {
@@ -405,44 +580,12 @@ export function generateReport(data: ReportData) {
     },
     alternateRowStyles: { fillColor: COLORS.white },
   })
-  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 16
-
-  // Equipment status snapshot
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(...COLORS.text)
-  doc.text('Snapshot de Status no Momento da Geracao:', 14, y)
-  y += 4
-
-  const allEquip: { name: string; type: string; status: string }[] = [
-    ...data.dvrs.map(d => ({ name: d.name, type: 'DVR', status: d.status })),
-    ...data.cameras.map(c => ({ name: c.name, type: 'Camera', status: c.status })),
-    ...data.switches.map(s => ({ name: s.name, type: 'Switch', status: s.status })),
-  ]
-
-  autoTable(doc, {
-    startY: y,
-    head: [['Equipamento', 'Tipo', 'Status']],
-    body: allEquip.map(e => [e.name, e.type, e.status.toUpperCase()]),
-    margin: { left: 14, right: 14 },
-    styles: { fontSize: 7, cellPadding: 2, textColor: COLORS.text },
-    headStyles: { fillColor: COLORS.headerBg, textColor: COLORS.white, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: COLORS.rowAlt },
-    didParseCell(hookData) {
-      if (hookData.section === 'body' && hookData.column.index === 2) {
-        const val = String(hookData.cell.raw).toLowerCase()
-        if (val === 'ativo') hookData.cell.styles.textColor = COLORS.success
-        else if (val === 'inativo') hookData.cell.styles.textColor = COLORS.danger
-        else if (val === 'manutencao') hookData.cell.styles.textColor = COLORS.warning
-      }
-    },
-  })
-  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20
+  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 25
 
   // Signature lines
-  if (y > 240) {
+  if (y > 230) {
     doc.addPage()
-    addPageHeader(doc, 'Log de Instalacao', headerSubtitle)
+    addPageHeader(doc, 'Log de Entrega Técnica', headerSubtitle)
     y = 50
   }
 
@@ -453,17 +596,17 @@ export function generateReport(data: ReportData) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(...COLORS.muted)
-  doc.text('Tecnico Responsavel', 52, y + 15, { align: 'center' })
+  doc.text('Técnico Responsável', 52, y + 15, { align: 'center' })
 
   // Client signature
   doc.line(120, y + 10, 196, y + 10)
-  doc.text('Cliente', 158, y + 15, { align: 'center' })
+  doc.text('Cliente (Assinatura de Recebimento)', 158, y + 15, { align: 'center' })
 
   // Date line
   doc.text(`Data: _____ / _____ / _________`, 14, y + 25)
 
   // =========================================================
-  // Add headers and footers to all pages
+  // Add page numbers at the end
   // =========================================================
   const totalPages = doc.getNumberOfPages()
   for (let i = 1; i <= totalPages; i++) {
@@ -472,6 +615,6 @@ export function generateReport(data: ReportData) {
   }
 
   // Download
-  const fileName = `CFTV_Relatorio_${data.clientName.replace(/\s+/g, '_')}_${now.toISOString().slice(0, 10)}.pdf`
+  const fileName = `Entrega_Tecnica_CFTV_${data.clientName.replace(/\s+/g, '_')}_${now.toISOString().slice(0, 10)}.pdf`
   doc.save(fileName)
 }

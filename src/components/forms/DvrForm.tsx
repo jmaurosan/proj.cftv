@@ -6,6 +6,7 @@ import { useDvrChannels } from '../../hooks/useDvrChannels'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import BackupManager from '../ui/BackupManager'
 import { Package, Cpu } from 'lucide-react'
 
 function DvrChannelItem({ chNum, channel, saveChannel }: { chNum: number; channel: any; saveChannel: any }) {
@@ -249,6 +250,16 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
           </div>
         </div>
       )}
+
+      {/* Backups de Configuração */}
+      {dvrId && (
+        <BackupManager
+          clientId={initialData?.client_id ?? null}
+          equipmentType="dvr"
+          equipmentId={dvrId}
+        />
+      )}
+
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
         <Button type="submit" disabled={loading}>

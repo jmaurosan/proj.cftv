@@ -15,6 +15,7 @@ import {
   Building2,
   ListOrdered,
   BookOpen,
+  Map,
 } from 'lucide-react'
 
 const navItems = [
@@ -28,6 +29,8 @@ const navItems = [
   { to: '/roteadores', label: 'Roteadores', icon: Wifi },
   { to: '/credenciais', label: 'Credenciais', icon: KeyRound },
   { to: '/visualizacao', label: 'Visualização', icon: Monitor },
+  { to: '/plantabaixa', label: 'Planta Baixa', icon: Map },
+  { to: '/topologia', label: 'Topologia de Rede', icon: Network },
   { to: '/crimpagem', label: 'Crimpagem', icon: BookOpen },
   { to: '/relatorios', label: 'Relatórios', icon: FileText },
 ]

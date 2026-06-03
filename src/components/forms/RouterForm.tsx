@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import BackupManager from '../ui/BackupManager'
 import { Globe, Plus, Trash2 } from 'lucide-react'
 
 interface RouterFormProps {
@@ -497,6 +498,15 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
           </div>
         )}
       </div>
+
+      {/* Backups de Configuração */}
+      {initialData?.id && (
+        <BackupManager
+          clientId={initialData?.client_id ?? null}
+          equipmentType="router"
+          equipmentId={initialData.id}
+        />
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>

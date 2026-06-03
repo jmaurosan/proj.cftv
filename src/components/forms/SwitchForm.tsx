@@ -6,6 +6,7 @@ import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import BackupManager from '../ui/BackupManager'
 import { Plug, Package } from 'lucide-react'
 
 const DEVICE_TYPES = [
@@ -334,6 +335,15 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
             })}
           </div>
         </div>
+      )}
+
+      {/* Backups de Configuração */}
+      {switchId && (
+        <BackupManager
+          clientId={initialData?.client_id ?? null}
+          equipmentType="switch"
+          equipmentId={switchId}
+        />
       )}
 
       <div className="flex justify-end gap-3 pt-2">

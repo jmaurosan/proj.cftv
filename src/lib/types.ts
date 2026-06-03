@@ -296,3 +296,15 @@ export interface NetworkSegment {
   created_at: string
   updated_at: string
 }
+
+export interface DeviceBackup {
+  id: string
+  client_id: string | null
+  equipment_type: 'router' | 'switch' | 'dvr'
+  equipment_id: string
+  file_name: string
+  file_path: string
+  file_size: number | null
+  notes: string | null
+  created_at: string
+}
