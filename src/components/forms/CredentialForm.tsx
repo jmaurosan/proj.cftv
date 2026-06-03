@@ -95,7 +95,7 @@ export default function CredentialForm({ initialData, onSubmit, onCancel }: Cred
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
         <Button type="submit" disabled={loading}>
-          {loading ? 'Salvando...' : initialData ? 'Atualizar' : 'Criar'}
+          {loading ? 'Salvando...' : 'Salvar'}
         </Button>
       </div>
     </form>

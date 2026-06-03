@@ -713,7 +713,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
           </Button>
         )}
         <Button type="submit" disabled={loading}>
-          {loading ? 'Salvando...' : initialData ? 'Atualizar' : 'Criar'}
+          {loading ? 'Salvando...' : 'Salvar'}
         </Button>
       </div>
     </form>

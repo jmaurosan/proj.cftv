@@ -338,7 +338,7 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
             Cancelar
           </Button>
           <Button type="submit" disabled={saving}>
-            {saving ? 'Salvando...' : data ? 'Atualizar' : 'Salvar'}
+            {saving ? 'Salvando...' : 'Salvar'}
           </Button>
         </div>
       </div>

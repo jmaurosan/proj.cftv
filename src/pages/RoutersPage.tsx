@@ -8,9 +8,11 @@ import RouterForm from '../components/forms/RouterForm'
 import Button from '../components/ui/Button'
 import { Wifi, Search, Plus } from 'lucide-react'
 import { STATUS_COLORS } from '../lib/constants'
+import { useToast } from '../components/ui/Toast'
 
 export default function RoutersPage() {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [routers, setRouters] = useState<Router[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
@@ -93,12 +95,20 @@ export default function RoutersPage() {
 
     if (editingRouter) {
       const { error } = await supabase.from('routers').update(data).eq('id', editingRouter.id)
-      if (error) return { error: error.message }
+      if (error) {
+        toast(error.message, 'error')
+        return { error: error.message }
+      }
       setRouters((prev) => prev.map((r) => (r.id === editingRouter.id ? { ...r, ...data } as Router : r)))
+      toast('Roteador atualizado com sucesso')
     } else {
       const { data: newRouter, error } = await supabase.from('routers').insert({ ...data, user_id: user.id }).select().single()
-      if (error) return { error: error.message }
+      if (error) {
+        toast(error.message, 'error')
+        return { error: error.message }
+      }
       setRouters((prev) => [...prev, newRouter as Router])
+      toast('Roteador criado com sucesso')
     }
 
     setShowForm(false)
@@ -110,9 +120,10 @@ export default function RoutersPage() {
     if (!confirm(`Excluir roteador "${router.name}"?`)) return
     const { error } = await supabase.from('routers').delete().eq('id', router.id)
     if (error) {
-      alert('Erro ao excluir: ' + error.message)
+      toast('Erro ao excluir: ' + error.message, 'error')
     } else {
       setRouters((prev) => prev.filter((r) => r.id !== router.id))
+      toast('Roteador excluído com sucesso')
     }
   }
 

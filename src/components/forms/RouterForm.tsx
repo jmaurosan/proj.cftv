@@ -28,9 +28,45 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
   const [username, setUsername] = useState(initialData?.username ?? '')
   const [password, setPassword] = useState(initialData?.password ?? '')
   const [status, setStatus] = useState(initialData?.status ?? 'ativo')
-  const [notes, setNotes] = useState(initialData?.notes ?? '')
+  
+  // SSID, Senha e Notas
+  const [wifiSsid, setWifiSsid] = useState('')
+  const [wifiPassword, setWifiPassword] = useState('')
+  const [notes, setNotes] = useState('')
+  
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Sync basic data when initialData changes
+  useEffect(() => {
+    setName(initialData?.name ?? '')
+    setBrand(initialData?.brand ?? '')
+    setModel(initialData?.model ?? '')
+    setDeviceType(initialData?.device_type ?? 'generic')
+    setLocation(initialData?.location ?? '')
+    setIpAddress(initialData?.ip_address ?? '')
+    setUsername(initialData?.username ?? '')
+    setPassword(initialData?.password ?? '')
+    setStatus(initialData?.status ?? 'ativo')
+
+    const rawNotes = initialData?.notes ?? ''
+    if (rawNotes.trim().startsWith('{') && rawNotes.trim().endsWith('}')) {
+      try {
+        const parsed = JSON.parse(rawNotes)
+        setWifiSsid(parsed.wifi_ssid ?? '')
+        setWifiPassword(parsed.wifi_password ?? '')
+        setNotes(parsed.notes ?? '')
+      } catch (e) {
+        setWifiSsid('')
+        setWifiPassword('')
+        setNotes(rawNotes)
+      }
+    } else {
+      setWifiSsid('')
+      setWifiPassword('')
+      setNotes(rawNotes)
+    }
+  }, [initialData])
 
   // Internet connections
   const [internetConnections, setInternetConnections] = useState<InternetConnection[]>([])
@@ -71,6 +107,16 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
     setLoading(true)
     setError(null)
 
+    // Serializar SSID e Senha do Wi-Fi no campo notes se algum deles for preenchido
+    let finalNotes = notes || null
+    if (wifiSsid || wifiPassword) {
+      finalNotes = JSON.stringify({
+        wifi_ssid: wifiSsid || null,
+        wifi_password: wifiPassword || null,
+        notes: notes || null
+      })
+    }
+
     const result = await onSubmit({
       name,
       brand: brand || null,
@@ -81,7 +127,7 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
       username: username || null,
       password: password || null,
       status,
-      notes: notes || null,
+      notes: finalNotes,
       client_id: clientId || null,
     })
 
@@ -246,6 +292,26 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
           onChange={(e) => setStatus(e.target.value)}
           options={STATUS_OPTIONS}
         />
+      </div>
+
+      {/* Rede Wi-Fi (Opcional) */}
+      <div className="border border-slate-700/60 rounded-lg p-4 space-y-4 bg-slate-800/10">
+        <h3 className="text-sm font-semibold text-primary">Rede Wi-Fi (Opcional)</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="SSID do Wi-Fi"
+            value={wifiSsid}
+            onChange={(e) => setWifiSsid(e.target.value)}
+            placeholder="Nome da rede sem fio"
+          />
+          <Input
+            label="Senha do Wi-Fi"
+            type="password"
+            value={wifiPassword}
+            onChange={(e) => setWifiPassword(e.target.value)}
+            placeholder="Senha da rede sem fio"
+          />
+        </div>
       </div>
 
       <Input
@@ -437,7 +503,7 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
           Cancelar
         </Button>
         <Button type="submit" disabled={loading}>
-          {loading ? 'Salvando...' : initialData ? 'Atualizar' : 'Criar'}
+          {loading ? 'Salvando...' : 'Salvar'}
         </Button>
       </div>
     </form>
