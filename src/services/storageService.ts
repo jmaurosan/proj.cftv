@@ -1,9 +1,9 @@
-import { supabase } from '../lib/supabase'
+import { supabase } from './supabase'
 
 /**
- * Upload genérico para qualquer bucket do Supabase Storage.
- * Mantém o path no formato `{userId}/{refId}-{timestamp}.{ext}` para que as
- * policies por usuário (auth.uid() = split_part(name, '/', 1)::uuid) funcionem.
+ * Upload gen├®rico para qualquer bucket do Supabase Storage.
+ * Mant├®m o path no formato `{userId}/{refId}-{timestamp}.{ext}` para que as
+ * policies por usu├írio (auth.uid() = split_part(name, '/', 1)::uuid) funcionem.
  */
 async function uploadImage(
   bucket: string,
@@ -34,7 +34,7 @@ async function uploadImage(
 }
 
 /**
- * Remove uma imagem de um bucket a partir da URL pública.
+ * Remove uma imagem de um bucket a partir da URL p├║blica.
  */
 async function deleteImage(
   bucket: string,
@@ -44,7 +44,7 @@ async function deleteImage(
     const urlObj = new URL(url)
     const pathParts = urlObj.pathname.split('/')
     const bucketIndex = pathParts.indexOf(bucket)
-    if (bucketIndex === -1) return { error: 'URL inválida' }
+    if (bucketIndex === -1) return { error: 'URL inv├ílida' }
 
     const filePath = pathParts.slice(bucketIndex + 1).join('/')
 
@@ -70,7 +70,7 @@ export function deleteQRCodeImage(url: string) {
 }
 
 // ============================================
-// Foto do local de instalação (bucket: installation-photos)
+// Foto do local de instala├º├úo (bucket: installation-photos)
 // ============================================
 
 export function uploadInstallationPhoto(file: File, userId: string, cameraId?: string) {

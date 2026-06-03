@@ -1,10 +1,11 @@
 import React from 'react';
-import { ArrowLeft, MapPin, Save, X, Shield, Router, Database, Settings, Verified, Video, AlertTriangle, Eye, Terminal, Cloud, MapPin as MapPinIcon, Loader2, Package } from 'lucide-react';
+import { ArrowLeft, MapPin, Save, X, Shield, Router, Database, Settings, Verified, Video, AlertTriangle, Eye, Terminal, Cloud, MapPin as MapPinIcon, Loader2, Package, QrCode, Camera } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Screen } from '../types';
 import { useImagenPlaceholder } from '../hooks/useImagenPlaceholder';
 import { useInsertRow, useUpdateRow } from '../hooks/useSupabase';
 import { supabase } from '../services/supabase';
+import { uploadQRCodeImage, deleteQRCodeImage, uploadInstallationPhoto, deleteInstallationPhoto } from '../services/storageService';
 import { CrimpReferenceModal } from './CrimpReference';
 import { Cable, ExternalLink } from 'lucide-react';
 
@@ -366,6 +367,106 @@ export function AddCameraForm({ onNavigate, initialData }: FormProps) {
     }
   };
 
+  // Estados de arrays para armazenar múltiplas fotos
+  const [qrCodeUrls, setQrCodeUrls] = React.useState<string[]>(() => {
+    if (initialData?.qr_code_url) {
+      try {
+        const parsed = JSON.parse(initialData.qr_code_url);
+        return Array.isArray(parsed) ? parsed : [initialData.qr_code_url];
+      } catch (e) {
+        return [initialData.qr_code_url];
+      }
+    }
+    return [];
+  });
+
+  const [installationPhotoUrls, setInstallationPhotoUrls] = React.useState<string[]>(() => {
+    if (initialData?.installation_photo_url) {
+      try {
+        const parsed = JSON.parse(initialData.installation_photo_url);
+        return Array.isArray(parsed) ? parsed : [initialData.installation_photo_url];
+      } catch (e) {
+        return [initialData.installation_photo_url];
+      }
+    }
+    return [];
+  });
+
+  const [uploadingQr, setUploadingQr] = React.useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = React.useState(false);
+
+  const qrInputRef = React.useRef<HTMLInputElement>(null);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Handlers para upload e deleção das imagens
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingQr(true);
+    try {
+      const dummyUserId = '00000000-0000-0000-0000-000000000000';
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || dummyUserId;
+
+      const result = await uploadQRCodeImage(file, userId, initialData?.id);
+      if (result.error) {
+        alert('Erro ao enviar QR Code: ' + result.error);
+      } else if (result.url) {
+        setQrCodeUrls(prev => [...prev, result.url!]);
+      }
+    } catch (err: any) {
+      alert('Erro no upload: ' + err.message);
+    } finally {
+      setUploadingQr(false);
+      if (qrInputRef.current) qrInputRef.current.value = '';
+    }
+  };
+
+  const handleQrDelete = async (urlToDelete: string) => {
+    if (window.confirm('Deseja excluir esta imagem do QR Code?')) {
+      try {
+        await deleteQRCodeImage(urlToDelete);
+        setQrCodeUrls(prev => prev.filter(url => url !== urlToDelete));
+      } catch (err: any) {
+        alert('Erro ao excluir: ' + err.message);
+      }
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const dummyUserId = '00000000-0000-0000-0000-000000000000';
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || dummyUserId;
+
+      const result = await uploadInstallationPhoto(file, userId, initialData?.id);
+      if (result.error) {
+        alert('Erro ao enviar Foto do Local: ' + result.error);
+      } else if (result.url) {
+        setInstallationPhotoUrls(prev => [...prev, result.url!]);
+      }
+    } catch (err: any) {
+      alert('Erro no upload: ' + err.message);
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  };
+
+  const handlePhotoDelete = async (urlToDelete: string) => {
+    if (window.confirm('Deseja excluir esta foto de instalação?')) {
+      try {
+        await deleteInstallationPhoto(urlToDelete);
+        setInstallationPhotoUrls(prev => prev.filter(url => url !== urlToDelete));
+      } catch (err: any) {
+        alert('Erro ao excluir: ' + err.message);
+      }
+    }
+  };
+
   // Parser retrocompatível para pair_map
   React.useEffect(() => {
     if (initialData?.pair_map) {
@@ -408,7 +509,9 @@ export function AddCameraForm({ onNavigate, initialData }: FormProps) {
 
       const submissionData = {
         ...formData,
-        pair_map: pairMapStringified
+        pair_map: pairMapStringified,
+        qr_code_url: qrCodeUrls.length > 0 ? JSON.stringify(qrCodeUrls) : null,
+        installation_photo_url: installationPhotoUrls.length > 0 ? JSON.stringify(installationPhotoUrls) : null
       };
 
       if (initialData?.id) {
@@ -721,6 +824,114 @@ export function AddCameraForm({ onNavigate, initialData }: FormProps) {
               </div>
             )}
 
+          </div>
+        </FormSection>
+
+        <FormSection number="06" title="FOTO DO QR CODE DE ACESSO">
+          <div className="space-y-4 bg-surface-container-low p-4 rounded-sm border border-outline-variant/10">
+            <input
+              ref={qrInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleQrUpload}
+              className="hidden"
+            />
+            
+            <div className="flex flex-wrap gap-4 items-center">
+              {qrCodeUrls.map((url, idx) => (
+                <div key={idx} className="relative w-36 h-36 border border-outline-variant/20 rounded-sm overflow-hidden bg-black/20 group">
+                  <img
+                    src={url}
+                    alt={`QR Code ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleQrDelete(url)}
+                    className="absolute top-1.5 right-1.5 bg-error text-on-error p-1.5 rounded-sm opacity-0 group-hover:opacity-100 active:scale-95 transition-all shadow-md"
+                    title="Excluir imagem"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              
+              <button
+                type="button"
+                onClick={() => qrInputRef.current?.click()}
+                disabled={uploadingQr}
+                className="w-36 h-36 border-2 border-dashed border-outline-variant/30 hover:border-primary/50 hover:text-primary rounded-sm flex flex-col items-center justify-center gap-1.5 transition-all text-on-surface-variant bg-surface-container-high/40 active:scale-[0.98]"
+              >
+                {uploadingQr ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <Camera className="w-5 h-5" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Tirar Foto</span>
+                    <span className="text-[8px] opacity-60">(ou selecionar)</span>
+                  </>
+                )}
+              </button>
+            </div>
+            
+            <p className="text-[10px] text-on-surface-variant/70 leading-relaxed">
+              Bata uma foto do QR Code do app da câmera para permitir o acesso rápido de outros dispositivos de rede.
+            </p>
+          </div>
+        </FormSection>
+
+        <FormSection number="07" title="FOTO DO LOCAL DE INSTALAÇÃO">
+          <div className="space-y-4 bg-surface-container-low p-4 rounded-sm border border-outline-variant/10">
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhotoUpload}
+              className="hidden"
+            />
+            
+            <div className="flex flex-wrap gap-4 items-center">
+              {installationPhotoUrls.map((url, idx) => (
+                <div key={idx} className="relative w-36 h-36 border border-outline-variant/20 rounded-sm overflow-hidden bg-black/20 group">
+                  <img
+                    src={url}
+                    alt={`Foto Local ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handlePhotoDelete(url)}
+                    className="absolute top-1.5 right-1.5 bg-error text-on-error p-1.5 rounded-sm opacity-0 group-hover:opacity-100 active:scale-95 transition-all shadow-md"
+                    title="Excluir imagem"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="w-36 h-36 border-2 border-dashed border-outline-variant/30 hover:border-primary/50 hover:text-primary rounded-sm flex flex-col items-center justify-center gap-1.5 transition-all text-on-surface-variant bg-surface-container-high/40 active:scale-[0.98]"
+              >
+                {uploadingPhoto ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <Camera className="w-5 h-5" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Tirar Foto</span>
+                    <span className="text-[8px] opacity-60">(ou selecionar)</span>
+                  </>
+                )}
+              </button>
+            </div>
+            
+            <p className="text-[10px] text-on-surface-variant/70 leading-relaxed">
+              Registre fotos de onde a câmera está instalada física e visualmente, auxiliando manutenções e conferências técnicas futuras.
+            </p>
           </div>
         </FormSection>
 
