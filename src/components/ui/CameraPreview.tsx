@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Loader2, EyeOff } from 'lucide-react'
+import Modal from './Modal'
 
 interface CameraPreviewProps {
   streamUrl?: string | null
@@ -23,6 +24,7 @@ export default function CameraPreview({
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [imageUrl, setImageUrl] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const [showHelp, setShowHelp] = useState(false)
 
   const injectAuth = (url: string): string => {
     if (!url || !streamUser || !streamPass) return url
@@ -49,7 +51,7 @@ export default function CameraPreview({
       
       switch (brand) {
         case 'hikvision':
-          rawUrl = `http://${deviceIp}/ISAPI/Streaming/channels/${streamCh}/httpPreview`
+          rawUrl = `http://${deviceIp}/ISAPI/Streaming/channels/${streamCh}/picture`
           break
         case 'intelbras':
         case 'amcrest':
@@ -70,7 +72,7 @@ export default function CameraPreview({
         
         switch (brand) {
           case 'hikvision':
-            rawUrl = `http://${rawUrl}/ISAPI/Streaming/channels/${streamCh}/httpPreview`
+            rawUrl = `http://${rawUrl}/ISAPI/Streaming/channels/${streamCh}/picture`
             break
           case 'intelbras':
           case 'amcrest':
@@ -134,6 +136,8 @@ export default function CameraPreview({
   const hasConfig = 
     (streamMode === 'manual' && streamUrl) ||
     (streamMode === 'auto' && deviceIp && channelNumber && dvrBrand)
+
+  const isMixedContent = typeof window !== 'undefined' && window.location.protocol === 'https:' && (imageUrl || streamUrl || '').startsWith('http:')
 
   return (
     <div className="bg-bg-secondary border border-border-light rounded-lg p-3">
@@ -260,10 +264,68 @@ export default function CameraPreview({
       {/* Alerta sobre limitações do preview HTTP */}
       <div className="mt-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-md">
         <p className="text-[10px] text-amber-200">
-          ️ <strong>Nota:</strong> O preview HTTP pode não funcionar em alguns navegadores devido a restrições de CORS e autenticação. 
+          ⚠️ <strong>Nota:</strong> O preview HTTP pode não funcionar em alguns navegadores devido a restrições de CORS e autenticação. 
           Para teste confiável, use a URL RTSP acima em apps como <strong>IP Cam Viewer</strong> (Android/iOS) ou <strong>VLC</strong> (desktop).
         </p>
       </div>
+
+      {isMixedContent && (
+        <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs space-y-2">
+          <p className="text-amber-400 font-semibold flex items-center gap-1.5">
+            ⚠️ Bloqueio de Segurança do Navegador (Mixed Content)
+          </p>
+          <p className="text-text-secondary text-[11px]">
+            Como este site roda em HTTPS seguro (Vercel) e o IP da sua câmera é HTTP local, o seu navegador bloqueia a conexão automaticamente.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            className="text-accent hover:underline font-medium text-[11px] block text-left"
+          >
+            Ver passo a passo de como liberar no Chrome/Edge para funcionar →
+          </button>
+        </div>
+      )}
+
+      {/* Modal com o passo a passo */}
+      <Modal open={showHelp} onClose={() => setShowHelp(false)} title="Habilitar Visualização de Câmeras Locais" size="md">
+        <div className="space-y-4 text-sm text-text-primary p-1">
+          <p>
+            Como o sistema está hospedado em um servidor seguro (<strong>HTTPS</strong> na Vercel), os navegadores de computador bloqueiam por padrão conexões a dispositivos da rede local que utilizem o protocolo <strong>HTTP</strong> comum (como o IP do seu DVR ou câmeras).
+          </p>
+          
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-200">
+            <strong>Nota técnica:</strong> Esta liberação é feita localmente no seu próprio navegador e é segura. Ela apenas autoriza o navegador a conectar o sistema na nuvem com a sua rede local física.
+          </div>
+
+          <div className="space-y-2">
+            <h5 className="font-semibold text-primary">No Google Chrome (Computador):</h5>
+            <ol className="list-decimal list-inside space-y-1.5 text-xs text-text-secondary pl-1">
+              <li>Na barra de endereços (onde digita o link do site), clique no ícone de <strong>configurações / controles deslizantes</strong> (ou ícone de cadeado) à esquerda do link.</li>
+              <li>Clique em <strong>"Configurações do site"</strong>.</li>
+              <li>Na lista que se abre, role até encontrar a opção <strong>"Conteúdo não seguro"</strong> (Insecure content).</li>
+              <li>Mude de <strong>"Bloquear (padrão)"</strong> para <strong>"Permitir"</strong>.</li>
+              <li>Volte à aba do sistema de CFTV e <strong>atualize a página (F5)</strong>.</li>
+            </ol>
+          </div>
+
+          <div className="space-y-2 border-t border-border-light pt-3">
+            <h5 className="font-semibold text-primary">No Microsoft Edge (Computador):</h5>
+            <ol className="list-decimal list-inside space-y-1.5 text-xs text-text-secondary pl-1">
+              <li>Clique no ícone de <strong>cadeado ou informação</strong> na barra de endereços do Edge.</li>
+              <li>Selecione <strong>"Permissões para este site"</strong>.</li>
+              <li>Procure por <strong>"Conteúdo não seguro"</strong> e mude a caixa de seleção para <strong>"Permitir"</strong>.</li>
+              <li>Recarregue a página do sistema.</li>
+            </ol>
+          </div>
+
+          <div className="space-y-2 border-t border-border-light pt-3 text-xs text-text-muted">
+            <p>
+              <strong>Dispositivos Móveis (Android/iOS):</strong> Os navegadores de celular são extremamente rígidos e geralmente não permitem esta liberação de conteúdo misto. Para celulares, a recomendação é copiar a <strong>URL RTSP</strong> (gerada abaixo no formulário) e colá-la em aplicativos como <strong>IP Cam Viewer</strong> ou <strong>VLC</strong> conectados ao mesmo Wi-Fi.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

@@ -90,7 +90,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
     let url = ''
     switch (brandLower) {
       case 'hikvision':
-        url = `http://${ipAddress}/ISAPI/Streaming/channels/${streamCh}/httpPreview`
+        url = `http://${ipAddress}/ISAPI/Streaming/channels/${streamCh}/picture`
         break
       case 'intelbras':
         url = `http://${ipAddress}/cgi-bin/snapshot.cgi?ch=${channelNumber}&subtype=1`
@@ -505,7 +505,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
             label="URL de Streaming (MJPEG, HLS ou Snapshot)"
             value={streamUrl}
             onChange={(e) => setStreamUrl(e.target.value)}
-            placeholder="http://192.168.1.100/ISAPI/Streaming/channels/101/httpPreview"
+            placeholder="http://192.168.1.100/ISAPI/Streaming/channels/101/picture"
           />
         )}
 

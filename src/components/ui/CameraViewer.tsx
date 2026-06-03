@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Loader2, WifiOff, EyeOff } from 'lucide-react'
+import Modal from './Modal'
 
 /** URLs RTSP por marca do DVR/NVR */
 const RTSP_URLS: Record<string, (ip: string, port: number, channel: number, stream?: 'main' | 'sub') => string> = {
@@ -78,6 +79,7 @@ export default function CameraViewer({
 }: CameraViewerProps) {
   const [mode, setMode] = useState<ViewerMode>('connecting')
   const [snapshotKey, setSnapshotKey] = useState(0)
+  const [showHelp, setShowHelp] = useState(false)
   const imgRef = useRef<HTMLImageElement>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
@@ -90,8 +92,8 @@ export default function CameraViewer({
     const resolver = DVR_URLS[brand]
     if (resolver) {
       const urls = resolver(deviceIp, channelNumber)
-      if (urls.mjpeg) return { url: urls.mjpeg, type: 'mjpeg' }
       if (urls.snapshot) return { url: urls.snapshot, type: 'snapshot' }
+      if (urls.mjpeg) return { url: urls.mjpeg, type: 'mjpeg' }
       if (urls.hls) return { url: urls.hls, type: 'hls' }
     }
     
@@ -219,6 +221,8 @@ export default function CameraViewer({
       )
     }
 
+    const isMixedContent = typeof window !== 'undefined' && window.location.protocol === 'https:' && (streamUrl || autoUrl().url || '').startsWith('http:')
+
     // Erro ou sem dados
     if (mode === 'error' || mode === 'connecting') {
       return (
@@ -242,18 +246,29 @@ export default function CameraViewer({
                 </span>
               )}
               {deviceIp && channelNumber && (
-                <a
-                  href={(() => {
-                    const raw = streamUrl || autoUrl().url
-                    return injectAuth(raw)
-                  })()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 px-3 py-1.5 bg-accent hover:opacity-90 text-[10px] font-bold text-white rounded cursor-pointer uppercase text-center block z-20 pointer-events-auto shadow-md"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Autenticar no DVR 🔗
-                </a>
+                <div className="flex flex-col gap-1 items-center z-20 pointer-events-auto">
+                  <a
+                    href={(() => {
+                      const raw = streamUrl || autoUrl().url
+                      return injectAuth(raw)
+                    })()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-accent hover:opacity-90 text-[10px] font-bold text-white rounded cursor-pointer uppercase text-center block shadow-md"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Autenticar no DVR 🔗
+                  </a>
+                  {isMixedContent && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setShowHelp(true); }}
+                      className="px-2.5 py-1 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 text-[9px] font-medium rounded cursor-pointer text-center block transition-colors"
+                    >
+                      Bloqueio de IP Local? ⚠️
+                    </button>
+                  )}
+                </div>
               )}
             </>
           )}
@@ -274,6 +289,46 @@ export default function CameraViewer({
           {cameraName}
         </span>
       </div>
+
+      {/* Modal explicativo de mixed content */}
+      <Modal open={showHelp} onClose={() => setShowHelp(false)} title="Habilitar Visualização de Câmeras Locais" size="md">
+        <div className="space-y-4 text-sm text-text-primary p-1">
+          <p>
+            Como o sistema está hospedado em um servidor seguro (<strong>HTTPS</strong> na Vercel), os navegadores de computador bloqueiam por padrão conexões a dispositivos da rede local que utilizem o protocolo <strong>HTTP</strong> comum (como o IP do seu DVR ou câmeras).
+          </p>
+          
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-200">
+            <strong>Nota técnica:</strong> Esta liberação é feita localmente no seu próprio navegador e é segura. Ela apenas autoriza o navegador a conectar o sistema na nuvem com a sua rede local física.
+          </div>
+
+          <div className="space-y-2">
+            <h5 className="font-semibold text-primary">No Google Chrome (Computador):</h5>
+            <ol className="list-decimal list-inside space-y-1.5 text-xs text-text-secondary pl-1">
+              <li>Na barra de endereços (onde digita o link do site), clique no ícone de <strong>configurações / controles deslizantes</strong> (ou ícone de cadeado) à esquerda do link.</li>
+              <li>Clique em <strong>"Configurações do site"</strong>.</li>
+              <li>Na lista que se abre, role até encontrar a opção <strong>"Conteúdo não seguro"</strong> (Insecure content).</li>
+              <li>Mude de <strong>"Bloquear (padrão)"</strong> para <strong>"Permitir"</strong>.</li>
+              <li>Volte à aba do sistema de CFTV e <strong>atualize a página (F5)</strong>.</li>
+            </ol>
+          </div>
+
+          <div className="space-y-2 border-t border-border-light pt-3">
+            <h5 className="font-semibold text-primary">No Microsoft Edge (Computador):</h5>
+            <ol className="list-decimal list-inside space-y-1.5 text-xs text-text-secondary pl-1">
+              <li>Clique no ícone de <strong>cadeado ou informação</strong> na barra de endereços do Edge.</li>
+              <li>Selecione <strong>"Permissões para este site"</strong>.</li>
+              <li>Procure por <strong>"Conteúdo não seguro"</strong> e mude a caixa de seleção para <strong>"Permitir"</strong>.</li>
+              <li>Recarregue a página do sistema.</li>
+            </ol>
+          </div>
+
+          <div className="space-y-2 border-t border-border-light pt-3 text-xs text-text-muted">
+            <p>
+              <strong>Dispositivos Móveis (Android/iOS):</strong> Os navegadores de celular são extremamente rígidos e geralmente não permitem esta liberação de conteúdo misto. Para celulares, a recomendação é copiar a <strong>URL RTSP</strong> (gerada na tela de configuração) e colá-la em aplicativos como <strong>IP Cam Viewer</strong> ou <strong>VLC</strong> conectados ao mesmo Wi-Fi.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
