@@ -1,0 +1,1 @@
+﻿1025: // URL alternativa com usu├írio e senha embutidos (Basic Auth na URL)

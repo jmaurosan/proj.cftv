@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Search, Plus, ChevronRight, Info, ShieldCheck, RefreshCw, Upload, Edit2, Trash2 } from 'lucide-react';
+import { Database, Search, Plus, ChevronRight, Info, ShieldCheck, RefreshCw, Upload, Edit2, Trash2, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useFetchTable, useDeleteRow } from '../hooks/useSupabase';
 import { useStatusMonitor } from '../hooks/useStatusMonitor';

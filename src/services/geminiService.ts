@@ -30,8 +30,10 @@ export async function generateSurveillancePlaceholder(prompt: string): Promise<s
     });
 
     if (response.generatedImages && response.generatedImages.length > 0) {
-      const base64EncodeString = response.generatedImages[0].image.imageBytes;
-      return `data:image/jpeg;base64,${base64EncodeString}`;
+      const base64EncodeString = response.generatedImages[0].image?.imageBytes;
+      if (base64EncodeString) {
+        return `data:image/jpeg;base64,${base64EncodeString}`;
+      }
     }
     
     throw new Error("No image generated");

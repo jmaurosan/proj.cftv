@@ -16,8 +16,8 @@ export type Screen =
 export interface DVR {
   id: string;
   name: string;
-  brand: string;
-  model: string;
+  brand?: string;
+  model?: string;
   ip: string;
   location: string;
   status: 'online' | 'warning' | 'offline';
@@ -33,8 +33,8 @@ export interface DVR {
 export interface Camera {
   id: string;
   name: string;
-  brand: string;
-  model: string;
+  brand?: string;
+  model?: string;
   ip: string;
   location: string;
   status: 'online' | 'warning' | 'offline';
@@ -66,8 +66,8 @@ export interface PowerBalun {
 export interface NetworkSwitch {
   id: string;
   name: string;
-  brand: string;
-  model: string;
+  brand?: string;
+  model?: string;
   ip: string;
   location: string;
   ports: number;

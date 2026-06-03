@@ -1,11 +1,13 @@
 import React from 'react';
-import { ArrowLeft, MapPin, Save, X, Shield, Router, Database, Settings, Verified, Video, AlertTriangle, Eye, Terminal, Cloud, MapPin as MapPinIcon, Loader2, Package, QrCode, Camera } from 'lucide-react';
+import { ArrowLeft, MapPin, Save, X, Shield, Router, Database, Settings, Verified, Video, AlertTriangle, Eye, Terminal, Cloud, MapPin as MapPinIcon, Loader2, Package, QrCode, Camera, Cpu, Plug } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Screen } from '../types';
 import { useImagenPlaceholder } from '../hooks/useImagenPlaceholder';
 import { useInsertRow, useUpdateRow } from '../hooks/useSupabase';
 import { supabase } from '../services/supabase';
 import { uploadQRCodeImage, deleteQRCodeImage, uploadInstallationPhoto, deleteInstallationPhoto } from '../services/storageService';
+import { useDvrChannels } from '../hooks/useDvrChannels';
+import { useSwitchPorts } from '../hooks/useSwitchPorts';
 import { CrimpReferenceModal } from './CrimpReference';
 import { Cable, ExternalLink } from 'lucide-react';
 
@@ -14,10 +16,65 @@ interface FormProps {
   initialData?: any;
 }
 
+function DvrChannelItem({ chNum, channel, saveChannel }: { chNum: number; channel: any; saveChannel: any }) {
+  const isActive = channel?.is_active ?? true;
+  const dbNotes = channel?.notes ?? '';
+  const [localNotes, setLocalNotes] = React.useState(dbNotes);
+
+  React.useEffect(() => {
+    setLocalNotes(dbNotes);
+  }, [dbNotes]);
+
+  const handleBlur = () => {
+    if (localNotes !== dbNotes) {
+      saveChannel({ channel_number: chNum, is_active: isActive, notes: localNotes });
+    }
+  };
+
+  const handleToggle = (checked: boolean) => {
+    saveChannel({ channel_number: chNum, is_active: checked, notes: localNotes });
+  };
+
+  return (
+    <div className={`bg-surface-container-high/40 border border-outline-variant/10 rounded-sm p-3 transition-all flex flex-col justify-between min-h-[96px] ${!isActive ? 'opacity-60 border-error/20' : ''}`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-xs font-headline font-bold text-on-surface-variant tracking-wider">CH {chNum}</span>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isActive}
+            onChange={(e) => handleToggle(e.target.checked)}
+            className="w-4 h-4 rounded-sm border-none bg-surface-container-highest text-primary focus:ring-primary"
+          />
+          <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">OK</span>
+        </label>
+      </div>
+      <input
+        type="text"
+        value={localNotes}
+        onChange={(e) => setLocalNotes(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder={isActive ? "Notas..." : "Motivo..."}
+        className={`w-full bg-surface-container-highest border-none focus:ring-1 text-xs h-8 px-2 rounded-sm placeholder:opacity-30 text-on-surface ${
+          isActive ? 'focus:ring-primary' : 'focus:ring-error'
+        }`}
+      />
+    </div>
+  );
+}
+
 export function AddDVRForm({ onNavigate, initialData }: FormProps) {
   const { insert, loading: inserting } = useInsertRow('dvrs');
   const { update, loading: updating } = useUpdateRow('dvrs');
   const loading = inserting || updating;
+
+  const dvrId = initialData?.id || null;
+  const { channels, saveChannel } = useDvrChannels(dvrId);
 
   const [formData, setFormData] = React.useState({
     name: initialData?.name || '',
@@ -177,6 +234,24 @@ export function AddDVRForm({ onNavigate, initialData }: FormProps) {
             </div>
           </div>
         </FormSection>
+
+        {initialData?.id && (
+          <FormSection number="05" title="CANAIS DO DVR">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-[350px] overflow-y-auto pr-1">
+              {Array.from({ length: formData.channels }, (_, i) => i + 1).map((chNum) => {
+                const channel = channels.find((c) => c.channel_number === chNum);
+                return (
+                  <DvrChannelItem
+                    key={chNum}
+                    chNum={chNum}
+                    channel={channel}
+                    saveChannel={saveChannel}
+                  />
+                );
+              })}
+            </div>
+          </FormSection>
+        )}
 
         <div className="pt-4 flex flex-col gap-3">
           <button 
@@ -1394,10 +1469,145 @@ export function AddBalunForm({ onNavigate, initialData }: FormProps) {
   );
 }
 
+function SwitchPortItem({ portNum, port, savePort }: { portNum: number; port: any; savePort: any }) {
+  const isActive = port?.is_active ?? true;
+  const deviceType = port?.device_type ?? '';
+  const deviceName = port?.device_name ?? '';
+  const dbNotes = port?.notes ?? '';
+  
+  const [localDeviceName, setLocalDeviceName] = React.useState(deviceName);
+  const [localNotes, setLocalNotes] = React.useState(dbNotes);
+
+  React.useEffect(() => {
+    setLocalDeviceName(deviceName);
+  }, [deviceName]);
+
+  React.useEffect(() => {
+    setLocalNotes(dbNotes);
+  }, [dbNotes]);
+
+  const handleDeviceNameBlur = () => {
+    if (localDeviceName !== deviceName) {
+      savePort({ 
+        port_number: portNum, 
+        device_type: deviceType, 
+        device_name: localDeviceName, 
+        is_active: isActive,
+        notes: dbNotes 
+      });
+    }
+  };
+
+  const handleNotesBlur = () => {
+    if (localNotes !== dbNotes) {
+      savePort({ 
+        port_number: portNum, 
+        device_type: deviceType, 
+        device_name: deviceName, 
+        is_active: isActive, 
+        notes: localNotes 
+      });
+    }
+  };
+
+  const handleToggle = (checked: boolean) => {
+    savePort({ 
+      port_number: portNum, 
+      device_type: deviceType, 
+      device_name: deviceName, 
+      is_active: checked, 
+      notes: localNotes 
+    });
+  };
+
+  const handleDeviceTypeChange = (newType: string) => {
+    savePort({
+      port_number: portNum,
+      device_type: newType || null,
+      device_name: newType ? localDeviceName : null,
+      is_active: isActive,
+      notes: localNotes
+    });
+  };
+
+  return (
+    <div className={`flex items-center gap-3 bg-surface-container-high/40 border border-outline-variant/10 rounded-sm px-4 py-3 flex-wrap transition-all ${!isActive ? 'opacity-60 border-error/20' : ''}`}>
+      <span className="text-xs font-mono text-on-surface-variant/80 w-20 shrink-0 font-bold">Porta {portNum}</span>
+      
+      <label className="flex items-center gap-2 cursor-pointer shrink-0">
+        <input
+          type="checkbox"
+          checked={isActive}
+          onChange={(e) => handleToggle(e.target.checked)}
+          className="w-4 h-4 rounded-sm border-none bg-surface-container-highest text-primary focus:ring-primary"
+        />
+        <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Ativa</span>
+      </label>
+
+      {isActive ? (
+        <>
+          <div className="w-40 shrink-0">
+            <select
+              value={deviceType}
+              onChange={(e) => handleDeviceTypeChange(e.target.value)}
+              className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary text-xs h-9 px-3 rounded-sm text-on-surface"
+            >
+              <option value="">Desconectado</option>
+              <option value="camera">Câmera</option>
+              <option value="dvr">DVR</option>
+              <option value="balun">Power Balun</option>
+              <option value="switch">Switch</option>
+              <option value="router">Roteador</option>
+              <option value="other">Outro</option>
+            </select>
+          </div>
+          
+          {deviceType && (
+            <div className="flex-1 min-w-[150px]">
+              <input
+                type="text"
+                value={localDeviceName}
+                onChange={(e) => setLocalDeviceName(e.target.value)}
+                onBlur={handleDeviceNameBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  }
+                }}
+                placeholder="Nome do dispositivo..."
+                className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary text-xs h-9 px-3 rounded-sm placeholder:opacity-30 text-on-surface"
+              />
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="flex-1 min-w-[200px]">
+          <input
+            type="text"
+            value={localNotes}
+            onChange={(e) => setLocalNotes(e.target.value)}
+            onBlur={handleNotesBlur}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="Motivo da desativação (opcional)..."
+            className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-error text-xs h-9 px-3 rounded-sm placeholder:opacity-30 text-on-surface"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AddSwitchForm({ onNavigate, initialData }: FormProps) {
   const { insert, loading: inserting } = useInsertRow('network_switches');
   const { update, loading: updating } = useUpdateRow('network_switches');
   const loading = inserting || updating;
+
+  const switchId = initialData?.id || null;
+  const { ports, savePort } = useSwitchPorts(switchId);
 
   const [formData, setFormData] = React.useState({
     name: initialData?.name || '',
@@ -1492,6 +1702,24 @@ export function AddSwitchForm({ onNavigate, initialData }: FormProps) {
             </div>
           </div>
         </FormSection>
+
+        {initialData?.id && (
+          <FormSection number="03" title="CONEXÕES DAS PORTAS">
+            <div className="grid grid-cols-1 gap-3 max-h-[350px] overflow-y-auto pr-1">
+              {Array.from({ length: formData.ports }, (_, i) => i + 1).map((portNum) => {
+                const port = ports.find((p) => p.port_number === portNum);
+                return (
+                  <SwitchPortItem
+                    key={portNum}
+                    portNum={portNum}
+                    port={port}
+                    savePort={savePort}
+                  />
+                );
+              })}
+            </div>
+          </FormSection>
+        )}
 
         <div className="pt-4 flex flex-col gap-3">
           <button 

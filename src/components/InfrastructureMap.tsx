@@ -188,12 +188,12 @@ export default function InfrastructureMap() {
 }
 
 function PortMappingModal({ port, cameras, baluns, onClose, onSave }: any) {
-  const { insertRow, loading } = useInsertRow('connections');
+  const { insert, loading } = useInsertRow('connections');
   const [target, setTarget] = useState<{ type: string, id: string }>({ type: 'camera', id: '' });
 
   const handleSave = async () => {
     if (!target.id) return;
-    await insertRow({
+    await insert({
       source_type: port.type,
       source_port: port.number,
       target_type: target.type,

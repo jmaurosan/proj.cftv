@@ -6,6 +6,7 @@ import { useImagenPlaceholder } from '../hooks/useImagenPlaceholder';
 import { useFetchTable } from '../hooks/useSupabase';
 import { useStatusMonitor } from '../hooks/useStatusMonitor';
 import SystemAnalytics from './SystemAnalytics';
+import { supabase } from '../services/supabase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 

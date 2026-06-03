@@ -1,0 +1,420 @@
+import { useState, useEffect, useMemo } from 'react'
+import { Plus, Cable, QrCode, HardDrive, Wifi, LayoutGrid, MapPin } from 'lucide-react'
+import { useCameras } from '../hooks/useCameras'
+import { useDvrs } from '../hooks/useDvrs'
+import type { Camera } from '../lib/types'
+import { CABLE_TYPE_LABELS } from '../lib/constants'
+import { supabase } from '../lib/supabase'
+import DataTable, { type Column } from '../components/ui/DataTable'
+import Badge from '../components/ui/Badge'
+import Button from '../components/ui/Button'
+import Modal from '../components/ui/Modal'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
+import LoadingSpinner from '../components/ui/LoadingSpinner'
+import CameraForm from '../components/forms/CameraForm'
+import CableForm from '../components/forms/CableForm'
+import { useToast } from '../components/ui/Toast'
+import ClientFilterBanner from '../components/ui/ClientFilterBanner'
+
+export default function CamerasPage() {
+  const { data, loading, create, update, remove } = useCameras()
+  const { data: dvrs } = useDvrs()
+  const { toast } = useToast()
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState<Camera | null>(null)
+  const [deleting, setDeleting] = useState<Camera | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [cableCamera, setCableCamera] = useState<Camera | null>(null)
+  const [qrCamera, setQrCamera] = useState<Camera | null>(null)
+  const [photoCamera, setPhotoCamera] = useState<Camera | null>(null)
+  const [cableTypes, setCableTypes] = useState<Record<string, string>>({})
+  const [sortKey, setSortKey] = useState<string>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  // activeTab: 'all' = todas; 'ip' = IP sem DVR; ou id do DVR
+  const [activeTab, setActiveTab] = useState<string>('all')
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      const aData = a as unknown as Record<string, unknown>
+      const bData = b as unknown as Record<string, unknown>
+      let aVal: string | number = ''
+      let bVal: string | number = ''
+
+      if (sortKey === 'ip_address') {
+        aVal = aData.ip_address?.toString() || ''
+        bVal = bData.ip_address?.toString() || ''
+      } else if (sortKey === 'channel_number') {
+        aVal = (aData.channel_number as number) || 0
+        bVal = (bData.channel_number as number) || 0
+      } else {
+        aVal = aData[sortKey]?.toString() || ''
+        bVal = bData[sortKey]?.toString() || ''
+      }
+
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [data, sortKey, sortDir])
+
+  // Dados filtrados pela aba ativa
+  const filteredData = useMemo(() => {
+    if (activeTab === 'all') return sortedData
+    if (activeTab === 'ip') return sortedData.filter((c) => c.connection_type === 'ip' && !c.dvr_id)
+    return sortedData.filter((c) => c.dvr_id === activeTab)
+  }, [sortedData, activeTab])
+
+  // DVRs ordenados alfanumericamente (DVR 1, DVR 2, ... DVR 10) — menor para maior
+  const sortedDvrs = useMemo(() => {
+    return [...dvrs].sort((a, b) =>
+      a.name.localeCompare(b.name, 'pt-BR', { numeric: true, sensitivity: 'base' })
+    )
+  }, [dvrs])
+
+  // Contagens por aba
+  const counts = useMemo(() => {
+    const byDvr: Record<string, number> = {}
+    let ipOnly = 0
+    for (const c of data) {
+      if (c.dvr_id) {
+        byDvr[c.dvr_id] = (byDvr[c.dvr_id] ?? 0) + 1
+      } else if (c.connection_type === 'ip') {
+        ipOnly++
+      }
+    }
+    return { byDvr, ipOnly, total: data.length }
+  }, [data])
+
+  // Fetch cable types for all cameras to show badge
+  const fetchCableTypes = async () => {
+    const { data } = await supabase
+      .from('cable_connections')
+      .select('camera_id, cable_type')
+    if (data) {
+      const map: Record<string, string> = {}
+      for (const row of data) {
+        map[row.camera_id] = row.cable_type
+      }
+      setCableTypes(map)
+    }
+  }
+
+  useEffect(() => {
+    if (!loading) fetchCableTypes()
+  }, [loading])
+
+  const columns: Column<Camera>[] = [
+    { key: 'name', label: 'Nome', sortable: true },
+    {
+      key: 'connection_type',
+      label: 'Conexão',
+      render: (c) =>
+        c.connection_type === 'ip' ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-500/15 text-blue-400">
+            IP{c.poe_powered ? ' ⚡' : ''}
+          </span>
+        ) : (
+          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-slate-500/15 text-slate-400">
+            Analógica
+          </span>
+        ),
+    },
+    {
+      key: 'dvr',
+      label: 'DVR / IP',
+      render: (c) =>
+        c.connection_type === 'ip'
+          ? c.ip_address ?? '-'
+          : c.dvrs?.name ?? '-',
+    },
+    { key: 'channel_number', label: 'Canal', sortable: true, render: (c) => c.channel_number ?? '-' },
+    { key: 'location', label: 'Localização', sortable: true },
+    { key: 'type', label: 'Tipo', render: (c) => c.type.charAt(0).toUpperCase() + c.type.slice(1) },
+    {
+      key: 'cable',
+      label: 'Cabo',
+      render: (c) => {
+        const ct = cableTypes[c.id]
+        if (!ct) return <span className="text-text-muted text-xs">-</span>
+        const label = CABLE_TYPE_LABELS[ct] || ct
+        return (
+          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-accent/15 text-accent">
+            {label}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'qr_code',
+      label: 'QR Code',
+      render: (c) =>
+        c.qr_code_url ? (
+          <button
+            onClick={() => setQrCamera(c)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
+          >
+            <QrCode className="w-3 h-3" />
+            Ver
+          </button>
+        ) : (
+          <span className="text-text-muted text-xs">-</span>
+        ),
+    },
+    {
+      key: 'installation_photo',
+      label: 'Foto Local',
+      render: (c) =>
+        c.installation_photo_url ? (
+          <button
+            onClick={() => setPhotoCamera(c)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-colors"
+          >
+            <MapPin className="w-3 h-3" />
+            Ver
+          </button>
+        ) : (
+          <span className="text-text-muted text-xs">-</span>
+        ),
+    },
+    { key: 'status', label: 'Status', render: (c) => <Badge status={c.status} /> },
+  ]
+
+  const handleSubmit = async (formData: Record<string, unknown>) => {
+    if (editing) {
+      const result = await update(editing.id, formData)
+      if (!result.error) {
+        setModalOpen(false)
+        setEditing(null)
+        toast('Câmera atualizada com sucesso')
+      }
+      return result
+    }
+    const result = await create(formData as Parameters<typeof create>[0])
+    if (!result.error) {
+      setModalOpen(false)
+      toast('Câmera criada com sucesso')
+    }
+    return result
+  }
+
+  const handleDelete = async () => {
+    if (!deleting) return
+    setDeleteLoading(true)
+    const result = await remove(deleting.id)
+    if (!result.error) toast('Câmera excluída com sucesso')
+    else toast(result.error, 'error')
+    setDeleteLoading(false)
+    setDeleting(null)
+  }
+
+  if (loading) return <LoadingSpinner />
+
+  return (
+    <div className="space-y-6">
+      <ClientFilterBanner />
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-text-primary">Câmeras</h2>
+          <p className="text-text-muted text-sm mt-1">
+            {activeTab === 'all'
+              ? `${data.length} registro(s)`
+              : `${filteredData.length} de ${data.length} registro(s)`}
+          </p>
+        </div>
+        <Button onClick={() => { setEditing(null); setModalOpen(true) }}>
+          <Plus className="w-4 h-4" /> Nova Câmera
+        </Button>
+      </div>
+
+      {/* Abas por DVR */}
+      <div className="flex flex-wrap gap-2 border-b border-border-light pb-1">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+            activeTab === 'all'
+              ? 'bg-accent/15 text-accent border-b-2 border-accent'
+              : 'text-text-muted hover:text-text-primary hover:bg-bg-secondary'
+          }`}
+        >
+          <LayoutGrid className="w-4 h-4" />
+          Todas
+          <span className="px-1.5 py-0.5 rounded-full bg-bg-primary text-xs">
+            {counts.total}
+          </span>
+        </button>
+
+        {sortedDvrs.map((dvr) => {
+          const used = counts.byDvr[dvr.id] ?? 0
+          const isActive = activeTab === dvr.id
+          return (
+            <button
+              key={dvr.id}
+              onClick={() => setActiveTab(dvr.id)}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-accent/15 text-accent border-b-2 border-accent'
+                  : 'text-text-muted hover:text-text-primary hover:bg-bg-secondary'
+              }`}
+              title={`${dvr.location ?? ''}`}
+            >
+              <HardDrive className="w-4 h-4" />
+              {dvr.name}
+              <span className="px-1.5 py-0.5 rounded-full bg-bg-primary text-xs">
+                {used}/{dvr.total_channels}
+              </span>
+            </button>
+          )
+        })}
+
+        {counts.ipOnly > 0 && (
+          <button
+            onClick={() => setActiveTab('ip')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+              activeTab === 'ip'
+                ? 'bg-accent/15 text-accent border-b-2 border-accent'
+                : 'text-text-muted hover:text-text-primary hover:bg-bg-secondary'
+            }`}
+          >
+            <Wifi className="w-4 h-4" />
+            IP (sem DVR)
+            <span className="px-1.5 py-0.5 rounded-full bg-bg-primary text-xs">
+              {counts.ipOnly}
+            </span>
+          </button>
+        )}
+      </div>
+
+      <div className="bg-bg-secondary border border-border-light rounded-xl overflow-hidden">
+        <DataTable
+          columns={columns}
+          data={filteredData}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
+          onEdit={(item) => { setEditing(item); setModalOpen(true) }}
+          onDelete={(item) => setDeleting(item)}
+          extraActions={(item) => (
+            <button
+              onClick={() => setCableCamera(item)}
+              className="p-1.5 rounded-lg hover:bg-accent/10 text-text-muted hover:text-accent transition-colors"
+              title="Cabeamento"
+            >
+              <Cable className="w-4 h-4" />
+            </button>
+          )}
+        />
+      </div>
+
+      <Modal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditing(null) }}
+        title={editing ? 'Editar Câmera' : 'Nova Câmera'}
+        size="lg"
+      >
+        <CameraForm
+          initialData={editing}
+          onSubmit={handleSubmit}
+          onCancel={() => { setModalOpen(false); setEditing(null) }}
+        />
+      </Modal>
+
+      <Modal
+        open={!!cableCamera}
+        onClose={() => setCableCamera(null)}
+        title={`Cabeamento - ${cableCamera?.name ?? ''}`}
+        size="lg"
+      >
+        {cableCamera && (
+          <CableForm
+            cameraId={cableCamera.id}
+            onClose={() => setCableCamera(null)}
+            onSaved={() => {
+              fetchCableTypes()
+              toast('Cabeamento salvo com sucesso')
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* Modal de visualização do QR Code */}
+      <Modal
+        open={!!qrCamera}
+        onClose={() => setQrCamera(null)}
+        title={`QR Code - ${qrCamera?.name ?? ''}`}
+        size="sm"
+      >
+        {qrCamera?.qr_code_url && (
+          <div className="flex flex-col items-center gap-4">
+            <img
+              src={qrCamera.qr_code_url}
+              alt={`QR Code da câmera ${qrCamera.name}`}
+              className="max-w-full rounded-lg border border-border-light"
+            />
+            <p className="text-sm text-text-muted text-center">
+              Use o app da câmera para escanear este QR Code e acessar o dispositivo.
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setQrCamera(null)}
+            >
+              Fechar
+            </Button>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal de visualização da Foto do Local de Instalação */}
+      <Modal
+        open={!!photoCamera}
+        onClose={() => setPhotoCamera(null)}
+        title={`Foto do Local - ${photoCamera?.name ?? ''}`}
+        size="md"
+      >
+        {photoCamera?.installation_photo_url && (
+          <div className="flex flex-col items-center gap-4">
+            <img
+              src={photoCamera.installation_photo_url}
+              alt={`Foto do local da câmera ${photoCamera.name}`}
+              className="max-w-full max-h-[70vh] rounded-lg border border-border-light"
+            />
+            {photoCamera.location && (
+              <p className="text-sm text-text-secondary text-center flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5" />
+                {photoCamera.location}
+              </p>
+            )}
+            <p className="text-xs text-text-muted text-center">
+              Referência visual para conferência física do local de instalação.
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPhotoCamera(null)}
+            >
+              Fechar
+            </Button>
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={handleDelete}
+        title="Excluir Câmera"
+        message={`Tem certeza que deseja excluir a câmera "${deleting?.name}"?`}
+        loading={deleteLoading}
+      />
+    </div>
+  )
+}

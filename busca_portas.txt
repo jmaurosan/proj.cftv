@@ -1,0 +1,68 @@
+src\components\CameraInventory.tsx:42: } catch (e) {
+src\components\CameraInventory.tsx:105: <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-4 h-4" />
+src\components\CrimpReference.tsx:91: {/* Select Switch */}
+src\components\Dashboard.tsx:48: } catch (err: any) {
+src\components\Dashboard.tsx:60: // Check first 2 items of each table for simulation
+src\components\Dashboard.tsx:114: subValue="ATIVAS"
+src\components\DVRList.tsx:55: <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant w-4 h-4" />
+src\components\DVRList.tsx:184: {selectedDvr.hikConnect ? 'LINK CLOUD P2P ATIVO' : 'LINK CLOUD DESATIVADO'}
+src\components\Forms.tsx:57: } catch (err: any) {
+src\components\Forms.tsx:376: } catch (e) {
+src\components\Forms.tsx:388: } catch (e) {
+src\components\Forms.tsx:417: } catch (err: any) {
+src\components\Forms.tsx:430: } catch (err: any) {
+src\components\Forms.tsx:451: } catch (err: any) {
+src\components\Forms.tsx:464: } catch (err: any) {
+src\components\Forms.tsx:485: } catch (e) {
+src\components\Forms.tsx:525: } catch (err: any) {
+src\components\Forms.tsx:667: <Input label="Porta Power Balun" placeholder="PB-A1" />
+src\components\Forms.tsx:983: } catch (e) {
+src\components\Forms.tsx:1025: // URL alternativa com usuário e senha embutidos (Basic Auth na URL)
+src\components\Forms.tsx:1327: } catch (err: any) {
+src\components\Forms.tsx:1417: alert('Switch atualizado com sucesso!');
+src\components\Forms.tsx:1420: alert('Switch cadastrado com sucesso!');
+src\components\Forms.tsx:1423: } catch (err: any) {
+src\components\Forms.tsx:1442: placeholder="ex: Switch Central POE"
+src\components\InfrastructureInventory.tsx:12: export default function InfrastructureInventory({ onNavigate, onEditBalun, onEditSwitch }: Props) {
+src\components\InfrastructureInventory.tsx:17: const { remove: removeSwitch } = useDeleteRow('network_switches');
+src\components\InfrastructureInventory.tsx:26: const handleDeleteSwitch = async (sw: any) => {
+src\components\InfrastructureInventory.tsx:27: if (window.confirm(`Excluir o Switch ${sw.name}?`)) {
+src\components\InfrastructureMap.tsx:38: <h3 className="font-headline text-lg font-bold uppercase">Switch Principal: Rack-Principal-01</h3>
+src\components\InfrastructureMap.tsx:39: <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">Switch POE+ Gerenciável de 26 Portas | IP: 10.0.1.254</p>
+src\components\InfrastructureMap.tsx:45: {/* Physical Switch Representation */}
+src\components\InfrastructureMap.tsx:106: Nenhuma porta mapeada no Switch
+src\components\InfrastructureMap.tsx:165: <ConsoleLog type="system" message="Verificação de diagnóstico concluída. Sem erros de CRC na Porta 1-12." />
+src\components\InfrastructureMap.tsx:167: <ConsoleLog type="critical" message="Link da Porta 4 fora do ar. Verifique a terminação física do UTP." />
+src\components\InfrastructureMap.tsx:215: Mapear Porta {port.number} ({port.type.toUpperCase()})
+src\components\InteractiveFloorPlan.tsx:34: } catch (err) {
+src\components\InteractiveFloorPlan.tsx:52: <MapIcon className="w-5 h-5" /> Planta Baixa Interativa
+src\constants.ts:107: message: 'Falha na Porta do Switch 04',
+src\hooks\useBalun4x1Outputs.ts:27: const fetch = useCallback(async () => {
+src\hooks\useBalun4x1Outputs.ts:81: return { outputs, loading, saveOutput, deleteOutput, refetch: fetch }
+src\hooks\useBalunPorts.ts:12: const fetch = useCallback(async () => {
+src\hooks\useBalunPorts.ts:57: return { ports, loading, savePort, refetch: fetch }
+src\hooks\useBaluns.ts:15: const fetch = useCallback(async () => {
+src\hooks\useBaluns.ts:54: return { data, loading, error, create, update, remove, refetch: fetch }
+src\hooks\useCableConnection.ts:12: const fetch = useCallback(async () => {
+src\hooks\useCableConnection.ts:55: return { data, loading, save, remove, fetch }
+src\hooks\useCameras.ts:15: const fetch = useCallback(async () => {
+src\hooks\useCameras.ts:54: return { data, loading, error, create, update, remove, refetch: fetch }
+src\hooks\useCredentials.ts:15: const fetch = useCallback(async () => {
+src\hooks\useCredentials.ts:54: return { data, loading, error, create, update, remove, refetch: fetch }
+src\hooks\useDvrChannels.ts:10: const fetch = useCallback(async () => {
+src\hooks\useDvrChannels.ts:52: return { channels, loading, saveChannel, refetch: fetch }
+src\hooks\useDvrs.ts:15: const fetch = useCallback(async () => {
+src\hooks\useDvrs.ts:54: return { data, loading, error, create, update, remove, refetch: fetch }
+src\hooks\useEquipmentModels.ts:12: const fetch = useCallback(async () => {
+src\hooks\useEquipmentModels.ts:46: return { models, loading, saveModel, refetch: fetch }
+src\hooks\useImagenPlaceholder.ts:26: } catch (error) {
+src\hooks\useStatusMonitor.ts:37: } catch (err) {
+src\hooks\useSupabase.ts:19: } catch (err: any) {
+src\hooks\useSwitches.ts:15: const fetch = useCallback(async () => {
+src\hooks\useSwitches.ts:54: return { data, loading, error, create, update, remove, refetch: fetch }
+src\hooks\useSwitchPorts.ts:10: const fetch = useCallback(async () => {
+src\hooks\useSwitchPorts.ts:56: return { ports, loading, savePort, refetch: fetch }
+src\services\geminiService.ts:38: } catch (error) {
+src\services\storageService.ts:55: } catch {
+src\services\supabase.ts:11: } catch {
+src\types.ts:66: export interface NetworkSwitch {

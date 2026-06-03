@@ -13,7 +13,7 @@ export default function Layout({ children, currentScreen, onNavigate }: LayoutPr
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background">
       {/* Sidebar - Desktop */}
-      <Sidebar currentScreen={currentScreen} onNavigate={onNavigate} />
+      <Sidebar collapsed={false} mobileOpen={false} onToggle={() => {}} onMobileClose={() => {}} />
 
       {/* Navbar & Mobile Header */}
       <Navbar currentScreen={currentScreen} onNavigate={onNavigate} />
