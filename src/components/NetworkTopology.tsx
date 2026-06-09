@@ -396,24 +396,26 @@ export default function NetworkTopology() {
     toast('Layout redefinido para a distribuição automática em árvore.')
   }
 
-  // Lógica de drag-and-drop de nós no Canvas da Topologia
-  const handleNodeDrag = (id: string, info: any) => {
+  // Lógica ao soltar o nó após arrastar no Canvas da Topologia
+  const handleNodeDragEnd = (id: string, info: any) => {
     if (!containerRef.current) return
 
     const rect = containerRef.current.getBoundingClientRect()
-    // Coordenadas locais em pixels no canvas de 1050x650
-    const x = info.point.x - rect.left
-    const y = info.point.y - rect.top
+    
+    // Coordenadas em relação ao container, compensando a escala do zoom
+    const x = (info.point.x - rect.left) / zoom
+    const y = (info.point.y - rect.top) / zoom
 
-    // Constrains dentro da tela
-    const constrainedX = Math.max(20, Math.min(1000, x))
-    const constrainedY = Math.max(20, Math.min(600, y))
+    // Limites lógicos do canvas técnico (1050x650)
+    const constrainedX = Math.max(75, Math.min(975, x))
+    const constrainedY = Math.max(45, Math.min(605, y))
 
     const newPositions = {
       ...nodePositions,
       [id]: { x: constrainedX, y: constrainedY }
     }
     setNodePositions(newPositions)
+    handleSaveTopology(newPositions)
   }
 
   // Obter detalhes de conexão por nó
@@ -714,12 +716,11 @@ export default function NetworkTopology() {
 
               return (
                 <motion.div
-                  key={node.id}
+                  key={`${node.id}-${pos.x}-${pos.y}`}
                   drag={isEditing && node.type !== 'internet'}
                   dragMomentum={false}
                   dragElastic={0}
-                  onDrag={(e, info) => handleNodeDrag(node.id, info)}
-                  onDragEnd={() => handleSaveTopology()}
+                  onDragEnd={(e, info) => handleNodeDragEnd(node.id, info)}
                   onClick={() => setSelectedNode(node)}
                   className={`absolute z-10 p-3 bg-bg-secondary border-2 rounded-xl flex items-center gap-3 shadow-2xl cursor-pointer select-none transition-all ${
                     isActive ? 'ring-2 ring-accent scale-105 border-accent' : 'border-border-light hover:border-accent/40'
