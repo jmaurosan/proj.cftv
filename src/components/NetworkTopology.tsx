@@ -398,13 +398,22 @@ export default function NetworkTopology() {
 
   // Lógica ao soltar o nó após arrastar no Canvas da Topologia
   const handleNodeDragEnd = (id: string, info: any) => {
-    if (!containerRef.current) return
+    const prevPos = nodePositions[id]
+    if (!prevPos) return
 
-    const rect = containerRef.current.getBoundingClientRect()
+    // Calcula a distância do movimento em pixels físicos da tela
+    const distance = Math.sqrt(info.offset.x * info.offset.x + info.offset.y * info.offset.y)
     
-    // Coordenadas em relação ao container, compensando a escala do zoom
-    const x = (info.point.x - rect.left) / zoom
-    const y = (info.point.y - rect.top) / zoom
+    // Se foi apenas um clique ou tremor leve (menos de 5px), não atualiza nada
+    if (distance < 5) return
+
+    // Calcula o deslocamento lógico compensando a escala do zoom do canvas
+    const deltaX = info.offset.x / zoom
+    const deltaY = info.offset.y / zoom
+
+    // Nova posição baseada na posição anterior + deslocamento lógico
+    const x = prevPos.x + deltaX
+    const y = prevPos.y + deltaY
 
     // Limites lógicos do canvas técnico (1050x650)
     const constrainedX = Math.max(75, Math.min(975, x))
