@@ -202,6 +202,7 @@ export default function RoutersPage() {
         onSort={handleSort}
         onEdit={(r) => { setEditingRouter(r); setShowForm(true) }}
         onDelete={handleDelete}
+        onRowClick={(r) => { setEditingRouter(r); setShowForm(true) }}
       />
 
       <Modal open={showForm} onClose={() => { setShowForm(false); setEditingRouter(null) }} title={editingRouter ? 'Editar Roteador' : 'Novo Roteador'} size="lg">
