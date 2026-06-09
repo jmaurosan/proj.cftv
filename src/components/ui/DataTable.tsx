@@ -13,6 +13,7 @@ interface DataTableProps<T> {
   data: T[]
   onEdit?: (item: T) => void
   onDelete?: (item: T) => void
+  onRowClick?: (item: T) => void
   extraActions?: (item: T) => ReactNode
   sortKey?: string
   sortDir?: 'asc' | 'desc'
@@ -24,6 +25,7 @@ export default function DataTable<T extends { id: string }>({
   data,
   onEdit,
   onDelete,
+  onRowClick,
   extraActions,
   sortKey,
   sortDir,
@@ -57,7 +59,8 @@ export default function DataTable<T extends { id: string }>({
           {data.map((item) => (
             <tr
               key={item.id}
-              className="border-b border-border-light/50 hover:bg-bg-tertiary/30 transition-colors"
+              onClick={() => onRowClick?.(item)}
+              className={`border-b border-border-light/50 hover:bg-bg-tertiary/30 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
             >
               {columns.map((col) => (
                 <td key={col.key} className="px-4 py-3 text-text-primary">
@@ -70,7 +73,10 @@ export default function DataTable<T extends { id: string }>({
                     {extraActions?.(item)}
                     {onEdit && (
                       <button
-                        onClick={() => onEdit(item)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEdit(item)
+                        }}
                         className="p-1.5 rounded-lg hover:bg-accent/10 text-text-muted hover:text-accent transition-colors"
                         title="Editar"
                       >
@@ -79,7 +85,10 @@ export default function DataTable<T extends { id: string }>({
                     )}
                     {onDelete && (
                       <button
-                        onClick={() => onDelete(item)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDelete(item)
+                        }}
                         className="p-1.5 rounded-lg hover:bg-danger/10 text-text-muted hover:text-danger transition-colors"
                         title="Excluir"
                       >

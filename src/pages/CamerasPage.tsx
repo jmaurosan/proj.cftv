@@ -159,7 +159,10 @@ export default function CamerasPage() {
       render: (c) =>
         c.qr_code_url ? (
           <button
-            onClick={() => setQrCamera(c)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setQrCamera(c)
+            }}
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
           >
             <QrCode className="w-3 h-3" />
@@ -175,7 +178,10 @@ export default function CamerasPage() {
       render: (c) =>
         c.installation_photo_url ? (
           <button
-            onClick={() => setPhotoCamera(c)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setPhotoCamera(c)
+            }}
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-colors"
           >
             <MapPin className="w-3 h-3" />
@@ -302,9 +308,13 @@ export default function CamerasPage() {
           onSort={handleSort}
           onEdit={(item) => { setEditing(item); setModalOpen(true) }}
           onDelete={(item) => setDeleting(item)}
+          onRowClick={(item) => { setEditing(item); setModalOpen(true) }}
           extraActions={(item) => (
             <button
-              onClick={() => setCableCamera(item)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setCableCamera(item)
+              }}
               className="p-1.5 rounded-lg hover:bg-accent/10 text-text-muted hover:text-accent transition-colors"
               title="Cabeamento"
             >

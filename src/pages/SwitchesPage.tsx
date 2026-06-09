@@ -116,6 +116,7 @@ export default function SwitchesPage() {
           onSort={handleSort}
           onEdit={(item) => { setEditing(item); setModalOpen(true) }}
           onDelete={(item) => setDeleting(item)}
+          onRowClick={(item) => { setEditing(item); setModalOpen(true) }}
         />
       </div>
 
