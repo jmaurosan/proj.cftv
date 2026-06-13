@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Camera,
   Server,
@@ -27,17 +28,16 @@ interface DashData {
   cableCount: number
 }
 
-function countStatus(items: { status: string }[]) {
-  return {
-    ativo: items.filter(i => i.status === 'ativo').length,
-    inativo: items.filter(i => i.status === 'inativo').length,
-    manutencao: items.filter(i => i.status === 'manutencao').length,
-    total: items.length,
-  }
-}
+const countStatus = (items: { status: string }[]) => ({
+  ativo: items.filter(i => i.status === 'ativo').length,
+  inativo: items.filter(i => i.status === 'inativo').length,
+  manutencao: items.filter(i => i.status === 'manutencao').length,
+  total: items.length,
+})
 
 export default function Dashboard() {
   const { selectedClientId } = useClient()
+  const navigate = useNavigate()
   const [data, setData] = useState<DashData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -102,17 +102,14 @@ export default function Dashboard() {
 
   const dvrStats = countStatus(data.dvrs)
   const totalChannels = data.dvrs.reduce((sum, d) => sum + d.total_channels, 0)
-
   const cableCoverage = data.cameras.length > 0 ? Math.round((data.cableCount / data.cameras.length) * 100) : 0
 
-  // Donut data
   const healthSegments = [
     { value: activeDevices, color: '#22c55e', label: 'Online' },
     { value: allDevices.filter(d => d.status === 'manutencao').length, color: '#f59e0b', label: 'Manutencao' },
     { value: allDevices.filter(d => d.status === 'inativo').length, color: '#ef4444', label: 'Offline' },
   ]
 
-  // Recent devices (last 8 by name)
   const recentDevices = [
     ...data.dvrs.map(d => ({ name: d.name, type: 'DVR', status: d.status, detail: d.ip_address })),
     ...data.cameras.slice(0, 4).map(c => ({ name: c.name, type: 'Camera', status: c.status, detail: c.location })),
@@ -122,19 +119,11 @@ export default function Dashboard() {
   const integrityColor = integrity >= 80 ? 'text-success' : integrity >= 50 ? 'text-warning' : 'text-danger'
   const integrityGlow = integrity >= 80 ? 'shadow-success/20' : integrity >= 50 ? 'shadow-warning/20' : 'shadow-danger/20'
 
-  // Monta a lista de equipamentos para testar conectividade
-  const pingDevices: { id: string; name: string; type: 'DVR' | 'Switch' | 'Roteador'; ip: string }[] = []
-  if (data) {
-    data.dvrs.forEach((d) => {
-      if (d.ip_address) pingDevices.push({ id: d.id, name: d.name, type: 'DVR' as const, ip: d.ip_address })
-    })
-    data.switches.forEach((s) => {
-      if (s.ip_address) pingDevices.push({ id: s.id, name: s.name, type: 'Switch' as const, ip: s.ip_address })
-    })
-    data.routers?.forEach((r) => {
-      if (r.ip_address) pingDevices.push({ id: r.id, name: r.name, type: 'Roteador' as const, ip: r.ip_address })
-    })
-  }
+  const pingDevices = data ? [
+    ...data.dvrs.filter(d => d.ip_address).map(d => ({ id: d.id, name: d.name, type: 'DVR' as const, ip: d.ip_address })),
+    ...data.switches.filter(s => s.ip_address).map(s => ({ id: s.id, name: s.name, type: 'Switch' as const, ip: s.ip_address! })),
+    ...(data.routers || []).filter(r => r.ip_address).map(r => ({ id: r.id, name: r.name, type: 'Roteador' as const, ip: r.ip_address! }))
+  ] : []
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -167,8 +156,11 @@ export default function Dashboard() {
       {/* ============ ROW 1: Hero Stats ============ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Cameras */}
-        <div className="relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden group hover:border-cyan-500/30 transition-all">
-          <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-cyan-500 to-cyan-500/0" />
+        <div
+          onClick={() => navigate('/cameras')}
+          className="relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden group hover:border-cyan-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+        >
+          <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-cyan-500 to-transparent" />
           <div className="flex items-start justify-between">
             <div className="min-w-0">
               <p className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium truncate">Cameras</p>
@@ -181,16 +173,19 @@ export default function Dashboard() {
               <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50">
-            <span className="text-[10px] text-text-muted">{camAnalog} Analog</span>
-            <span className="text-[10px] text-text-muted">|</span>
-            <span className="text-[10px] text-cyan-400">{camIP} IP</span>
+          <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50 text-[10px]">
+            <span className="text-text-muted">{camAnalog} Analog</span>
+            <span className="text-text-muted">|</span>
+            <span className="text-cyan-400">{camIP} IP</span>
           </div>
         </div>
 
         {/* DVRs */}
-        <div className="relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden group hover:border-indigo-500/30 transition-all">
-          <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-indigo-500 to-indigo-500/0" />
+        <div
+          onClick={() => navigate('/dvrs')}
+          className="relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden group hover:border-indigo-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+        >
+          <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-indigo-500 to-transparent" />
           <div className="flex items-start justify-between">
             <div className="min-w-0">
               <p className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium truncate">DVRs</p>
@@ -203,14 +198,17 @@ export default function Dashboard() {
               <Server className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50">
-            <span className="text-[10px] text-text-muted">{totalChannels} Canais</span>
+          <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50 text-[10px] text-text-muted">
+            <span>{totalChannels} Canais</span>
           </div>
         </div>
 
         {/* Switches */}
-        <div className="relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden group hover:border-emerald-500/30 transition-all">
-          <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-emerald-500 to-emerald-500/0" />
+        <div
+          onClick={() => navigate('/switches')}
+          className="relative bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 overflow-hidden group hover:border-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+        >
+          <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-emerald-500 to-transparent" />
           <div className="flex items-start justify-between">
             <div className="min-w-0">
               <p className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium truncate">Switches</p>
@@ -223,10 +221,10 @@ export default function Dashboard() {
               <Network className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50">
-            <span className="text-[10px] text-emerald-400">{poeSwitches.length} PoE</span>
-            <span className="text-[10px] text-text-muted">|</span>
-            <span className="text-[10px] text-text-muted">{totalPorts} Portas</span>
+          <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50 text-[10px]">
+            <span className="text-emerald-400">{poeSwitches.length} PoE</span>
+            <span className="text-text-muted">|</span>
+            <span className="text-text-muted">{totalPorts} Portas</span>
           </div>
         </div>
 
@@ -292,16 +290,20 @@ export default function Dashboard() {
           <h3 className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium mb-3 sm:mb-5">Infraestrutura</h3>
           <div className="space-y-3 sm:space-y-4">
             {[
-              { label: 'Cameras', total: camStats.total, active: camStats.ativo, color: 'bg-cyan-500', icon: Camera },
-              { label: 'DVRs', total: dvrStats.total, active: dvrStats.ativo, color: 'bg-indigo-500', icon: Server },
-              { label: 'Switches', total: swStats.total, active: swStats.ativo, color: 'bg-emerald-500', icon: Network },
-              { label: 'Power Baluns', total: data.baluns.length, active: data.baluns.filter(b => b.status === 'ativo').length, color: 'bg-purple-500', icon: Cable },
+              { label: 'Cameras', total: camStats.total, active: camStats.ativo, color: 'bg-cyan-500', icon: Camera, path: '/cameras' },
+              { label: 'DVRs', total: dvrStats.total, active: dvrStats.ativo, color: 'bg-indigo-500', icon: Server, path: '/dvrs' },
+              { label: 'Switches', total: swStats.total, active: swStats.ativo, color: 'bg-emerald-500', icon: Network, path: '/switches' },
+              { label: 'Power Baluns', total: data.baluns.length, active: data.baluns.filter(b => b.status === 'ativo').length, color: 'bg-purple-500', icon: Cable, path: '/baluns' },
             ].map((item) => (
-              <div key={item.label}>
+              <div
+                key={item.label}
+                onClick={() => item.path && navigate(item.path)}
+                className={`group/infra select-none ${item.path ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+              >
                 <div className="flex items-center justify-between mb-1 sm:mb-1.5">
                   <div className="flex items-center gap-2">
-                    <item.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-text-muted shrink-0" />
-                    <span className="text-xs sm:text-sm text-text-secondary">{item.label}</span>
+                    <item.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-text-muted shrink-0 group-hover/infra:text-text-primary transition-colors" />
+                    <span className="text-xs sm:text-sm text-text-secondary group-hover/infra:text-text-primary transition-colors">{item.label}</span>
                   </div>
                   <span className="text-xs sm:text-sm font-mono text-text-primary">
                     <span className="font-bold">{item.active}</span>
@@ -338,7 +340,12 @@ export default function Dashboard() {
               {recentDevices.map((device, i) => (
                 <div
                   key={i}
-                  className="flex sm:grid sm:grid-cols-[auto_1fr_80px_60px] gap-2 sm:gap-3 items-center px-2 sm:px-3 py-2 rounded-lg hover:bg-bg-tertiary/30 transition-colors"
+                  onClick={() => {
+                    if (device.type === 'Camera') navigate('/cameras')
+                    else if (device.type === 'DVR') navigate('/dvrs')
+                    else if (device.type === 'Switch') navigate('/switches')
+                  }}
+                  className="flex sm:grid sm:grid-cols-[auto_1fr_80px_60px] gap-2 sm:gap-3 items-center px-2 sm:px-3 py-2 rounded-lg hover:bg-bg-tertiary/30 transition-colors cursor-pointer"
                 >
                   <CircleDot
                     className={`w-3 h-3 shrink-0 ${
@@ -366,13 +373,17 @@ export default function Dashboard() {
           <h3 className="text-[10px] sm:text-[11px] text-text-muted uppercase tracking-wider sm:tracking-widest font-medium mb-3 sm:mb-4">Metricas de Conexao</h3>
           <div className="space-y-3 sm:space-y-4">
             {[
-              { icon: MonitorCheck, label: 'Cameras Analogicas', value: String(camAnalog), color: 'text-slate-400' },
-              { icon: Wifi, label: 'Cameras IP', value: String(camIP), color: 'text-cyan-400' },
-              { icon: Zap, label: 'Cameras PoE', value: String(camPoe), color: 'text-amber-400' },
-              { icon: Network, label: 'Switches PoE', value: `${poeSwitches.length} (${totalPoeBudget}W)`, color: 'text-emerald-400' },
-              { icon: Cable, label: 'Doc. Cabeamento', value: `${cableCoverage}%`, color: 'text-purple-400' },
+              { icon: MonitorCheck, label: 'Cameras Analogicas', value: String(camAnalog), color: 'text-slate-400', path: '/cameras' },
+              { icon: Wifi, label: 'Cameras IP', value: String(camIP), color: 'text-cyan-400', path: '/cameras' },
+              { icon: Zap, label: 'Cameras PoE', value: String(camPoe), color: 'text-amber-400', path: '/cameras' },
+              { icon: Network, label: 'Switches PoE', value: `${poeSwitches.length} (${totalPoeBudget}W)`, color: 'text-emerald-400', path: '/switches' },
+              { icon: Cable, label: 'Doc. Cabeamento', value: `${cableCoverage}%`, color: 'text-purple-400', path: '/mapeamento' },
             ].map((metric) => (
-              <div key={metric.label} className="flex items-center justify-between py-1.5 sm:py-2 border-b border-border-light/30 last:border-0">
+              <div
+                key={metric.label}
+                onClick={() => metric.path && navigate(metric.path)}
+                className="flex items-center justify-between py-1.5 sm:py-2 border-b border-border-light/30 last:border-0 cursor-pointer hover:bg-bg-tertiary/10 px-1 rounded transition-colors"
+              >
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <metric.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${metric.color} shrink-0`} />
                   <span className="text-xs sm:text-sm text-text-secondary truncate">{metric.label}</span>
