@@ -15,20 +15,25 @@ const DEVICE_TYPES = [
 interface SwitchPortItemProps {
   portNum: number
   port: any
+  deviceOptions: Record<string, { id: string; name: string }[]>
   savePort: (port: {
     port_number: number
     device_type?: string | null
+    device_id?: string | null
     device_name?: string | null
     is_active?: boolean
     notes?: string
   }) => Promise<{ error: string | null } | { error: null }>
 }
 
-export default function SwitchPortItem({ portNum, port, savePort }: SwitchPortItemProps) {
+export default function SwitchPortItem({ portNum, port, deviceOptions, savePort }: SwitchPortItemProps) {
   const isActive = port?.is_active ?? true
   const deviceType = port?.device_type ?? ''
+  const deviceId = port?.device_id ?? ''
   const deviceName = port?.device_name ?? ''
   const dbNotes = port?.notes ?? ''
+  const availableDevices = deviceOptions[deviceType] ?? []
+  const canSelectDevice = availableDevices.length > 0
   
   const [localDeviceName, setLocalDeviceName] = useState(deviceName)
   const [localNotes, setLocalNotes] = useState(dbNotes)
@@ -46,6 +51,7 @@ export default function SwitchPortItem({ portNum, port, savePort }: SwitchPortIt
       savePort({ 
         port_number: portNum, 
         device_type: deviceType || null, 
+        device_id: null,
         device_name: localDeviceName || null, 
         is_active: isActive,
         notes: dbNotes || undefined
@@ -58,6 +64,7 @@ export default function SwitchPortItem({ portNum, port, savePort }: SwitchPortIt
       savePort({ 
         port_number: portNum, 
         device_type: deviceType || null, 
+        device_id: deviceId || null,
         device_name: deviceName || null, 
         is_active: isActive, 
         notes: localNotes || undefined
@@ -69,6 +76,7 @@ export default function SwitchPortItem({ portNum, port, savePort }: SwitchPortIt
     savePort({ 
       port_number: portNum, 
       device_type: deviceType || null, 
+      device_id: deviceId || null,
       device_name: deviceName || null, 
       is_active: checked, 
       notes: localNotes || undefined
@@ -79,7 +87,22 @@ export default function SwitchPortItem({ portNum, port, savePort }: SwitchPortIt
     savePort({
       port_number: portNum,
       device_type: newType || null,
+      device_id: null,
       device_name: newType ? localDeviceName : null,
+      is_active: isActive,
+      notes: localNotes || undefined
+    })
+  }
+
+  const handleDeviceSelect = (newDeviceId: string) => {
+    const selectedDevice = availableDevices.find((device) => device.id === newDeviceId)
+    const selectedName = selectedDevice?.name ?? ''
+    setLocalDeviceName(selectedName)
+    savePort({
+      port_number: portNum,
+      device_type: deviceType || null,
+      device_id: newDeviceId || null,
+      device_name: selectedName || null,
       is_active: isActive,
       notes: localNotes || undefined
     })
@@ -110,18 +133,30 @@ export default function SwitchPortItem({ portNum, port, savePort }: SwitchPortIt
 
       {deviceType && (
         <div className="flex-1 min-w-[150px]">
-          <Input
-            placeholder="Nome do dispositivo"
-            value={localDeviceName}
-            onChange={(e) => setLocalDeviceName(e.target.value)}
-            onBlur={handleDeviceNameBlur}
-            disabled={!isActive}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.currentTarget.blur()
-              }
-            }}
-          />
+          {canSelectDevice ? (
+            <Select
+              value={deviceId}
+              onChange={(e) => handleDeviceSelect(e.target.value)}
+              options={[
+                { value: '', label: 'Selecione o equipamento' },
+                ...availableDevices.map((device) => ({ value: device.id, label: device.name })),
+              ]}
+              disabled={!isActive}
+            />
+          ) : (
+            <Input
+              placeholder="Nome do dispositivo"
+              value={localDeviceName}
+              onChange={(e) => setLocalDeviceName(e.target.value)}
+              onBlur={handleDeviceNameBlur}
+              disabled={!isActive}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur()
+                }
+              }}
+            />
+          )}
         </div>
       )}
 

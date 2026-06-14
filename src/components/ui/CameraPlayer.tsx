@@ -27,7 +27,7 @@ export default function CameraPlayer({ name, rtspUrl, go2rtcUrl }: CameraPlayerP
     if (!video || !rtspUrl || !go2rtcUrl) return
 
     let sourceBuffer: SourceBuffer | null = null
-    let bufferQueue: ArrayBuffer[] = []
+    const bufferQueue: ArrayBuffer[] = []
     let isUpdating = false
 
     const streamId = encodeURIComponent(name)

@@ -6,6 +6,7 @@ export interface SwitchPort {
   switch_id: string;
   port_number: number;
   device_type?: string | null;
+  device_id?: string | null;
   device_name?: string | null;
   is_active: boolean;
   notes?: string;
@@ -37,7 +38,7 @@ export function useSwitchPorts(switchId: string | null) {
     fetch(); 
   }, [fetch]);
 
-  const savePort = async (port: { port_number: number; device_type?: string | null; device_name?: string | null; is_active?: boolean; notes?: string }) => {
+  const savePort = async (port: { port_number: number; device_type?: string | null; device_id?: string | null; device_name?: string | null; is_active?: boolean; notes?: string }) => {
     if (!switchId) return { error: 'Sem switch' };
     const { data: existing } = await supabase
       .from('switch_ports')
@@ -49,6 +50,7 @@ export function useSwitchPorts(switchId: string | null) {
     if (existing) {
       const { error } = await supabase.from('switch_ports').update({
         device_type: port.device_type || null,
+        device_id: port.device_id || null,
         device_name: port.device_name || null,
         is_active: port.is_active ?? true,
         notes: port.notes || null,
@@ -59,6 +61,7 @@ export function useSwitchPorts(switchId: string | null) {
         switch_id: switchId,
         port_number: port.port_number,
         device_type: port.device_type || null,
+        device_id: port.device_id || null,
         device_name: port.device_name || null,
         is_active: port.is_active ?? true,
         notes: port.notes || null,

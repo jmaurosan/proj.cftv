@@ -1,8 +1,9 @@
-import { useState, useMemo, type FormEvent } from 'react'
+import { useEffect, useState, useMemo, type FormEvent } from 'react'
 import type { Switch } from '../../lib/types'
 import { STATUS_OPTIONS, POE_STANDARDS } from '../../lib/constants'
 import { useSwitchPorts } from '../../hooks/useSwitchPorts'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
+import { supabase } from '../../lib/supabase'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
@@ -30,10 +31,47 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [otherBrandMode, setOtherBrandMode] = useState(false)
+  const [deviceOptions, setDeviceOptions] = useState<Record<string, { id: string; name: string }[]>>({})
 
   const switchId = initialData?.id ?? null
   const { ports, savePort } = useSwitchPorts(switchId)
   const { models: switchModels, saveModel } = useEquipmentModels('switch')
+
+  useEffect(() => {
+    if (!initialData?.client_id) {
+      setDeviceOptions({})
+      return
+    }
+
+    let cancelled = false
+
+    async function loadDeviceOptions() {
+      const clientId = initialData?.client_id
+      if (!clientId) return
+
+      const [camerasRes, dvrsRes, switchesRes, routersRes] = await Promise.all([
+        supabase.from('cameras').select('id, name').eq('client_id', clientId).order('name'),
+        supabase.from('dvrs').select('id, name').eq('client_id', clientId).order('name'),
+        supabase.from('switches').select('id, name').eq('client_id', clientId).order('name'),
+        supabase.from('routers').select('id, name').eq('client_id', clientId).order('name'),
+      ])
+
+      if (cancelled) return
+
+      setDeviceOptions({
+        camera: camerasRes.data ?? [],
+        dvr: dvrsRes.data ?? [],
+        switch: (switchesRes.data ?? []).filter((item) => item.id !== switchId),
+        router: routersRes.data ?? [],
+      })
+    }
+
+    loadDeviceOptions()
+
+    return () => {
+      cancelled = true
+    }
+  }, [initialData?.client_id, switchId])
   
   // Extrai marcas únicas dos modelos cadastrados
   const brandOptions = useMemo(() => {
@@ -200,6 +238,7 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
                   key={portNum}
                   portNum={portNum}
                   port={port}
+                  deviceOptions={deviceOptions}
                   savePort={savePort}
                 />
               )
