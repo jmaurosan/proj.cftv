@@ -38,6 +38,23 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Clientes para seleção dinâmica se clientId não for fornecido por prop
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([])
+  const [selectedClient, setSelectedClient] = useState<string>('')
+
+  useEffect(() => {
+    if (!clientId && !initialData?.client_id && user) {
+      supabase
+        .from('clients')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .order('name')
+        .then(({ data }) => {
+          if (data) setClients(data as { id: string; name: string }[])
+        })
+    }
+  }, [clientId, initialData?.client_id, user])
+
   // Sync basic data when initialData changes
   useEffect(() => {
     setName(initialData?.name ?? '')
@@ -129,7 +146,7 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
       password: password || null,
       status,
       notes: finalNotes,
-      client_id: clientId || null,
+      client_id: clientId || initialData?.client_id || selectedClient || null,
     })
 
     if (result.error) {
@@ -222,6 +239,21 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
       {error && (
         <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-2.5">
           {error}
+        </div>
+      )}
+
+      {!clientId && !initialData?.client_id && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Select
+            label="Cliente do Roteador"
+            value={selectedClient}
+            onChange={(e) => setSelectedClient(e.target.value)}
+            options={[
+              { value: '', label: 'Selecione um cliente...' },
+              ...clients.map((c) => ({ value: c.id, label: c.name }))
+            ]}
+            required
+          />
         </div>
       )}
 

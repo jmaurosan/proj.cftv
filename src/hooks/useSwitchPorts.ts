@@ -44,7 +44,7 @@ export function useSwitchPorts(switchId: string | null) {
       .select('id')
       .eq('switch_id', switchId)
       .eq('port_number', port.port_number)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       const { error } = await supabase.from('switch_ports').update({

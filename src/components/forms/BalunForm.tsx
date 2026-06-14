@@ -218,7 +218,8 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
                   <select
                     value={cameraId}
                     onChange={(e) => handlePortChange(portNum, e.target.value)}
-                    className="flex-1 min-w-[150px] px-3 py-2 bg-bg-primary border rounded-lg text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors text-sm"
+                    disabled={!isActive}
+                    className="flex-1 min-w-[150px] px-3 py-2 bg-bg-primary border rounded-lg text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors text-sm disabled:opacity-50"
                   >
                     <option value="">Desconectado</option>
                     {cameras.map((c) => (
@@ -233,18 +234,16 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
                       {selectedCamera.dvrs?.name} CH{selectedCamera.channel_number || '?'}
                     </span>
                   )}
-                  {isActive && (
-                    <div className="w-full flex gap-2 mt-1">
-                      <input
-                        type="text"
-                        value={currentNotes}
-                        onChange={(e) => setEditingNotes((prev) => ({ ...prev, [portNum]: e.target.value }))}
-                        onBlur={() => handlePortNotesSave(portNum)}
-                        placeholder="Observações da porta (problemas, manutenções...)"
-                        className="flex-1 px-2 py-1 text-xs bg-bg-tertiary border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary/50"
-                      />
-                    </div>
-                  )}
+                  <div className="w-full flex gap-2 mt-1">
+                    <input
+                      type="text"
+                      value={currentNotes}
+                      onChange={(e) => setEditingNotes((prev) => ({ ...prev, [portNum]: e.target.value }))}
+                      onBlur={() => handlePortNotesSave(portNum)}
+                      placeholder={isActive ? "Observações da porta (problemas, manutenções...)" : "Motivo da desativação (opcional)..."}
+                      className="flex-1 px-2 py-1 text-xs bg-bg-tertiary border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  </div>
                 </div>
               )
             })}

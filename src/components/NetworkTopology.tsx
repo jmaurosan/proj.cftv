@@ -731,13 +731,14 @@ export default function NetworkTopology() {
                   dragElastic={0}
                   onDragEnd={(e, info) => handleNodeDragEnd(node.id, info)}
                   onClick={() => setSelectedNode(node)}
-                  className={`absolute z-10 p-3 bg-bg-secondary border-2 rounded-xl flex items-center gap-3 shadow-2xl cursor-pointer select-none transition-all ${
+                  className={`absolute z-10 p-3 bg-bg-secondary border-2 rounded-xl flex items-center gap-3 shadow-2xl cursor-pointer select-none transition-colors ${
                     isActive ? 'ring-2 ring-accent scale-105 border-accent' : 'border-border-light hover:border-accent/40'
                   }`}
                   style={{
                     left: pos.x,
                     top: pos.y,
-                    transform: 'translate(-50%, -50%)',
+                    x: '-50%',
+                    y: '-50%',
                     width: node.type === 'internet' ? '180px' : '150px'
                   }}
                   whileHover={{ scale: isEditing ? 1.02 : 1.05 }}
