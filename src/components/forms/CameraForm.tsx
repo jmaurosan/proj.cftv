@@ -5,18 +5,38 @@ import { supabase } from '../../lib/supabase'
 import { uploadQRCodeImage, deleteQRCodeImage, uploadInstallationPhoto, deleteInstallationPhoto } from '../../services/storageService'
 import { useAuth } from '../../hooks/useAuth'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
-import { useToast } from '../ui/Toast'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
-import CameraPreview from '../ui/CameraPreview'
-import { CameraIcon, X, QrCode, Package, MapPin, Monitor } from 'lucide-react'
+import { CameraIcon, X, QrCode, Package, MapPin, Zap } from 'lucide-react'
 
 interface CameraFormProps {
   initialData?: Camera | null
   onSubmit: (data: Record<string, unknown>) => Promise<{ error: string | null }>
   onCancel: () => void
 }
+
+const POWER_SOURCE_OPTIONS = [
+  { value: 'power_supply', label: 'Fonte de alimentação' },
+  { value: 'power_balun', label: 'Power Balun' },
+  { value: 'poe', label: 'PoE' },
+  { value: 'unknown', label: 'Não informado' },
+] as const
+
+const POWER_SUPPLY_VOLTAGE_OPTIONS = [
+  { value: '12V', label: '12V' },
+  { value: '24V', label: '24V' },
+] as const
+
+const POWER_SUPPLY_CURRENT_OPTIONS = [
+  { value: 1, label: '1A' },
+  { value: 2, label: '2A' },
+  { value: 2.5, label: '2,5A' },
+  { value: 5, label: '5A' },
+  { value: 10, label: '10A' },
+  { value: 20, label: '20A' },
+  { value: 30, label: '30A' },
+] as const
 
 export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFormProps) {
   const [name, setName] = useState(initialData?.name ?? '')
@@ -33,6 +53,17 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [ipAddress, setIpAddress] = useState(initialData?.ip_address ?? '')
   const [macAddress, setMacAddress] = useState(initialData?.mac_address ?? '')
   const [poePowered, setPoePowered] = useState(initialData?.poe_powered ?? false)
+  const getDefaultPowerSource = () => {
+    if (initialData?.power_source_type) return initialData.power_source_type
+    if (initialData?.poe_powered) return 'poe'
+    if (initialData?.balun_id) return 'power_balun'
+    return 'power_supply'
+  }
+  const [powerSourceType, setPowerSourceType] = useState(getDefaultPowerSource())
+  const [powerSupplyVoltage, setPowerSupplyVoltage] = useState(initialData?.power_supply_voltage ?? '12V')
+  const [powerSupplyCurrent, setPowerSupplyCurrent] = useState(initialData?.power_supply_current_a?.toString() ?? '')
+  const [powerSupplyBrand, setPowerSupplyBrand] = useState(initialData?.power_supply_brand ?? '')
+  const [powerSupplyModel, setPowerSupplyModel] = useState(initialData?.power_supply_model ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [type, setType] = useState(initialData?.type ?? 'dome')
   const [status, setStatus] = useState(initialData?.status ?? 'ativo')
@@ -41,10 +72,6 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [balunPort, setBalunPort] = useState(initialData?.balun_port ?? '')
   const [switchId, setSwitchId] = useState(initialData?.switch_id ?? '')
   const [switchPort, setSwitchPort] = useState(initialData?.switch_port ?? '')
-  const [streamUrl, setStreamUrl] = useState(initialData?.rtsp_url ?? '')
-  const [streamMode, setStreamMode] = useState<'auto' | 'manual'>('manual')
-  const [streamUser, setStreamUser] = useState('')
-  const [streamPass, setStreamPass] = useState('')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [qrCodeUrl, setQrCodeUrl] = useState(initialData?.qr_code_url ?? '')
   const [installationPhotoUrl, setInstallationPhotoUrl] = useState(initialData?.installation_photo_url ?? '')
@@ -56,7 +83,6 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const fileInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const { user } = useAuth()
-  const { toast } = useToast()
   const [otherBrandMode, setOtherBrandMode] = useState(false)
 
   const [dvrs, setDvrs] = useState<Dvr[]>([])
@@ -65,6 +91,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
   const isIP = connectionType === 'ip' || connectionType === 'wifi'
   const { models: cameraModels, saveModel } = useEquipmentModels('camera')
+  const { models: powerSupplyModels, saveModel: savePowerSupplyModel } = useEquipmentModels('power_supply')
 
   const technologyOptions = useMemo(() => {
     const analogTechnologies = ['multi_hd', 'hdcvi', 'ahd', 'hdtvi', 'cvbs', 'full_color']
@@ -103,32 +130,12 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   useEffect(() => {
     if (isIP && switchId) {
       const sw = switches.find((s) => s.id === switchId)
-      if (sw?.is_poe) setPoePowered(true)
+      if (sw?.is_poe) {
+        setPoePowered(true)
+        setPowerSourceType('poe')
+      }
     }
   }, [switchId, isIP, switches])
-
-  // Preenche URL manual automaticamente quando muda marca/IP/canal
-  useEffect(() => {
-    if (streamMode !== 'manual') return
-    if (!ipAddress || !channelNumber || !brand) return
-    const brandLower = brand.toLowerCase()
-    const streamCh = channelNumber === 1 ? '101' : `${channelNumber}01`
-    let url = ''
-    switch (brandLower) {
-      case 'hikvision':
-        url = `http://${ipAddress}/ISAPI/Streaming/channels/${streamCh}/picture`
-        break
-      case 'intelbras':
-        url = `http://${ipAddress}/cgi-bin/snapshot.cgi?ch=${channelNumber}&subtype=1`
-        break
-      case 'dahua':
-        url = `http://${ipAddress}/cgi-bin/snapManager.cgi?action=attachFileProc&Channels[0].Channel=${channelNumber}`
-        break
-    }
-    if (url && url !== streamUrl) {
-      setStreamUrl(url)
-    }
-  }, [brand, ipAddress, channelNumber, streamMode])
 
   const handleModelSelect = (modelId: string) => {
     const m = cameraModels.find((x) => x.id === modelId)
@@ -137,6 +144,17 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
     if (m.resolution) setResolution(m.resolution)
     // Não preenche name - é o identificador da câmera específica
     // Não preenche model - é diferente do name da câmera
+  }
+
+  const handlePowerSupplyModelSelect = (modelId: string) => {
+    const m = powerSupplyModels.find((x) => x.id === modelId)
+    if (!m) return
+    setPowerSupplyBrand(m.brand)
+    setPowerSupplyModel(m.model)
+    const currentMatch = m.notes?.match(/(\d+(?:[.,]\d+)?)A/i)
+    const voltageMatch = m.notes?.match(/(\d+V)/i)
+    if (currentMatch?.[1]) setPowerSupplyCurrent(currentMatch[1].replace(',', '.'))
+    if (voltageMatch?.[1]) setPowerSupplyVoltage(voltageMatch[1].toUpperCase())
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -152,7 +170,12 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       channel_number: dvrId && channelNumber ? channelNumber : null,
       ip_address: isIP && ipAddress ? ipAddress : null,
       mac_address: isIP && macAddress ? macAddress : null,
-      poe_powered: isIP ? poePowered : false,
+      poe_powered: powerSourceType === 'poe' ? true : isIP ? poePowered : false,
+      power_source_type: powerSourceType === 'unknown' ? null : powerSourceType,
+      power_supply_voltage: powerSourceType === 'power_supply' ? powerSupplyVoltage || null : null,
+      power_supply_current_a: powerSourceType === 'power_supply' && powerSupplyCurrent ? Number(powerSupplyCurrent) : null,
+      power_supply_brand: powerSourceType === 'power_supply' ? powerSupplyBrand || null : null,
+      power_supply_model: powerSourceType === 'power_supply' ? powerSupplyModel || null : null,
       location,
       type,
       status,
@@ -161,9 +184,9 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       balun_port: !isIP && balunPort ? Number(balunPort) : null,
       switch_id: switchId || null,
       switch_port: switchPort ? Number(switchPort) : null,
-      rtsp_url: streamUrl || null,
-      streaming_user: streamUser || null,
-      streaming_password: streamPass || null,
+      rtsp_url: null,
+      streaming_user: null,
+      streaming_password: null,
       qr_code_url: qrCodeUrl || null,
       installation_photo_url: installationPhotoUrl || null,
       notes: notes || null,
@@ -173,6 +196,19 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
     } else if (brand) {
       // Salva no catálogo automaticamente
       await saveModel({ type: 'camera', brand, model: name, resolution, channel_count: null, poe_standard: null, max_ports: null, is_poe: false, notes: null })
+    }
+    if (!result.error && powerSourceType === 'power_supply' && powerSupplyBrand && powerSupplyModel) {
+      await savePowerSupplyModel({
+        type: 'power_supply',
+        brand: powerSupplyBrand,
+        model: powerSupplyModel,
+        resolution: null,
+        channel_count: null,
+        poe_standard: null,
+        max_ports: null,
+        is_poe: false,
+        notes: `${powerSupplyVoltage}${powerSupplyCurrent ? ` ${powerSupplyCurrent.replace('.', ',')}A` : ''}`,
+      })
     }
     setLoading(false)
   }
@@ -416,7 +452,10 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
           <Select
             label="Power Balun (opcional)"
             value={balunId}
-            onChange={(e) => setBalunId(e.target.value)}
+            onChange={(e) => {
+              setBalunId(e.target.value)
+              if (e.target.value) setPowerSourceType('power_balun')
+            }}
             options={baluns.map((b) => ({ value: b.id, label: b.name }))}
             placeholder="Nenhum"
           />
@@ -461,121 +500,68 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         </div>
       )}
 
-      {/* PoE checkbox for IP cameras */}
-      {isIP && (
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={poePowered}
-            onChange={(e) => setPoePowered(e.target.checked)}
-            className="w-4 h-4 rounded border-border accent-accent"
+      {/* Alimentação */}
+      <div className="border border-border-light rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+          <Zap className="w-4 h-4 text-accent" />
+          Alimentação da Câmera
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Select
+            label="Tipo de alimentação"
+            value={powerSourceType}
+            onChange={(e) => {
+              setPowerSourceType(e.target.value)
+              if (e.target.value === 'poe') setPoePowered(true)
+              if (e.target.value !== 'poe') setPoePowered(false)
+            }}
+            options={POWER_SOURCE_OPTIONS}
           />
-          <span className="text-sm text-text-primary">Alimentação via PoE</span>
-        </label>
-      )}
-
-      {/* ── Visualização ao vivo ── */}
-      <div className="space-y-2">
-        <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5">
-          <Monitor className="w-3.5 h-3.5" />
-          Visualização ao Vivo
-        </label>
-
-        <div className="flex gap-2 p-1 bg-bg-tertiary rounded-lg w-fit">
-          <button
-            type="button"
-            onClick={() => setStreamMode('manual')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              streamMode === 'manual'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-text-muted hover:text-text-primary'
-            }`}
-          >
-            Manual
-          </button>
-          <button
-            type="button"
-            onClick={() => setStreamMode('auto')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              streamMode === 'auto'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-text-muted hover:text-text-primary'
-            }`}
-          >
-            Auto (DVR)
-          </button>
-        </div>
-
-        {streamMode === 'auto' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Input
-              label="IP do DVR/NVR ou Câmera"
-              value={ipAddress || ''}
-              onChange={(e) => setIpAddress(e.target.value)}
-              placeholder="192.168.1.100"
-              required={streamMode === 'auto'}
-            />
+          {powerSourceType === 'power_supply' && powerSupplyModels.length > 0 && (
             <Select
-              label="Marca"
-              value={brand || ''}
-              onChange={(e) => setBrand(e.target.value)}
+              label="Modelo de fonte salvo"
+              value=""
+              onChange={(e) => handlePowerSupplyModelSelect(e.target.value)}
               options={[
-                { value: '', label: 'Selecione a marca' },
-                { value: 'Hikvision', label: 'Hikvision' },
-                { value: 'Intelbras', label: 'Intelbras' },
-                { value: 'Dahua', label: 'Dahua' },
-                { value: 'Amcrest', label: 'Amcrest' },
+                { value: '', label: 'Selecione uma fonte cadastrada' },
+                ...powerSupplyModels.map((m) => ({
+                  value: m.id,
+                  label: `${m.brand} ${m.model}${m.notes ? ` (${m.notes})` : ''}`,
+                })),
               ]}
             />
-            <Select
-              label="Canal"
-              value={channelNumber}
-              onChange={(e) => setChannelNumber(Number(e.target.value))}
-              options={Array.from({ length: 16 }, (_, i) => ({ value: i + 1, label: `Canal ${i + 1}` }))}
-            />
-          </div>
-        ) : (
-          <Input
-            label="URL de Streaming (MJPEG, HLS ou Snapshot)"
-            value={streamUrl}
-            onChange={(e) => setStreamUrl(e.target.value)}
-            placeholder="http://192.168.1.100/ISAPI/Streaming/channels/101/picture"
-          />
-        )}
-
-        {/* Credenciais de streaming */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Usuário do DVR"
-            value={streamUser}
-            onChange={(e) => setStreamUser(e.target.value)}
-            placeholder="admin"
-          />
-          <Input
-            label="Senha do DVR"
-            type="password"
-            value={streamPass}
-            onChange={(e) => setStreamPass(e.target.value)}
-            placeholder="••••••••"
-          />
+          )}
         </div>
 
-        <p className="text-xs text-text-muted">
-          {streamMode === 'auto'
-            ? 'O sistema monta a URL automaticamente com base na marca e canal do DVR.'
-            : 'Cole a URL direta de streaming (MJPEG, HLS ou snapshot) do seu dispositivo.'}
-        </p>
-
-        {/* Preview ao vivo */}
-        <CameraPreview
-          streamUrl={streamUrl}
-          streamUser={streamUser}
-          streamPass={streamPass}
-          deviceIp={ipAddress}
-          channelNumber={channelNumber}
-          dvrBrand={brand}
-          streamMode={streamMode}
-        />
+        {powerSourceType === 'power_supply' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Tensão"
+              value={powerSupplyVoltage}
+              onChange={(e) => setPowerSupplyVoltage(e.target.value)}
+              options={POWER_SUPPLY_VOLTAGE_OPTIONS}
+            />
+            <Select
+              label="Corrente"
+              value={powerSupplyCurrent}
+              onChange={(e) => setPowerSupplyCurrent(e.target.value)}
+              options={POWER_SUPPLY_CURRENT_OPTIONS}
+              placeholder="Selecione"
+            />
+            <Input
+              label="Marca da fonte"
+              value={powerSupplyBrand}
+              onChange={(e) => setPowerSupplyBrand(e.target.value)}
+              placeholder="Ex: Intelbras, Hayonik"
+            />
+            <Input
+              label="Modelo da fonte"
+              value={powerSupplyModel}
+              onChange={(e) => setPowerSupplyModel(e.target.value)}
+              placeholder="Ex: EF 1205, 12V 10A"
+            />
+          </div>
+        )}
       </div>
       {/* ── QR Code / Foto de acesso ── */}
       <div className="space-y-2">
@@ -706,47 +692,6 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
-        {!initialData && (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={async () => {
-              // Monta o payload manualmente
-              const formData = {
-                name,
-                brand: brand || null,
-                technology: technology || null,
-                connection_type: connectionType,
-                dvr_id: dvrId || null,
-                channel_number: dvrId && channelNumber ? channelNumber : null,
-                ip_address: isIP && ipAddress ? ipAddress : null,
-                mac_address: isIP && macAddress ? macAddress : null,
-                poe_powered: isIP ? poePowered : false,
-                location,
-                type,
-                status,
-                resolution,
-                balun_id: !isIP && balunId ? balunId : null,
-                balun_port: !isIP && balunPort ? Number(balunPort) : null,
-                switch_id: switchId || null,
-                switch_port: switchPort ? Number(switchPort) : null,
-                rtsp_url: streamUrl || null,
-                streaming_user: streamUser || null,
-                streaming_password: streamPass || null,
-                qr_code_url: qrCodeUrl || null,
-                installation_photo_url: installationPhotoUrl || null,
-                notes: notes || null,
-              }
-              const result = await onSubmit(formData)
-              if (!result.error) {
-                toast('Câmera salva! Agora teste o streaming.')
-              }
-            }}
-            disabled={loading}
-          >
-            Salvar e Testar
-          </Button>
-        )}
         <Button type="submit" disabled={loading}>
           {loading ? 'Salvando...' : 'Salvar'}
         </Button>

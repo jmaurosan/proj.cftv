@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Info, Sparkles, BookOpen } from 'lucide-react';
+import { ArrowDown, ArrowUp, RotateCcw, ShieldCheck, Info, Sparkles, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const WIRE_COLORS = {
@@ -14,20 +14,6 @@ const WIRE_COLORS = {
 };
 
 const pinouts = {
-  '568B': {
-    title: 'Padrão T-568B (Mais Utilizado)',
-    description: 'Padrão industrial mais comum em redes locais (LAN). Recomendado para a maioria das instalações modernas de CFTV IP.',
-    wires: [
-      { pin: 1, name: 'Par 2 (Tx+)', colorText: WIRE_COLORS.orangeStripe.text, bgHex: WIRE_COLORS.orangeStripe.bg, stripeHex: WIRE_COLORS.orangeStripe.stripe, colorClass: 'border-l-[12px] border-orange-500 bg-white' },
-      { pin: 2, name: 'Par 2 (Tx-)', colorText: WIRE_COLORS.orange.text, bgHex: WIRE_COLORS.orange.bg, colorClass: 'bg-orange-600' },
-      { pin: 3, name: 'Par 3 (Rx+)', colorText: WIRE_COLORS.greenStripe.text, bgHex: WIRE_COLORS.greenStripe.bg, stripeHex: WIRE_COLORS.greenStripe.stripe, colorClass: 'border-l-[12px] border-green-500 bg-white' },
-      { pin: 4, name: 'Par 1 (PoE)', colorText: WIRE_COLORS.blue.text, bgHex: WIRE_COLORS.blue.bg, colorClass: 'bg-blue-600' },
-      { pin: 5, name: 'Par 1 (PoE)', colorText: WIRE_COLORS.blueStripe.text, bgHex: WIRE_COLORS.blueStripe.bg, stripeHex: WIRE_COLORS.blueStripe.stripe, colorClass: 'border-l-[12px] border-blue-500 bg-white' },
-      { pin: 6, name: 'Par 3 (Rx-)', colorText: WIRE_COLORS.green.text, bgHex: WIRE_COLORS.green.bg, colorClass: 'bg-green-600' },
-      { pin: 7, name: 'Par 4 (PoE)', colorText: WIRE_COLORS.brownStripe.text, bgHex: WIRE_COLORS.brownStripe.bg, stripeHex: WIRE_COLORS.brownStripe.stripe, colorClass: 'border-l-[12px] border-amber-800 bg-white' },
-      { pin: 8, name: 'Par 4 (PoE)', colorText: WIRE_COLORS.brown.text, bgHex: WIRE_COLORS.brown.bg, colorClass: 'bg-amber-900' }
-    ]
-  },
   '568A': {
     title: 'Padrão T-568A (Tradicional)',
     description: 'Padrão normativo oficial de cabeamento estruturado. Muito utilizado em projetos de telecomunicações antigos.',
@@ -38,6 +24,20 @@ const pinouts = {
       { pin: 4, name: 'Par 1 (PoE)', colorText: WIRE_COLORS.blue.text, bgHex: WIRE_COLORS.blue.bg, colorClass: 'bg-blue-600' },
       { pin: 5, name: 'Par 1 (PoE)', colorText: WIRE_COLORS.blueStripe.text, bgHex: WIRE_COLORS.blueStripe.bg, stripeHex: WIRE_COLORS.blueStripe.stripe, colorClass: 'border-l-[12px] border-blue-500 bg-white' },
       { pin: 6, name: 'Par 2 (Tx-)', colorText: WIRE_COLORS.orange.text, bgHex: WIRE_COLORS.orange.bg, colorClass: 'bg-orange-600' },
+      { pin: 7, name: 'Par 4 (PoE)', colorText: WIRE_COLORS.brownStripe.text, bgHex: WIRE_COLORS.brownStripe.bg, stripeHex: WIRE_COLORS.brownStripe.stripe, colorClass: 'border-l-[12px] border-amber-800 bg-white' },
+      { pin: 8, name: 'Par 4 (PoE)', colorText: WIRE_COLORS.brown.text, bgHex: WIRE_COLORS.brown.bg, colorClass: 'bg-amber-900' }
+    ]
+  },
+  '568B': {
+    title: 'Padrão T-568B (Mais Utilizado)',
+    description: 'Padrão industrial mais comum em redes locais (LAN). Recomendado para a maioria das instalações modernas de CFTV IP.',
+    wires: [
+      { pin: 1, name: 'Par 2 (Tx+)', colorText: WIRE_COLORS.orangeStripe.text, bgHex: WIRE_COLORS.orangeStripe.bg, stripeHex: WIRE_COLORS.orangeStripe.stripe, colorClass: 'border-l-[12px] border-orange-500 bg-white' },
+      { pin: 2, name: 'Par 2 (Tx-)', colorText: WIRE_COLORS.orange.text, bgHex: WIRE_COLORS.orange.bg, colorClass: 'bg-orange-600' },
+      { pin: 3, name: 'Par 3 (Rx+)', colorText: WIRE_COLORS.greenStripe.text, bgHex: WIRE_COLORS.greenStripe.bg, stripeHex: WIRE_COLORS.greenStripe.stripe, colorClass: 'border-l-[12px] border-green-500 bg-white' },
+      { pin: 4, name: 'Par 1 (PoE)', colorText: WIRE_COLORS.blue.text, bgHex: WIRE_COLORS.blue.bg, colorClass: 'bg-blue-600' },
+      { pin: 5, name: 'Par 1 (PoE)', colorText: WIRE_COLORS.blueStripe.text, bgHex: WIRE_COLORS.blueStripe.bg, stripeHex: WIRE_COLORS.blueStripe.stripe, colorClass: 'border-l-[12px] border-blue-500 bg-white' },
+      { pin: 6, name: 'Par 3 (Rx-)', colorText: WIRE_COLORS.green.text, bgHex: WIRE_COLORS.green.bg, colorClass: 'bg-green-600' },
       { pin: 7, name: 'Par 4 (PoE)', colorText: WIRE_COLORS.brownStripe.text, bgHex: WIRE_COLORS.brownStripe.bg, stripeHex: WIRE_COLORS.brownStripe.stripe, colorClass: 'border-l-[12px] border-amber-800 bg-white' },
       { pin: 8, name: 'Par 4 (PoE)', colorText: WIRE_COLORS.brown.text, bgHex: WIRE_COLORS.brown.bg, colorClass: 'bg-amber-900' }
     ]
@@ -58,11 +58,39 @@ const pinouts = {
   }
 };
 
-type Standard = '568B' | '568A' | 'SEQUENTIAL';
+type Standard = '568A' | '568B' | 'SEQUENTIAL';
+type Wire = (typeof pinouts)[Standard]['wires'][number];
+
+const STANDARD_ORDER: Standard[] = ['568A', '568B', 'SEQUENTIAL'];
 
 export default function CrimpPage() {
-  const [selectedStandard, setSelectedStandard] = React.useState<Standard>('568B');
+  const [selectedStandard, setSelectedStandard] = React.useState<Standard>('568A');
+  const [customWires, setCustomWires] = React.useState<Record<Standard, Wire[]>>({
+    '568A': pinouts['568A'].wires,
+    '568B': pinouts['568B'].wires,
+    'SEQUENTIAL': pinouts.SEQUENTIAL.wires,
+  });
   const currentPinout = pinouts[selectedStandard];
+  const currentWires = customWires[selectedStandard];
+
+  const moveWire = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= currentWires.length) return;
+
+    setCustomWires((prev) => {
+      const next = [...prev[selectedStandard]];
+      const [wire] = next.splice(index, 1);
+      next.splice(targetIndex, 0, wire);
+      return { ...prev, [selectedStandard]: next };
+    });
+  };
+
+  const resetCurrentStandard = () => {
+    setCustomWires((prev) => ({
+      ...prev,
+      [selectedStandard]: pinouts[selectedStandard].wires,
+    }));
+  };
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-12">
@@ -81,7 +109,7 @@ export default function CrimpPage() {
 
       {/* Select Tab */}
       <div className="flex bg-bg-secondary p-1 border border-border-light rounded-lg max-w-sm">
-        {(Object.keys(pinouts) as Standard[]).map((std) => (
+        {STANDARD_ORDER.map((std) => (
           <button
             key={std}
             onClick={() => setSelectedStandard(std)}
@@ -120,9 +148,9 @@ export default function CrimpPage() {
             {/* Os 8 fios UTP crimpados */}
             <div className="flex-1 flex justify-between items-end px-1 pt-6 pb-8">
               <AnimatePresence mode="popLayout">
-                {currentPinout.wires.map((wire, idx) => (
+                {currentWires.map((wire, idx) => (
                   <motion.div
-                    key={`${selectedStandard}-${wire.pin}`}
+                    key={`${selectedStandard}-${wire.colorText}-${wire.name}`}
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: -20, opacity: 0 }}
@@ -164,9 +192,20 @@ export default function CrimpPage() {
         {/* Technical Explanations and Pinout Details List */}
         <div className="space-y-4">
           <div className="bg-bg-secondary p-4 rounded-xl border border-border-light space-y-2">
-            <h3 className="font-bold text-sm text-text-primary uppercase tracking-wide">
-              {currentPinout.title}
-            </h3>
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="font-bold text-sm text-text-primary uppercase tracking-wide">
+                {currentPinout.title}
+              </h3>
+              <button
+                type="button"
+                onClick={resetCurrentStandard}
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-bg-primary border border-border-light text-[9px] font-bold uppercase tracking-wide text-text-muted hover:text-accent hover:border-accent/40 transition-colors"
+                title="Restaurar sequência original"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Restaurar
+              </button>
+            </div>
             <p className="text-xs text-text-muted leading-relaxed">
               {currentPinout.description}
             </p>
@@ -174,15 +213,15 @@ export default function CrimpPage() {
 
           {/* Wires List */}
           <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
-            {currentPinout.wires.map((wire) => (
+            {currentWires.map((wire, index) => (
               <div
-                key={wire.pin}
+                key={`${selectedStandard}-${wire.colorText}-${wire.name}-row`}
                 className="flex items-center justify-between bg-bg-secondary p-2 rounded-lg border border-border-light"
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   {/* Círculo do número do pino */}
                   <span className="w-5.5 h-5.5 rounded-full bg-bg-primary text-text-muted flex items-center justify-center font-mono text-[9px] font-bold border border-border-light">
-                    {wire.pin}
+                    {index + 1}
                   </span>
                   {/* Caixa de cor */}
                   <div
@@ -201,9 +240,31 @@ export default function CrimpPage() {
                   <span className="text-[11px] font-bold text-text-primary font-mono">{wire.colorText}</span>
                 </div>
 
-                <span className="text-[8px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded uppercase tracking-wide">
-                  {wire.name}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline text-[8px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded uppercase tracking-wide">
+                    {wire.name}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveWire(index, -1)}
+                      disabled={index === 0}
+                      className="p-1 rounded bg-bg-primary border border-border-light text-text-muted hover:text-accent disabled:opacity-30 disabled:hover:text-text-muted"
+                      title="Mover para cima"
+                    >
+                      <ArrowUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveWire(index, 1)}
+                      disabled={index === currentWires.length - 1}
+                      className="p-1 rounded bg-bg-primary border border-border-light text-text-muted hover:text-accent disabled:opacity-30 disabled:hover:text-text-muted"
+                      title="Mover para baixo"
+                    >
+                      <ArrowDown className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -216,7 +277,7 @@ export default function CrimpPage() {
             <ul className="space-y-1.5 text-[9px] text-text-secondary leading-relaxed list-decimal pl-4">
               <li>Decape 2 a 3 cm do revestimento externo com o alicate decapador sem estragar os fios internos.</li>
               <li>Destrance e estique os fios individualmente com os dedos até ficarem 100% alinhados e retos.</li>
-              <li>Ordene a sequência das cores conforme o padrão selecionado no topo.</li>
+              <li>Ordene a sequência das cores conforme o padrão selecionado ou ajuste manualmente pelos botões de mover.</li>
               <li>Corte as pontas de forma perfeitamente retilínea, deixando cerca de 1.2 cm expostos.</li>
               <li>Insira os condutores no RJ45 até tocarem o topo dourado e prense o conector com firmeza.</li>
             </ul>

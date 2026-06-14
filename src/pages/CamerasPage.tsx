@@ -16,6 +16,18 @@ import CableForm from '../components/forms/CableForm'
 import { useToast } from '../components/ui/Toast'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
 
+const getPowerSourceLabel = (camera: Camera) => {
+  if (camera.power_source_type === 'poe' || camera.poe_powered) return 'PoE'
+  if (camera.power_source_type === 'power_balun') return 'Power Balun'
+  if (camera.power_source_type === 'power_supply') {
+    const current = camera.power_supply_current_a ? `${String(camera.power_supply_current_a).replace('.', ',')}A` : ''
+    const voltage = camera.power_supply_voltage || '12V'
+    const model = camera.power_supply_model || camera.power_supply_brand || ''
+    return [voltage, current, model].filter(Boolean).join(' · ')
+  }
+  return '-'
+}
+
 export default function CamerasPage() {
   const { data, loading, create, update, remove } = useCameras()
   const { data: dvrs } = useDvrs()
@@ -139,6 +151,19 @@ export default function CamerasPage() {
       ) : (
         <span className="text-text-muted text-xs">-</span>
       ),
+    },
+    {
+      key: 'power_source_type',
+      label: 'Alimentação',
+      render: (c) => {
+        const label = getPowerSourceLabel(c)
+        if (label === '-') return <span className="text-text-muted text-xs">-</span>
+        return (
+          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-300">
+            {label}
+          </span>
+        )
+      },
     },
     {
       key: 'dvr',

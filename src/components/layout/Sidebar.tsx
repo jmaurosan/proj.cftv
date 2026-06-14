@@ -18,18 +18,17 @@ import {
 } from 'lucide-react'
 
 const navItems = [
-  { to: '/', label: 'Painel', icon: LayoutDashboard },
   { to: '/clientes', label: 'Clientes', icon: Building2 },
+  { to: '/roteadores', label: 'Roteadores', icon: Wifi },
   { to: '/dvrs', label: 'DVRs', icon: Server },
+  { to: '/credenciais', label: 'Credenciais', icon: KeyRound },
   { to: '/cameras', label: 'Câmeras', icon: Camera },
-  { to: '/mapeamento', label: 'Mapeamento', icon: ListOrdered },
+  { to: '/crimpagem', label: 'Crimpagem', icon: BookOpen },
   { to: '/baluns', label: 'Baluns', icon: Cable },
   { to: '/switches', label: 'Switches', icon: Network },
-  { to: '/roteadores', label: 'Roteadores', icon: Wifi },
-  { to: '/credenciais', label: 'Credenciais', icon: KeyRound },
-  { to: '/plantabaixa', label: 'Planta Baixa', icon: Map },
   { to: '/topologia', label: 'Topologia de Rede', icon: Network },
-  { to: '/crimpagem', label: 'Crimpagem', icon: BookOpen },
+  { to: '/plantabaixa', label: 'Planta Baixa', icon: Map },
+  { to: '/mapeamento', label: 'Mapeamento', icon: ListOrdered },
   { to: '/relatorios', label: 'Relatórios', icon: FileText },
 ]
 

@@ -55,6 +55,11 @@ export interface Camera {
   ip_address: string | null
   mac_address: string | null
   poe_powered: boolean
+  power_source_type: string | null
+  power_supply_voltage: string | null
+  power_supply_current_a: number | null
+  power_supply_brand: string | null
+  power_supply_model: string | null
   location: string
   type: string
   status: string
@@ -235,7 +240,7 @@ export interface SwitchPort {
 
 export interface EquipmentModel {
   id: string
-  type: 'camera' | 'dvr' | 'switch' | 'balun' | 'router' | 'other'
+  type: 'camera' | 'dvr' | 'switch' | 'balun' | 'router' | 'power_supply' | 'other'
   brand: string
   model: string
   resolution: string | null
