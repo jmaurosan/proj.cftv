@@ -7,7 +7,20 @@ import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
 import BackupManager from '../ui/BackupManager'
-import { Package, Cpu } from 'lucide-react'
+import { AlertTriangle, HardDrive, Package, Cpu } from 'lucide-react'
+
+const HD_CAPACITY_OPTIONS = [
+  { value: '', label: 'Selecione a capacidade' },
+  { value: '0.5', label: '500 GB' },
+  { value: '1', label: '1 TB' },
+  { value: '2', label: '2 TB' },
+  { value: '3', label: '3 TB' },
+  { value: '4', label: '4 TB' },
+  { value: '6', label: '6 TB' },
+  { value: '8', label: '8 TB' },
+  { value: '10', label: '10 TB' },
+  { value: '12', label: '12 TB' },
+]
 
 function DvrChannelItem({ chNum, channel, saveChannel }: { chNum: number; channel: any; saveChannel: any }) {
   const isActive = channel?.is_active ?? true;
@@ -29,9 +42,15 @@ function DvrChannelItem({ chNum, channel, saveChannel }: { chNum: number; channe
   };
 
   return (
-    <div className={`bg-slate-800/50 rounded-lg p-2 ${!isActive ? 'opacity-50' : ''}`}>
+    <div className={`rounded-lg p-2 border transition-colors ${
+      isActive
+        ? 'bg-slate-800/50 border-transparent'
+        : 'bg-rose-500/10 border-rose-500/50 shadow-sm shadow-rose-500/10'
+    }`}>
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-xs font-mono text-slate-400">CH {chNum}</span>
+        <span className={`text-xs font-mono ${isActive ? 'text-slate-400' : 'text-rose-300 font-bold'}`}>
+          CH {chNum}
+        </span>
         <label className="flex items-center gap-1 cursor-pointer ml-auto">
           <input
             type="checkbox"
@@ -39,9 +58,17 @@ function DvrChannelItem({ chNum, channel, saveChannel }: { chNum: number; channe
             onChange={(e) => handleToggle(e.target.checked)}
             className="w-3.5 h-3.5 rounded border-border accent-accent"
           />
-          <span className="text-xs text-text-secondary">OK</span>
+          <span className={`text-xs ${isActive ? 'text-text-secondary' : 'text-rose-300 font-semibold'}`}>
+            {isActive ? 'OK' : 'Problema'}
+          </span>
         </label>
       </div>
+      {!isActive && (
+        <div className="flex items-center gap-1 text-[10px] text-rose-300 mb-1">
+          <AlertTriangle className="w-3 h-3" />
+          Canal desabilitado
+        </div>
+      )}
       <input
         type="text"
         value={localNotes}
@@ -52,7 +79,7 @@ function DvrChannelItem({ chNum, channel, saveChannel }: { chNum: number; channe
             e.currentTarget.blur();
           }
         }}
-        placeholder={isActive ? "Notas..." : "Motivo..."}
+        placeholder={isActive ? "Notas..." : "Motivo: câmera ruim, canal queimado..."}
         className={`w-full px-2 py-1 text-xs rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 ${
           isActive 
             ? 'bg-bg-tertiary border border-border focus:ring-primary/50' 
@@ -76,6 +103,9 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
   const [model, setModel] = useState(initialData?.model ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [totalChannels, setTotalChannels] = useState(initialData?.total_channels ?? 8)
+  const [hdCapacityTb, setHdCapacityTb] = useState(initialData?.hd_capacity_tb?.toString() ?? '')
+  const [hdBrand, setHdBrand] = useState(initialData?.hd_brand ?? '')
+  const [hdModel, setHdModel] = useState(initialData?.hd_model ?? '')
   const [status, setStatus] = useState(initialData?.status ?? 'ativo')
   const [username, setUsername] = useState(initialData?.username ?? '')
   const [password, setPassword] = useState(initialData?.password ?? '')
@@ -115,6 +145,9 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
       model: model || null,
       location,
       total_channels: totalChannels,
+      hd_capacity_tb: hdCapacityTb ? Number(hdCapacityTb) : null,
+      hd_brand: hdBrand || null,
+      hd_model: hdModel || null,
       status,
       username: username || null,
       password: password || null,
@@ -207,6 +240,35 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Sala de TI" />
+      </div>
+      <div className="border border-border-light rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
+          <HardDrive className="w-4 h-4" />
+          HD Instalado
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Select
+            label="Capacidade"
+            value={hdCapacityTb}
+            onChange={(e) => setHdCapacityTb(e.target.value)}
+            options={HD_CAPACITY_OPTIONS}
+            required
+          />
+          <Input
+            label="Marca do HD"
+            value={hdBrand}
+            onChange={(e) => setHdBrand(e.target.value)}
+            required
+            placeholder="Ex: Seagate"
+          />
+          <Input
+            label="Modelo do HD"
+            value={hdModel}
+            onChange={(e) => setHdModel(e.target.value)}
+            required
+            placeholder="Ex: SkyHawk ST2000VX"
+          />
+        </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select

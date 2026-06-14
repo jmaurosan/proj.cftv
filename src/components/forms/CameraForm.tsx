@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, type FormEvent, useRef } from 'react'
 import type { Camera, Dvr, PowerBalun, Switch } from '../../lib/types'
-import { STATUS_OPTIONS, CAMERA_TYPES, RESOLUTION_OPTIONS } from '../../lib/constants'
+import { STATUS_OPTIONS, CAMERA_TYPES, CAMERA_TECHNOLOGY_OPTIONS, RESOLUTION_OPTIONS } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import { uploadQRCodeImage, deleteQRCodeImage, uploadInstallationPhoto, deleteInstallationPhoto } from '../../services/storageService'
 import { useAuth } from '../../hooks/useAuth'
@@ -22,6 +22,12 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
   const [name, setName] = useState(initialData?.name ?? '')
   const [brand, setBrand] = useState(initialData?.brand ?? '')
   const [connectionType, setConnectionType] = useState(initialData?.connection_type ?? 'analogica')
+  const getDefaultTechnology = (nextConnectionType: string) => {
+    if (nextConnectionType === 'wifi') return 'wifi_smart'
+    if (nextConnectionType === 'ip') return 'ip_onvif'
+    return 'multi_hd'
+  }
+  const [technology, setTechnology] = useState(initialData?.technology ?? getDefaultTechnology(initialData?.connection_type ?? 'analogica'))
   const [dvrId, setDvrId] = useState(initialData?.dvr_id ?? '')
   const [channelNumber, setChannelNumber] = useState(initialData?.channel_number ?? 1)
   const [ipAddress, setIpAddress] = useState(initialData?.ip_address ?? '')
@@ -59,6 +65,26 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
 
   const isIP = connectionType === 'ip' || connectionType === 'wifi'
   const { models: cameraModels, saveModel } = useEquipmentModels('camera')
+
+  const technologyOptions = useMemo(() => {
+    const analogTechnologies = ['multi_hd', 'hdcvi', 'ahd', 'hdtvi', 'cvbs', 'full_color']
+    const ipTechnologies = connectionType === 'wifi'
+      ? ['wifi_smart', 'ip_onvif', 'full_color']
+      : ['ip_onvif', 'full_color']
+    const allowed = connectionType === 'analogica' ? analogTechnologies : ipTechnologies
+    return CAMERA_TECHNOLOGY_OPTIONS.filter((option) => allowed.includes(option.value))
+  }, [connectionType])
+
+  const handleConnectionTypeChange = (nextConnectionType: string) => {
+    setConnectionType(nextConnectionType)
+    const nextDefaultTechnology = getDefaultTechnology(nextConnectionType)
+    const nextAllowed = nextConnectionType === 'analogica'
+      ? ['multi_hd', 'hdcvi', 'ahd', 'hdtvi', 'cvbs', 'full_color']
+      : nextConnectionType === 'wifi'
+        ? ['wifi_smart', 'ip_onvif', 'full_color']
+        : ['ip_onvif', 'full_color']
+    if (!nextAllowed.includes(technology)) setTechnology(nextDefaultTechnology)
+  }
   
   // Extrai marcas únicas dos modelos cadastrados
   const brandOptions = useMemo(() => {
@@ -120,6 +146,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
     const result = await onSubmit({
       name,
       brand: brand || null,
+      technology: technology || null,
       connection_type: connectionType,
       dvr_id: dvrId || null,
       channel_number: dvrId && channelNumber ? channelNumber : null,
@@ -220,7 +247,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         <button
           key="analogica"
           type="button"
-          onClick={() => setConnectionType('analogica')}
+          onClick={() => handleConnectionTypeChange('analogica')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             connectionType === 'analogica'
               ? 'bg-accent text-white shadow-sm'
@@ -232,7 +259,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         <button
           key="ip"
           type="button"
-          onClick={() => setConnectionType('ip')}
+          onClick={() => handleConnectionTypeChange('ip')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             connectionType === 'ip'
               ? 'bg-accent text-white shadow-sm'
@@ -244,7 +271,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
         <button
           key="wifi"
           type="button"
-          onClick={() => setConnectionType('wifi')}
+          onClick={() => handleConnectionTypeChange('wifi')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             connectionType === 'wifi'
               ? 'bg-accent text-white shadow-sm'
@@ -313,6 +340,13 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Estacionamento" />
+        <Select
+          label="Tecnologia"
+          value={technology}
+          onChange={(e) => setTechnology(e.target.value)}
+          options={technologyOptions}
+          required
+        />
       </div>
 
       {/* Analógica: DVR + Canal */}
@@ -681,6 +715,7 @@ export default function CameraForm({ initialData, onSubmit, onCancel }: CameraFo
               const formData = {
                 name,
                 brand: brand || null,
+                technology: technology || null,
                 connection_type: connectionType,
                 dvr_id: dvrId || null,
                 channel_number: dvrId && channelNumber ? channelNumber : null,

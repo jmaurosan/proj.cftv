@@ -4,6 +4,7 @@ import { STATUS_OPTIONS, POE_STANDARDS } from '../../lib/constants'
 import { useSwitchPorts } from '../../hooks/useSwitchPorts'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import { supabase } from '../../lib/supabase'
+import { useClient } from '../../contexts/ClientContext'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
@@ -18,6 +19,7 @@ interface SwitchFormProps {
 }
 
 export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFormProps) {
+  const { selectedClientId } = useClient()
   const [name, setName] = useState(initialData?.name ?? '')
   const [brand, setBrand] = useState(initialData?.brand ?? '')
   const [model, setModel] = useState(initialData?.model ?? '')
@@ -38,7 +40,9 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
   const { models: switchModels, saveModel } = useEquipmentModels('switch')
 
   useEffect(() => {
-    if (!initialData?.client_id) {
+    const clientId = initialData?.client_id ?? selectedClientId
+
+    if (!clientId) {
       setDeviceOptions({})
       return
     }
@@ -46,13 +50,9 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
     let cancelled = false
 
     async function loadDeviceOptions() {
-      const clientId = initialData?.client_id
-      if (!clientId) return
-
-      const [camerasRes, dvrsRes, switchesRes, routersRes] = await Promise.all([
-        supabase.from('cameras').select('id, name').eq('client_id', clientId).order('name'),
+      const [camerasRes, dvrsRes, routersRes] = await Promise.all([
+        supabase.from('cameras').select('id, name').eq('client_id', clientId).eq('connection_type', 'ip').order('name'),
         supabase.from('dvrs').select('id, name').eq('client_id', clientId).order('name'),
-        supabase.from('switches').select('id, name').eq('client_id', clientId).order('name'),
         supabase.from('routers').select('id, name').eq('client_id', clientId).order('name'),
       ])
 
@@ -61,7 +61,6 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
       setDeviceOptions({
         camera: camerasRes.data ?? [],
         dvr: dvrsRes.data ?? [],
-        switch: (switchesRes.data ?? []).filter((item) => item.id !== switchId),
         router: routersRes.data ?? [],
       })
     }
@@ -71,7 +70,7 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
     return () => {
       cancelled = true
     }
-  }, [initialData?.client_id, switchId])
+  }, [initialData?.client_id, selectedClientId])
   
   // Extrai marcas únicas dos modelos cadastrados
   const brandOptions = useMemo(() => {

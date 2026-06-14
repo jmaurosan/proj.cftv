@@ -17,6 +17,28 @@ export const CAMERA_TYPES = [
   { value: 'fisheye', label: 'Fisheye' },
 ] as const
 
+export const CAMERA_TECHNOLOGY_OPTIONS = [
+  { value: 'multi_hd', label: 'Multi HD / 4 em 1' },
+  { value: 'hdcvi', label: 'HDCVI' },
+  { value: 'ahd', label: 'AHD' },
+  { value: 'hdtvi', label: 'HDTVI' },
+  { value: 'cvbs', label: 'CVBS / Analógica' },
+  { value: 'ip_onvif', label: 'IP / ONVIF' },
+  { value: 'wifi_smart', label: 'Wi-Fi Smart' },
+  { value: 'full_color', label: 'Full Color' },
+] as const
+
+export const CAMERA_TECHNOLOGY_LABELS: Record<string, string> = {
+  multi_hd: 'Multi HD / 4 em 1',
+  hdcvi: 'HDCVI',
+  ahd: 'AHD',
+  hdtvi: 'HDTVI',
+  cvbs: 'CVBS / Analógica',
+  ip_onvif: 'IP / ONVIF',
+  wifi_smart: 'Wi-Fi Smart',
+  full_color: 'Full Color',
+}
+
 export const RESOLUTION_OPTIONS = [
   { value: '720p', label: '720p' },
   { value: '1080p', label: '1080p' },

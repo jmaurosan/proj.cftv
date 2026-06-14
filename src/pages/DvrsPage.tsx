@@ -62,6 +62,12 @@ export default function DvrsPage() {
     { key: 'model', label: 'Modelo', sortable: true },
     { key: 'location', label: 'Localização', sortable: true },
     { key: 'total_channels', label: 'Canais', sortable: true, render: (d) => `${d.total_channels} ch` },
+    {
+      key: 'hd_capacity_tb',
+      label: 'HD',
+      sortable: true,
+      render: (d) => d.hd_capacity_tb ? `${d.hd_capacity_tb} TB${d.hd_brand ? ` · ${d.hd_brand}` : ''}` : 'Sem HD',
+    },
     { key: 'status', label: 'Status', sortable: true, render: (d) => <Badge status={d.status} /> },
   ]
 

@@ -50,6 +50,8 @@ interface EquipmentItem {
   brand?: string | null
   model?: string | null
   details?: string
+  dvr_id?: string | null
+  channel_number?: number | null
 }
 
 export default function InteractiveFloorPlan() {
@@ -135,7 +137,7 @@ export default function InteractiveFloorPlan() {
 
       // 2. Carregar todos os equipamentos do Cliente
       const [camerasRes, dvrsRes, switchesRes, routersRes] = await Promise.all([
-        supabase.from('cameras').select('id, name, status, ip_address, location, brand, model, installation_photo_url').eq('client_id', selectedClientId),
+        supabase.from('cameras').select('id, name, status, ip_address, location, brand, model, installation_photo_url, dvr_id, channel_number').eq('client_id', selectedClientId),
         supabase.from('dvrs').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
         supabase.from('switches').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
         supabase.from('routers').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId)
@@ -155,7 +157,9 @@ export default function InteractiveFloorPlan() {
             location: c.location || 'Não informada',
             brand: c.brand,
             model: c.model,
-            details: c.installation_photo_url || undefined
+            details: c.installation_photo_url || undefined,
+            dvr_id: c.dvr_id,
+            channel_number: c.channel_number
           })
         })
       }
@@ -335,6 +339,24 @@ export default function InteractiveFloorPlan() {
   const positionedIds = Object.keys(positions)
   const nonPositionedEquipments = equipments.filter((e) => !positionedIds.includes(e.id))
   const positionedEquipments = equipments.filter((e) => positionedIds.includes(e.id))
+  const equipmentById = new Map(equipments.map((equip) => [equip.id, equip]))
+  const cameraDvrConnections = positionedEquipments
+    .filter((equip) => {
+      if (equip.type !== 'camera' || !equip.dvr_id) return false
+      const linkedDvr = equipmentById.get(equip.dvr_id)
+      return linkedDvr?.type === 'dvr' && !!positions[equip.id] && !!positions[equip.dvr_id]
+    })
+    .map((camera) => {
+      const dvr = equipmentById.get(camera.dvr_id!)!
+      return {
+        id: `${camera.dvr_id}-${camera.id}`,
+        camera,
+        dvr,
+        source: positions[camera.dvr_id!],
+        target: positions[camera.id],
+        label: camera.channel_number ? `CH${camera.channel_number}` : 'DVR'
+      }
+    })
 
   // Obter cores por status
   const getStatusColorClass = (status: string) => {
@@ -699,6 +721,76 @@ export default function InteractiveFloorPlan() {
                     backgroundSize: '30px 30px'
                   }}
                 />
+              )}
+
+              {/* Conexões físicas entre DVRs e câmeras posicionadas */}
+              {cameraDvrConnections.length > 0 && (
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                >
+                  <defs>
+                    <filter id="floor-link-glow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="0" stdDeviation="1.8" floodColor="#0ea5e9" floodOpacity="0.45" />
+                    </filter>
+                  </defs>
+
+                  {cameraDvrConnections.map((conn) => {
+                    const isActive =
+                      (conn.camera.status === 'ativo' || conn.camera.status === 'online') &&
+                      (conn.dvr.status === 'ativo' || conn.dvr.status === 'online')
+                    const midX = (conn.source.x + conn.target.x) / 2
+                    const midY = (conn.source.y + conn.target.y) / 2
+                    const bend = conn.target.y >= conn.source.y ? -7 : 7
+                    const controlX = midX
+                    const controlY = midY + bend
+                    const pathData = `M ${conn.source.x} ${conn.source.y} Q ${controlX} ${controlY} ${conn.target.x} ${conn.target.y}`
+
+                    return (
+                      <g key={conn.id} filter={isActive ? 'url(#floor-link-glow)' : undefined}>
+                        <path
+                          d={pathData}
+                          fill="none"
+                          stroke={isActive ? '#0ea5e9' : '#64748b'}
+                          strokeWidth={isActive ? 2.2 : 1.6}
+                          strokeDasharray="7 5"
+                          strokeLinecap="round"
+                          opacity={isActive ? 0.85 : 0.55}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                        <circle
+                          cx={conn.source.x}
+                          cy={conn.source.y}
+                          r="0.8"
+                          fill={isActive ? '#22d3ee' : '#94a3b8'}
+                          opacity="0.85"
+                        />
+                        <circle
+                          cx={conn.target.x}
+                          cy={conn.target.y}
+                          r="0.8"
+                          fill={isActive ? '#22d3ee' : '#94a3b8'}
+                          opacity="0.85"
+                        />
+                        <text
+                          x={midX}
+                          y={midY - 1.5}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-slate-100 font-mono font-bold"
+                          fontSize="2.5"
+                          stroke="#0f172a"
+                          strokeWidth="0.7"
+                          paintOrder="stroke"
+                          vectorEffect="non-scaling-stroke"
+                        >
+                          {conn.label}
+                        </text>
+                      </g>
+                    )
+                  })}
+                </svg>
               )}
 
               {/* Renderização dos Pinos dos Equipamentos no Canvas */}

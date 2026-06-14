@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  AlertTriangle,
   Camera,
   Server,
   Network,
@@ -23,8 +24,9 @@ interface DashData {
   dvrs: { id: string; name: string; status: string; ip_address: string; total_channels: number }[]
   cameras: { id: string; name: string; status: string; connection_type: string; poe_powered: boolean; type: string; location: string }[]
   switches: { id: string; name: string; status: string; is_poe: boolean; poe_standard: string | null; poe_budget_watts: number | null; total_ports: number; ip_address?: string | null }[]
-  baluns: { id: string; status: string }[]
+  baluns: { id: string; status: string; balun_type?: 'passive' | 'power' | null }[]
   routers?: { id: string; name: string; status: string; ip_address: string | null }[]
+  dvrChannelIssues: { id: string; dvr_id: string; channel_number: number; notes: string | null; dvrName: string }[]
   cableCount: number
 }
 
@@ -46,7 +48,7 @@ export default function Dashboard() {
       let dvrsQuery = supabase.from('dvrs').select('id, name, status, ip_address, total_channels').order('name')
       let camerasQuery = supabase.from('cameras').select('id, name, status, connection_type, poe_powered, type, location').order('name')
       let switchesQuery = supabase.from('switches').select('id, name, status, is_poe, poe_standard, poe_budget_watts, total_ports, ip_address').order('name')
-      let balunsQuery = supabase.from('power_baluns').select('id, status')
+      let balunsQuery = supabase.from('power_baluns').select('id, status, balun_type')
       let cablesQuery = supabase.from('cable_connections').select('id')
       let routersQuery = supabase.from('routers').select('id, name, status, ip_address').order('name')
 
@@ -68,12 +70,35 @@ export default function Dashboard() {
         routersQuery
       ])
 
+      const dvrIds = (dvrs.data || []).map((d) => d.id)
+      const dvrChannelIssues = dvrIds.length > 0
+        ? await supabase
+            .from('dvr_channels')
+            .select('id, dvr_id, channel_number, notes, dvrs(name)')
+            .eq('is_active', false)
+            .in('dvr_id', dvrIds)
+            .order('channel_number')
+        : { data: [] }
+
       setData({
         dvrs: (dvrs.data || []) as DashData['dvrs'],
         cameras: (cameras.data || []) as DashData['cameras'],
         switches: (switches.data || []) as DashData['switches'],
         baluns: (baluns.data || []) as DashData['baluns'],
         routers: (routers.data || []) as DashData['routers'],
+        dvrChannelIssues: ((dvrChannelIssues.data || []) as unknown as {
+          id: string
+          dvr_id: string
+          channel_number: number
+          notes: string | null
+          dvrs?: { name: string } | { name: string }[] | null
+        }[]).map((issue) => ({
+          id: issue.id,
+          dvr_id: issue.dvr_id,
+          channel_number: issue.channel_number,
+          notes: issue.notes,
+          dvrName: Array.isArray(issue.dvrs) ? issue.dvrs[0]?.name || 'DVR' : issue.dvrs?.name || 'DVR',
+        })),
         cableCount: cables.data?.length ?? 0,
       })
       setLoading(false)
@@ -101,7 +126,11 @@ export default function Dashboard() {
   const totalPorts = data.switches.reduce((sum, s) => sum + s.total_ports, 0)
 
   const dvrStats = countStatus(data.dvrs)
+  const passiveBaluns = data.baluns.filter(b => b.balun_type === 'passive').length
+  const powerBaluns = data.baluns.length - passiveBaluns
   const totalChannels = data.dvrs.reduce((sum, d) => sum + d.total_channels, 0)
+  const channelsWithIssues = data.dvrChannelIssues.length
+  const operationalChannels = Math.max(0, totalChannels - channelsWithIssues)
   const cableCoverage = data.cameras.length > 0 ? Math.round((data.cableCount / data.cameras.length) * 100) : 0
 
   const healthSegments = [
@@ -153,6 +182,43 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {channelsWithIssues > 0 && (
+        <div
+          onClick={() => navigate('/dvrs')}
+          className="bg-rose-500/10 border border-rose-500/40 rounded-xl p-4 cursor-pointer hover:bg-rose-500/15 transition-colors"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-rose-500/15 text-rose-300 border border-rose-500/30 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-rose-200">Canais de DVR com atenção</h3>
+                <p className="text-xs text-rose-100/80 mt-1">
+                  {channelsWithIssues} canal(is) desabilitado(s) por problema de câmera, canal queimado ou manutenção.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {data.dvrChannelIssues.slice(0, 4).map((issue) => (
+                <span
+                  key={issue.id}
+                  className="px-2 py-1 rounded-md bg-bg-primary/70 border border-rose-500/30 text-[10px] font-mono text-rose-100"
+                >
+                  {issue.dvrName} CH{issue.channel_number}
+                  {issue.notes ? ` · ${issue.notes}` : ''}
+                </span>
+              ))}
+              {channelsWithIssues > 4 && (
+                <span className="px-2 py-1 rounded-md bg-bg-primary/70 border border-rose-500/30 text-[10px] font-mono text-rose-100">
+                  +{channelsWithIssues - 4}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ============ ROW 1: Hero Stats ============ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Cameras */}
@@ -199,7 +265,13 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-border-light/50 text-[10px] text-text-muted">
-            <span>{totalChannels} Canais</span>
+            <span>{operationalChannels}/{totalChannels} canais OK</span>
+            {channelsWithIssues > 0 && (
+              <>
+                <span>|</span>
+                <span className="text-rose-400">{channelsWithIssues} atenção</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -293,7 +365,7 @@ export default function Dashboard() {
               { label: 'Cameras', total: camStats.total, active: camStats.ativo, color: 'bg-cyan-500', icon: Camera, path: '/cameras' },
               { label: 'DVRs', total: dvrStats.total, active: dvrStats.ativo, color: 'bg-indigo-500', icon: Server, path: '/dvrs' },
               { label: 'Switches', total: swStats.total, active: swStats.ativo, color: 'bg-emerald-500', icon: Network, path: '/switches' },
-              { label: 'Power Baluns', total: data.baluns.length, active: data.baluns.filter(b => b.status === 'ativo').length, color: 'bg-purple-500', icon: Cable, path: '/baluns' },
+              { label: 'Baluns', total: data.baluns.length, active: data.baluns.filter(b => b.status === 'ativo').length, color: 'bg-purple-500', icon: Cable, path: '/baluns', detail: `${powerBaluns} power · ${passiveBaluns} passivos` },
             ].map((item) => (
               <div
                 key={item.label}
@@ -304,6 +376,9 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <item.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-text-muted shrink-0 group-hover/infra:text-text-primary transition-colors" />
                     <span className="text-xs sm:text-sm text-text-secondary group-hover/infra:text-text-primary transition-colors">{item.label}</span>
+                    {'detail' in item && item.detail && (
+                      <span className="hidden sm:inline text-[10px] text-text-muted">{item.detail}</span>
+                    )}
                   </div>
                   <span className="text-xs sm:text-sm font-mono text-text-primary">
                     <span className="font-bold">{item.active}</span>

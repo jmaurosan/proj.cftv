@@ -2,15 +2,11 @@ import { useState, useEffect } from 'react'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 
-const DEVICE_TYPES = [
-  { value: '', label: 'Desconectado' },
-  { value: 'camera', label: 'Câmera' },
-  { value: 'dvr', label: 'DVR' },
-  { value: 'balun', label: 'Power Balun' },
-  { value: 'switch', label: 'Switch' },
-  { value: 'router', label: 'Roteador' },
-  { value: 'other', label: 'Outro' },
-]
+const DEVICE_TYPE_LABELS: Record<string, string> = {
+  dvr: 'DVR',
+  camera: 'Câmera IP',
+  router: 'Roteador',
+}
 
 interface SwitchPortItemProps {
   portNum: number
@@ -32,32 +28,21 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
   const deviceId = port?.device_id ?? ''
   const deviceName = port?.device_name ?? ''
   const dbNotes = port?.notes ?? ''
-  const availableDevices = deviceOptions[deviceType] ?? []
-  const canSelectDevice = availableDevices.length > 0
+  const availableDevices = ['dvr', 'camera', 'router'].flatMap((type) =>
+    (deviceOptions[type] ?? []).map((device) => ({
+      ...device,
+      type,
+      value: `${type}:${device.id}`,
+      label: `${DEVICE_TYPE_LABELS[type]} - ${device.name}`,
+    }))
+  )
+  const selectedDeviceValue = deviceType && deviceId ? `${deviceType}:${deviceId}` : ''
   
-  const [localDeviceName, setLocalDeviceName] = useState(deviceName)
   const [localNotes, setLocalNotes] = useState(dbNotes)
-
-  useEffect(() => {
-    setLocalDeviceName(deviceName)
-  }, [deviceName])
 
   useEffect(() => {
     setLocalNotes(dbNotes)
   }, [dbNotes])
-
-  const handleDeviceNameBlur = () => {
-    if (localDeviceName !== deviceName) {
-      savePort({ 
-        port_number: portNum, 
-        device_type: deviceType || null, 
-        device_id: null,
-        device_name: localDeviceName || null, 
-        is_active: isActive,
-        notes: dbNotes || undefined
-      })
-    }
-  }
 
   const handleNotesBlur = () => {
     if (localNotes !== dbNotes) {
@@ -83,24 +68,25 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
     })
   }
 
-  const handleDeviceTypeChange = (newType: string) => {
-    savePort({
-      port_number: portNum,
-      device_type: newType || null,
-      device_id: null,
-      device_name: newType ? localDeviceName : null,
-      is_active: isActive,
-      notes: localNotes || undefined
-    })
-  }
+  const handleDeviceSelect = (selectedValue: string) => {
+    if (!selectedValue) {
+      savePort({
+        port_number: portNum,
+        device_type: null,
+        device_id: null,
+        device_name: null,
+        is_active: isActive,
+        notes: localNotes || undefined
+      })
+      return
+    }
 
-  const handleDeviceSelect = (newDeviceId: string) => {
-    const selectedDevice = availableDevices.find((device) => device.id === newDeviceId)
+    const [newDeviceType, newDeviceId] = selectedValue.split(':')
+    const selectedDevice = availableDevices.find((device) => device.type === newDeviceType && device.id === newDeviceId)
     const selectedName = selectedDevice?.name ?? ''
-    setLocalDeviceName(selectedName)
     savePort({
       port_number: portNum,
-      device_type: deviceType || null,
+      device_type: newDeviceType || null,
       device_id: newDeviceId || null,
       device_name: selectedName || null,
       is_active: isActive,
@@ -124,41 +110,15 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
 
       <div className="flex-1 min-w-[120px]">
         <Select
-          value={deviceType}
-          onChange={(e) => handleDeviceTypeChange(e.target.value)}
-          options={DEVICE_TYPES}
+          value={selectedDeviceValue}
+          onChange={(e) => handleDeviceSelect(e.target.value)}
+          options={[
+            { value: '', label: 'Desconectado' },
+            ...availableDevices.map((device) => ({ value: device.value, label: device.label })),
+          ]}
           disabled={!isActive}
         />
       </div>
-
-      {deviceType && (
-        <div className="flex-1 min-w-[150px]">
-          {canSelectDevice ? (
-            <Select
-              value={deviceId}
-              onChange={(e) => handleDeviceSelect(e.target.value)}
-              options={[
-                { value: '', label: 'Selecione o equipamento' },
-                ...availableDevices.map((device) => ({ value: device.id, label: device.name })),
-              ]}
-              disabled={!isActive}
-            />
-          ) : (
-            <Input
-              placeholder="Nome do dispositivo"
-              value={localDeviceName}
-              onChange={(e) => setLocalDeviceName(e.target.value)}
-              onBlur={handleDeviceNameBlur}
-              disabled={!isActive}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.currentTarget.blur()
-                }
-              }}
-            />
-          )}
-        </div>
-      )}
 
       {!isActive && (
         <div className="flex-1 min-w-[150px]">

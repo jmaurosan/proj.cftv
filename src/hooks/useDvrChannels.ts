@@ -42,7 +42,7 @@ export function useDvrChannels(dvrId: string | null) {
       .select('id')
       .eq('dvr_id', dvrId)
       .eq('channel_number', channel.channel_number)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       const { error } = await supabase.from('dvr_channels').update({

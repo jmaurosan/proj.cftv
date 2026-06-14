@@ -17,6 +17,7 @@ interface BalunFormProps {
 }
 
 export default function BalunForm({ initialData, onSubmit, onCancel }: BalunFormProps) {
+  const [balunType, setBalunType] = useState(initialData?.balun_type ?? 'power')
   const [name, setName] = useState(initialData?.name ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [totalPorts, setTotalPorts] = useState(initialData?.total_ports ?? 4)
@@ -32,6 +33,7 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
   const { outputs: outputs4x1, saveOutput } = useBalun4x1Outputs(balunId)
   const { data: cameras } = useCameras()
   const { models: balunModels, saveModel } = useEquipmentModels('balun')
+  const isPowerBalun = balunType === 'power'
   
   // Calcula as saídas 4x1 baseado no total de portas
   const expectedOutputs = get4x1Outputs(totalPorts)
@@ -49,6 +51,7 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
     setError(null)
     const result = await onSubmit({
       name,
+      balun_type: balunType,
       location,
       total_ports: totalPorts,
       status,
@@ -57,7 +60,7 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
     if (result.error) {
       setError(result.error)
     } else if (name) {
-      await saveModel({ type: 'balun', brand: 'Power Balun', model: name, max_ports: totalPorts, resolution: null, channel_count: null, poe_standard: null, is_poe: false, notes: null })
+      await saveModel({ type: 'balun', brand: isPowerBalun ? 'Power Balun' : 'Balun Passivo', model: name, max_ports: totalPorts, resolution: null, channel_count: null, poe_standard: null, is_poe: false, notes: null })
     }
     setLoading(false)
   }
@@ -110,17 +113,32 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Select
+          label="Tipo"
+          value={balunType}
+          onChange={(e) => {
+            const nextType = e.target.value as 'passive' | 'power'
+            setBalunType(nextType)
+            if (!initialData && nextType === 'passive' && totalPorts === 4) setTotalPorts(1)
+            if (!initialData && nextType === 'power' && totalPorts === 1) setTotalPorts(4)
+          }}
+          options={[
+            { value: 'power', label: 'Power Balun' },
+            { value: 'passive', label: 'Balun passivo' },
+          ]}
+        />
+        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Poste frontal" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Input label="Total de Portas" type="number" value={totalPorts.toString()} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />
-        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} />
-      </div>
+      <Input label={isPowerBalun ? 'Total de Portas' : 'Total de Baluns/Pontos'} type="number" value={totalPorts.toString()} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />
 
       {/* Seção de Saídas 4x1 */}
-      {balunId && totalPorts >= 4 && (
+      {balunId && isPowerBalun && totalPorts >= 4 && (
         <div className="border border-blue-800 rounded-lg p-4 space-y-3">
           <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
             <Layers className="w-4 h-4" />
@@ -184,7 +202,7 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
         <div className="border border-slate-700 rounded-lg p-4 space-y-3">
           <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
             <Plug className="w-4 h-4" />
-            Conexões das Portas ({totalPorts} portas)
+            {isPowerBalun ? `Conexões das Portas (${totalPorts} portas)` : `Conexões dos Baluns (${totalPorts} ponto${totalPorts !== 1 ? 's' : ''})`}
           </h3>
           <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto">
             {Array.from({ length: totalPorts }, (_, i) => i + 1).map((portNum) => {
@@ -201,7 +219,7 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
               return (
                 <div key={portNum} className={`flex flex-wrap items-center gap-3 bg-slate-800/50 rounded-lg px-3 py-2 ${!isActive ? 'opacity-50' : ''}`}>
                   <span className="text-xs font-mono text-slate-400 w-16 shrink-0">Porta {portNum}</span>
-                  {outputInfo && (
+                  {isPowerBalun && outputInfo && (
                     <span className="text-xs px-2 py-0.5 bg-blue-900/30 text-blue-400 rounded shrink-0">
                       4x1-{outputInfo.output_number}
                     </span>

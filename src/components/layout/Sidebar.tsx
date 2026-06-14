@@ -23,7 +23,7 @@ const navItems = [
   { to: '/dvrs', label: 'DVRs', icon: Server },
   { to: '/cameras', label: 'Câmeras', icon: Camera },
   { to: '/mapeamento', label: 'Mapeamento', icon: ListOrdered },
-  { to: '/baluns', label: 'Power Baluns', icon: Cable },
+  { to: '/baluns', label: 'Baluns', icon: Cable },
   { to: '/switches', label: 'Switches', icon: Network },
   { to: '/roteadores', label: 'Roteadores', icon: Wifi },
   { to: '/credenciais', label: 'Credenciais', icon: KeyRound },

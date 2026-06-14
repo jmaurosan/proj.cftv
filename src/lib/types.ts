@@ -31,6 +31,9 @@ export interface Dvr {
   model: string | null
   location: string
   total_channels: number
+  hd_capacity_tb: number | null
+  hd_brand: string | null
+  hd_model: string | null
   status: string
   username: string | null
   password: string | null
@@ -45,6 +48,7 @@ export interface Camera {
   id: string
   name: string
   brand: string | null
+  technology: string | null
   connection_type: string
   dvr_id: string | null
   channel_number: number | null
@@ -72,9 +76,12 @@ export interface Camera {
   dvrs?: { name: string }
 }
 
+export type BalunType = 'passive' | 'power'
+
 export interface PowerBalun {
   id: string
   name: string
+  balun_type: BalunType
   location: string
   total_ports: number
   status: string

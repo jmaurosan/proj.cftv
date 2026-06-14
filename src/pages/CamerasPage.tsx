@@ -3,7 +3,7 @@ import { Plus, Cable, QrCode, HardDrive, Wifi, LayoutGrid, MapPin } from 'lucide
 import { useCameras } from '../hooks/useCameras'
 import { useDvrs } from '../hooks/useDvrs'
 import type { Camera } from '../lib/types'
-import { CABLE_TYPE_LABELS } from '../lib/constants'
+import { CABLE_TYPE_LABELS, CAMERA_TECHNOLOGY_LABELS } from '../lib/constants'
 import { supabase } from '../lib/supabase'
 import DataTable, { type Column } from '../components/ui/DataTable'
 import Badge from '../components/ui/Badge'
@@ -127,6 +127,18 @@ export default function CamerasPage() {
             Analógica
           </span>
         ),
+    },
+    {
+      key: 'technology',
+      label: 'Tecnologia',
+      sortable: true,
+      render: (c) => c.technology ? (
+        <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-violet-500/15 text-violet-300">
+          {CAMERA_TECHNOLOGY_LABELS[c.technology] || c.technology}
+        </span>
+      ) : (
+        <span className="text-text-muted text-xs">-</span>
+      ),
     },
     {
       key: 'dvr',
