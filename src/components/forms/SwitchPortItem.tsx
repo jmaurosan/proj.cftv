@@ -39,14 +39,22 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
   const selectedDeviceValue = deviceType && deviceId ? `${deviceType}:${deviceId}` : ''
   
   const [localNotes, setLocalNotes] = useState(dbNotes)
+  const [localDeviceValue, setLocalDeviceValue] = useState(selectedDeviceValue)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     setLocalNotes(dbNotes)
   }, [dbNotes])
 
-  const handleNotesBlur = () => {
+  useEffect(() => {
+    setLocalDeviceValue(selectedDeviceValue)
+  }, [selectedDeviceValue])
+
+  const handleNotesBlur = async () => {
     if (localNotes !== dbNotes) {
-      savePort({ 
+      setSaveError(null)
+      const result = await savePort({
         port_number: portNum, 
         device_type: deviceType || null, 
         device_id: deviceId || null,
@@ -54,11 +62,13 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
         is_active: isActive, 
         notes: localNotes || undefined
       })
+      if (result.error) setSaveError(result.error)
     }
   }
 
-  const handleToggle = (checked: boolean) => {
-    savePort({ 
+  const handleToggle = async (checked: boolean) => {
+    setSaveError(null)
+    const result = await savePort({
       port_number: portNum, 
       device_type: deviceType || null, 
       device_id: deviceId || null,
@@ -66,11 +76,16 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
       is_active: checked, 
       notes: localNotes || undefined
     })
+    if (result.error) setSaveError(result.error)
   }
 
-  const handleDeviceSelect = (selectedValue: string) => {
+  const handleDeviceSelect = async (selectedValue: string) => {
+    setLocalDeviceValue(selectedValue)
+    setSaving(true)
+    setSaveError(null)
+
     if (!selectedValue) {
-      savePort({
+      const result = await savePort({
         port_number: portNum,
         device_type: null,
         device_id: null,
@@ -78,13 +93,18 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
         is_active: isActive,
         notes: localNotes || undefined
       })
+      if (result.error) {
+        setSaveError(result.error)
+        setLocalDeviceValue(selectedDeviceValue)
+      }
+      setSaving(false)
       return
     }
 
     const [newDeviceType, newDeviceId] = selectedValue.split(':')
     const selectedDevice = availableDevices.find((device) => device.type === newDeviceType && device.id === newDeviceId)
     const selectedName = selectedDevice?.name ?? ''
-    savePort({
+    const result = await savePort({
       port_number: portNum,
       device_type: newDeviceType || null,
       device_id: newDeviceId || null,
@@ -92,6 +112,11 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
       is_active: isActive,
       notes: localNotes || undefined
     })
+    if (result.error) {
+      setSaveError(result.error)
+      setLocalDeviceValue(selectedDeviceValue)
+    }
+    setSaving(false)
   }
 
   return (
@@ -110,14 +135,17 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
 
       <div className="flex-1 min-w-[120px]">
         <Select
-          value={selectedDeviceValue}
+          value={localDeviceValue}
           onChange={(e) => handleDeviceSelect(e.target.value)}
           options={[
             { value: '', label: 'Desconectado' },
             ...availableDevices.map((device) => ({ value: device.value, label: device.label })),
           ]}
-          disabled={!isActive}
+          disabled={!isActive || saving}
         />
+        {saveError && (
+          <p className="mt-1 text-xs text-danger">{saveError}</p>
+        )}
       </div>
 
       {!isActive && (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabase';
+import { useAuth } from './useAuth';
 
 export interface SwitchPort {
   id?: string;
@@ -14,6 +15,7 @@ export interface SwitchPort {
 }
 
 export function useSwitchPorts(switchId: string | null) {
+  const { user } = useAuth();
   const [ports, setPorts] = useState<SwitchPort[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -40,6 +42,7 @@ export function useSwitchPorts(switchId: string | null) {
 
   const savePort = async (port: { port_number: number; device_type?: string | null; device_id?: string | null; device_name?: string | null; is_active?: boolean; notes?: string }) => {
     if (!switchId) return { error: 'Sem switch' };
+    if (!user) return { error: 'Não autenticado' };
     const { data: existing } = await supabase
       .from('switch_ports')
       .select('id')
@@ -65,6 +68,7 @@ export function useSwitchPorts(switchId: string | null) {
         device_name: port.device_name || null,
         is_active: port.is_active ?? true,
         notes: port.notes || null,
+        user_id: user.id,
       });
       if (error) return { error: error.message };
     }

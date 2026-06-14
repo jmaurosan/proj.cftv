@@ -51,6 +51,10 @@ interface SwitchPortTopologyRow {
   is_active: boolean
 }
 
+interface TopologyBuildContext {
+  connections: TopologyConnection[]
+}
+
 export default function NetworkTopology() {
   const { selectedClientId, selectedClientName } = useClient()
   const { toast } = useToast()
@@ -276,21 +280,12 @@ export default function NetworkTopology() {
         }
       })
 
-      // Conectar DVRs aos switches ou roteadores
+      // Conectar DVRs apenas quando houver mapeamento físico ou quando não existir switch cadastrado.
       const dvrs = list.filter((n) => n.type === 'dvr')
       dvrs.forEach((dvr) => {
         if (connectedTargets.has(dvr.id)) return
-        // Fallback: liga no primeiro switch, senão no primeiro roteador
-        const connectedSwitch = switches[0]
         const connectedRouter = routers[0]
-        if (connectedSwitch) {
-          addConnection({
-            id: `conn-switch-dvr-${dvr.id}`,
-            source: connectedSwitch.id,
-            target: dvr.id,
-            active: dvr.status === 'ativo' || dvr.status === 'online'
-          })
-        } else if (connectedRouter) {
+        if (switches.length === 0 && connectedRouter) {
           addConnection({
             id: `conn-router-dvr-${dvr.id}`,
             source: connectedRouter.id,
@@ -351,7 +346,7 @@ export default function NetworkTopology() {
       setConnections(conns)
 
       // 4. Calcular layout default ou usar o salvo
-      const computedLayout = computeLayout(list, savedPositions)
+      const computedLayout = computeLayout(list, savedPositions, { connections: conns })
       setNodePositions(computedLayout)
     } catch (err: any) {
       console.error(err)
@@ -362,7 +357,11 @@ export default function NetworkTopology() {
   }
 
   // Distribui os nós em camadas automáticas
-  const computeLayout = (allNodes: TopologyNode[], saved: Record<string, { x: number; y: number }>) => {
+  const computeLayout = (
+    allNodes: TopologyNode[],
+    saved: Record<string, { x: number; y: number }>,
+    context?: TopologyBuildContext
+  ) => {
     const layout: Record<string, { x: number; y: number }> = {}
 
     // Separa por camadas
@@ -372,28 +371,89 @@ export default function NetworkTopology() {
     const dvrs = allNodes.filter((n) => n.type === 'dvr')
     const cameras = allNodes.filter((n) => n.type === 'camera')
 
-    const layers = [internet, routers, switches, dvrs, cameras]
     const containerWidth = 980
-    const layerHeight = 120
+    const centerX = containerWidth / 2
+    const placeNode = (node: TopologyNode, fallback: { x: number; y: number }) => {
+      layout[node.id] = saved[node.id] ?? fallback
+    }
 
-    layers.forEach((layerNodes, layerIndex) => {
-      if (layerNodes.length === 0) return
-      
-      const y = 50 + layerIndex * layerHeight
-      const step = containerWidth / (layerNodes.length + 1)
+    internet.forEach((node) => placeNode(node, { x: centerX, y: 45 }))
 
-      layerNodes.forEach((node, nodeIndex) => {
-        // Se existir posição salva, usa ela. Senão calcula a default
-        if (saved[node.id]) {
-          layout[node.id] = saved[node.id]
-        } else {
-          layout[node.id] = {
-            x: step * (nodeIndex + 1),
-            y
-          }
-        }
+    routers.forEach((node, index) => {
+      const step = containerWidth / (routers.length + 1)
+      placeNode(node, { x: routers.length === 1 ? centerX : step * (index + 1), y: 145 })
+    })
+
+    const routerBySwitch = new Map<string, string>()
+    const dvrConnectionsBySwitch = new Map<string, TopologyConnection[]>()
+    const connections = context?.connections ?? []
+
+    connections.forEach((connection) => {
+      const sourceNode = allNodes.find((node) => node.id === connection.source)
+      const targetNode = allNodes.find((node) => node.id === connection.target)
+      if (sourceNode?.type === 'router' && targetNode?.type === 'switch') {
+        routerBySwitch.set(targetNode.id, sourceNode.id)
+      }
+    })
+
+    connections.forEach((connection) => {
+      const sourceNode = allNodes.find((node) => node.id === connection.source)
+      const targetNode = allNodes.find((node) => node.id === connection.target)
+      if (sourceNode?.type === 'switch' && targetNode?.type === 'dvr') {
+        const rows = dvrConnectionsBySwitch.get(sourceNode.id) ?? []
+        rows.push(connection)
+        dvrConnectionsBySwitch.set(sourceNode.id, rows)
+      }
+    })
+
+    switches.forEach((node, index) => {
+      const routerId = routerBySwitch.get(node.id)
+      const routerPos = routerId ? layout[routerId] : undefined
+      const step = containerWidth / (switches.length + 1)
+      placeNode(node, { x: routerPos?.x ?? step * (index + 1), y: 260 })
+    })
+
+    const positionedDvrs = new Set<string>()
+    switches.forEach((sw) => {
+      const switchPos = layout[sw.id]
+      const mappedDvrConnections = (dvrConnectionsBySwitch.get(sw.id) ?? [])
+        .sort((a, b) => Number(a.label?.replace('P', '') ?? 0) - Number(b.label?.replace('P', '') ?? 0))
+      const spread = Math.min(360, Math.max(160, mappedDvrConnections.length * 120))
+      mappedDvrConnections.forEach((connection, index) => {
+        const dvr = dvrs.find((node) => node.id === connection.target)
+        if (!dvr || !switchPos) return
+        const offset = mappedDvrConnections.length === 1 ? 0 : -spread / 2 + (spread / (mappedDvrConnections.length - 1)) * index
+        placeNode(dvr, { x: Math.max(80, Math.min(970, switchPos.x + offset)), y: 395 })
+        positionedDvrs.add(dvr.id)
       })
     })
+
+    dvrs
+      .filter((node) => !positionedDvrs.has(node.id))
+      .forEach((node, index, unpositioned) => {
+        const step = containerWidth / (unpositioned.length + 1)
+        placeNode(node, { x: step * (index + 1), y: switches.length > 0 ? 500 : 300 })
+      })
+
+    const positionedCameras = new Set<string>()
+    cameras.forEach((camera) => {
+      const cameraConnection = connections.find((connection) => connection.target === camera.id)
+      const parentPos = cameraConnection ? layout[cameraConnection.source] : undefined
+      if (!parentPos) return
+      const siblings = cameras.filter((cam) => connections.some((connection) => connection.source === cameraConnection!.source && connection.target === cam.id))
+      const siblingIndex = siblings.findIndex((cam) => cam.id === camera.id)
+      const spread = Math.min(520, Math.max(180, siblings.length * 70))
+      const offset = siblings.length <= 1 ? 0 : -spread / 2 + (spread / (siblings.length - 1)) * siblingIndex
+      placeNode(camera, { x: Math.max(70, Math.min(980, parentPos.x + offset)), y: Math.min(590, parentPos.y + 115) })
+      positionedCameras.add(camera.id)
+    })
+
+    cameras
+      .filter((node) => !positionedCameras.has(node.id))
+      .forEach((node, index, unpositioned) => {
+        const step = containerWidth / (unpositioned.length + 1)
+        placeNode(node, { x: step * (index + 1), y: 590 })
+      })
 
     return layout
   }
@@ -432,7 +492,7 @@ export default function NetworkTopology() {
 
   // Redefinir para o layout padrão em árvore
   const handleResetLayout = () => {
-    const defaultLayout = computeLayout(nodes, {})
+    const defaultLayout = computeLayout(nodes, {}, { connections })
     setNodePositions(defaultLayout)
     handleSaveTopology(defaultLayout)
     toast('Layout redefinido para a distribuição automática em árvore.')
