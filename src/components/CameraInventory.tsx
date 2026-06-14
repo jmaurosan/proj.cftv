@@ -1,5 +1,5 @@
 import React from 'react';
-import { Video, Search, Plus, Settings, VideoOff, Eye, AlertTriangle, MoreVertical, Loader2, Edit2, Trash2, Activity, Info, Cable, Zap, CheckCircle2 } from 'lucide-react';
+import { Video, Search, Plus, VideoOff, AlertTriangle, MoreVertical, Loader2, Edit2, Trash2, Activity, Info, Cable, Zap, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useFetchTable, useDeleteRow } from '../hooks/useSupabase';
 import { useStatusMonitor } from '../hooks/useStatusMonitor';
@@ -389,22 +389,6 @@ const CameraCard = ({ camera, onNavigate, onEdit, onDelete, onTest, onViewTech, 
               title="Excluir"
             >
               <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex gap-4">
-            <button 
-              onClick={() => onNavigate('test-view', camera)}
-              className="text-on-surface-variant hover:text-primary transition-colors"
-              title="Painel de Teste e Frequência"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={() => onNavigate('test-view', camera)}
-              className="text-on-surface-variant hover:text-primary transition-colors"
-              title="Abrir Visualização Direta (RTSP/WebRTC)"
-            >
-              {camera.status === 'offline' ? <AlertTriangle className="w-4 h-4 text-error animate-pulse" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
         </div>

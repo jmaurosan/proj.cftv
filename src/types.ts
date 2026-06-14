@@ -9,7 +9,6 @@ export type Screen =
   | 'add-camera' 
   | 'add-balun' 
   | 'add-switch' 
-  | 'test-view' 
   | 'register-client'
   | 'crimp-reference';
 
