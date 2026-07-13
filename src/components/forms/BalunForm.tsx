@@ -19,6 +19,8 @@ interface BalunFormProps {
 export default function BalunForm({ initialData, onSubmit, onCancel }: BalunFormProps) {
   const [balunType, setBalunType] = useState(initialData?.balun_type ?? 'power')
   const [name, setName] = useState(initialData?.name ?? '')
+  const [serialNumber, setSerialNumber] = useState(initialData?.serial_number ?? '')
+  const [installationDate, setInstallationDate] = useState(initialData?.installation_date ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [totalPorts, setTotalPorts] = useState(initialData?.total_ports ?? 4)
   const [status, setStatus] = useState(initialData?.status ?? 'ativo')
@@ -51,6 +53,8 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
     setError(null)
     const result = await onSubmit({
       name,
+      serial_number: serialNumber || null,
+      installation_date: installationDate || null,
       balun_type: balunType,
       location,
       total_ports: totalPorts,
@@ -67,18 +71,24 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
 
   const handlePortChange = async (portNumber: number, cameraId: string) => {
     if (!balunId) return
-    await savePort({ port_number: portNumber, camera_id: cameraId || null })
+    setError(null)
+    const result = await savePort({ port_number: portNumber, camera_id: cameraId || null })
+    if (result.error) setError(result.error)
   }
 
   const handlePortActiveToggle = async (portNumber: number, isActive: boolean) => {
     if (!balunId) return
-    await savePort({ port_number: portNumber, camera_id: ports.find(p => p.port_number === portNumber)?.camera_id || null, is_active: isActive })
+    setError(null)
+    const result = await savePort({ port_number: portNumber, camera_id: ports.find(p => p.port_number === portNumber)?.camera_id || null, is_active: isActive })
+    if (result.error) setError(result.error)
   }
 
   const handlePortNotesSave = async (portNumber: number) => {
     if (!balunId) return
     const notes = editingNotes[portNumber] ?? ''
-    await savePort({ port_number: portNumber, camera_id: ports.find(p => p.port_number === portNumber)?.camera_id || null, notes })
+    setError(null)
+    const result = await savePort({ port_number: portNumber, camera_id: ports.find(p => p.port_number === portNumber)?.camera_id || null, notes })
+    if (result.error) setError(result.error)
   }
 
   // Função para encontrar a saída 4x1 de uma porta
@@ -133,6 +143,10 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Poste frontal" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input label="SN / Número de série" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="Número de série do equipamento" />
+        <Input label="Data de instalação" type="date" value={installationDate} onChange={(e) => setInstallationDate(e.target.value)} />
       </div>
       <Input label={isPowerBalun ? 'Total de Portas' : 'Total de Baluns/Pontos'} type="number" value={totalPorts.toString()} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} />

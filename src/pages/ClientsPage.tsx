@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, Trash2, Globe, User, Loader2, Link2 } from 'lucide-react'
 import { useClients } from '../hooks/useClients'
+import { useClient } from '../contexts/ClientContext'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -120,6 +122,8 @@ const inputClass =
 // Sistema de gerenciamento de clientes/projetos
 export default function ClientsPage() {
   const { clients, loading, error, createClient, updateClient, deleteClient, assignOrphansToClient } = useClients()
+  const { setSelectedClient } = useClient()
+  const navigate = useNavigate()
   const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -385,26 +389,26 @@ export default function ClientsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredClients.map((client) => (
-            <Card key={client.id} className="relative group">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
+            <Card key={client.id} className="relative group min-w-0 overflow-hidden">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center shrink-0">
                     {client.person_type === 'PF'
                       ? <User className="w-5 h-5 text-accent" />
                       : <Building2 className="w-5 h-5 text-accent" />
                     }
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-text-primary truncate">{client.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-text-primary truncate max-w-full" title={client.name}>{client.name}</h3>
                     {(client.cnpj || client.cpf) && (
-                      <p className="text-xs text-text-muted font-mono">
+                      <p className="text-xs text-text-muted font-mono truncate max-w-full">
                         {client.person_type === 'PF' ? client.cpf : client.cnpj}
                       </p>
                     )}
                     {client.city && (
-                      <p className="text-xs text-text-muted flex items-center gap-1 mt-0.5">
+                      <p className="text-xs text-text-muted flex items-center gap-1 mt-0.5 min-w-0">
                         <MapPin className="w-3 h-3 shrink-0" />
-                        {client.city}{client.state && `, ${client.state}`}
+                        <span className="truncate">{client.city}{client.state && `, ${client.state}`}</span>
                       </p>
                     )}
                   </div>
@@ -421,24 +425,24 @@ export default function ClientsPage() {
               {(client.contact_name || client.contact_phone || client.contact_email || client.website) && (
                 <div className="mt-4 pt-4 border-t border-border-light space-y-1.5">
                   {client.contact_name && (
-                    <p className="text-sm text-text-secondary truncate">{client.contact_name}</p>
+                    <p className="text-sm text-text-secondary truncate max-w-full" title={client.contact_name}>{client.contact_name}</p>
                   )}
                   {client.contact_phone && (
-                    <p className="text-xs text-text-muted flex items-center gap-1">
+                    <p className="text-xs text-text-muted flex items-center gap-1 min-w-0">
                       <Phone className="w-3 h-3 shrink-0" />
-                      {client.contact_phone}
+                      <span className="truncate">{client.contact_phone}</span>
                     </p>
                   )}
                   {client.contact_email && (
-                    <p className="text-xs text-text-muted flex items-center gap-1 truncate">
+                    <p className="text-xs text-text-muted flex items-center gap-1 min-w-0">
                       <Mail className="w-3 h-3 shrink-0" />
-                      {client.contact_email}
+                      <span className="truncate" title={client.contact_email}>{client.contact_email}</span>
                     </p>
                   )}
                   {client.website && (
-                    <p className="text-xs text-text-muted flex items-center gap-1 truncate">
+                    <p className="text-xs text-text-muted flex items-center gap-1 min-w-0">
                       <Globe className="w-3 h-3 shrink-0" />
-                      {client.website}
+                      <span className="truncate" title={client.website}>{client.website}</span>
                     </p>
                   )}
                 </div>
@@ -454,9 +458,8 @@ export default function ClientsPage() {
                   size="sm"
                   className="flex-1"
                   onClick={() => {
-                    localStorage.setItem('selectedClientId', client.id)
-                    localStorage.setItem('selectedClientName', client.name)
-                    window.location.href = '/'
+                    setSelectedClient(client.id, client.name)
+                    navigate('/')
                   }}
                 >
                   Selecionar

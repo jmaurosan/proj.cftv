@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "mediamtx:agent": "node tools/mediamtx-agent/server.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

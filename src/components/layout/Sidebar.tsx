@@ -15,20 +15,31 @@ import {
   ListOrdered,
   BookOpen,
   Map,
+  BatteryCharging,
+  FolderKanban,
+  MonitorPlay,
+  Monitor,
+  ServerCog,
 } from 'lucide-react'
 
 const navItems = [
+  { to: '/', label: 'Painel', icon: LayoutDashboard },
   { to: '/clientes', label: 'Clientes', icon: Building2 },
   { to: '/roteadores', label: 'Roteadores', icon: Wifi },
   { to: '/dvrs', label: 'DVRs', icon: Server },
   { to: '/credenciais', label: 'Credenciais', icon: KeyRound },
   { to: '/cameras', label: 'Câmeras', icon: Camera },
+  { to: '/visualizacao-local', label: 'Visualização Local', icon: MonitorPlay },
   { to: '/crimpagem', label: 'Crimpagem', icon: BookOpen },
   { to: '/baluns', label: 'Baluns', icon: Cable },
   { to: '/switches', label: 'Switches', icon: Network },
+  { to: '/racks', label: 'Racks e Quadros', icon: ServerCog },
+  { to: '/monitores', label: 'Monitores', icon: Monitor },
   { to: '/topologia', label: 'Topologia de Rede', icon: Network },
   { to: '/plantabaixa', label: 'Planta Baixa', icon: Map },
   { to: '/mapeamento', label: 'Mapeamento', icon: ListOrdered },
+  { to: '/energia-documentos', label: 'Nobreaks', icon: BatteryCharging },
+  { to: '/documentos-midias', label: 'Documentos e Mídias', icon: FolderKanban },
   { to: '/relatorios', label: 'Relatórios', icon: FileText },
 ]
 

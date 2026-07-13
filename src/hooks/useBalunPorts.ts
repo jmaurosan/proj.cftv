@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { BalunPort } from '../lib/types'
 import { useAuth } from './useAuth'
 import { translateError } from '../lib/errorTranslator'
+import { validatePortAssignment } from '../lib/connectionValidation'
 
 export function useBalunPorts(balunId: string | null) {
   const { user } = useAuth()
@@ -25,12 +26,27 @@ export function useBalunPorts(balunId: string | null) {
 
   const savePort = async (port: { port_number: number; camera_id?: string | null; is_active?: boolean; notes?: string }) => {
     if (!balunId || !user) return { error: 'Sem balun ou usuário' }
+    const { data: currentPorts, error: validationError } = await supabase
+      .from('balun_ports')
+      .select('port_number, camera_id, cameras(name)')
+      .eq('balun_id', balunId)
+    if (validationError) return { error: `Não foi possível validar as portas: ${translateError(validationError)}` }
+    const conflict = validatePortAssignment(
+      (currentPorts || []).map((item) => ({
+        port_number: item.port_number,
+        target_id: item.camera_id,
+        target_name: (Array.isArray(item.cameras) ? item.cameras[0] : item.cameras)?.name,
+      })),
+      { port_number: port.port_number, target_id: port.camera_id },
+      'Power Balun',
+    )
+    if (conflict) return { error: conflict }
     const { data: existing } = await supabase
       .from('balun_ports')
       .select('id, user_id')
       .eq('balun_id', balunId)
       .eq('port_number', port.port_number)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       const { error } = await supabase.from('balun_ports').update({

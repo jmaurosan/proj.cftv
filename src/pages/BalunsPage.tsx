@@ -12,6 +12,7 @@ import LoadingSpinner from '../components/ui/LoadingSpinner'
 import BalunForm from '../components/forms/BalunForm'
 import { useToast } from '../components/ui/Toast'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
+import { byDirection, compareNumbers, naturalCompare } from '../lib/sorting'
 
 export default function BalunsPage() {
   const { data, loading, create, update, remove } = useBaluns()
@@ -38,11 +39,10 @@ export default function BalunsPage() {
     return [...filtered].sort((a, b) => {
       const aData = a as unknown as Record<string, unknown>
       const bData = b as unknown as Record<string, unknown>
-      const aVal = aData[sortKey]?.toString() || ''
-      const bVal = bData[sortKey]?.toString() || ''
-      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
-      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
-      return 0
+      const result = sortKey === 'total_ports'
+        ? compareNumbers(aData.total_ports, bData.total_ports)
+        : naturalCompare(aData[sortKey], bData[sortKey])
+      return byDirection(result, sortDir) || naturalCompare(a.name, b.name)
     })
   }, [data, sortKey, sortDir, typeFilter])
 

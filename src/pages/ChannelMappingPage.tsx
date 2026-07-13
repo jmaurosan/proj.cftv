@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import type { Camera, Dvr } from '../lib/types'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import EmptyState from '../components/ui/EmptyState'
+import { useClient } from '../contexts/ClientContext'
+import ClientFilterBanner from '../components/ui/ClientFilterBanner'
 
 type CameraWithRelations = Camera & {
   power_baluns?: { name: string } | null
@@ -11,6 +13,7 @@ type CameraWithRelations = Camera & {
 }
 
 export default function ChannelMappingPage() {
+  const { selectedClientId } = useClient()
   const [cameras, setCameras] = useState<CameraWithRelations[]>([])
   const [dvrs, setDvrs] = useState<Dvr[]>([])
   const [loading, setLoading] = useState(true)
@@ -21,11 +24,20 @@ export default function ChannelMappingPage() {
     const fetchData = async () => {
       setLoading(true)
       setError(null)
+      setSelectedDvr('all')
+
+      if (!selectedClientId) {
+        setCameras([])
+        setDvrs([])
+        setLoading(false)
+        return
+      }
 
       // Busca câmeras analógicas com relações
       const { data: camData, error: camError } = await supabase
         .from('cameras')
         .select('*, dvrs(name), power_baluns(name), switches(name)')
+        .eq('client_id', selectedClientId)
         .eq('connection_type', 'analogica')
         .order('dvr_id')
         .order('channel_number', { ascending: true })
@@ -34,6 +46,7 @@ export default function ChannelMappingPage() {
       const { data: dvrData } = await supabase
         .from('dvrs')
         .select('*')
+        .eq('client_id', selectedClientId)
         .order('name')
 
       if (camError) {
@@ -46,7 +59,7 @@ export default function ChannelMappingPage() {
     }
 
     fetchData()
-  }, [])
+  }, [selectedClientId])
 
   // Agrupa câmeras por DVR
   const grouped = useMemo(() => {
@@ -80,6 +93,8 @@ export default function ChannelMappingPage() {
 
   return (
     <div className="space-y-6">
+      <ClientFilterBanner />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>

@@ -13,9 +13,15 @@ export function useCredentials() {
   const [error, setError] = useState<string | null>(null)
 
   const fetch = useCallback(async () => {
+    if (!selectedClientId) {
+      setData([])
+      setLoading(false)
+      setError(null)
+      return
+    }
     setLoading(true)
     let query = supabase.from('credentials').select('*').order('created_at', { ascending: false })
-    if (selectedClientId) query = query.eq('client_id', selectedClientId)
+    query = query.eq('client_id', selectedClientId)
     const { data, error } = await query
     if (error) setError(translateError(error))
     else setData(data as Credential[])
@@ -26,6 +32,7 @@ export function useCredentials() {
 
   const create = async (payload: Omit<CredentialInsert, 'user_id'>) => {
     if (!user) return { error: 'Não autenticado' }
+    if (!selectedClientId && !(payload as { client_id?: string | null }).client_id) return { error: 'Selecione um cliente antes de cadastrar credencial' }
     const finalPayload = {
       ...payload,
       user_id: user.id,

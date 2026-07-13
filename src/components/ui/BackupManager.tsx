@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { Upload, Trash2, Download, FileText, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { uploadDeviceBackup, listDeviceBackups, deleteDeviceBackup, getBackupDownloadUrl } from '../../services/backupService'
 import type { DeviceBackup } from '../../lib/types'
 import Button from './Button'
 import { useToast } from './Toast'
+import { useAuth } from '../../hooks/useAuth'
 
 interface BackupManagerProps {
   clientId: string | null
@@ -13,18 +14,16 @@ interface BackupManagerProps {
 
 export default function BackupManager({ clientId, equipmentType, equipmentId }: BackupManagerProps) {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [backups, setBackups] = useState<DeviceBackup[]>([])
+  const [downloadUrls, setDownloadUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    loadBackups()
-  }, [equipmentId])
-
-  const loadBackups = async () => {
+  const loadBackups = useCallback(async () => {
     setLoading(true)
     setError(null)
     const { data, error: err } = await listDeviceBackups(equipmentId)
@@ -34,7 +33,33 @@ export default function BackupManager({ clientId, equipmentType, equipmentId }: 
       setBackups(data)
     }
     setLoading(false)
-  }
+  }, [equipmentId])
+
+  useEffect(() => {
+    loadBackups()
+  }, [loadBackups])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadDownloadUrls() {
+      const entries = await Promise.all(
+        backups.map(async (backup) => [
+          backup.id,
+          await getBackupDownloadUrl(backup.file_path),
+        ] as const)
+      )
+      if (cancelled) return
+      setDownloadUrls(Object.fromEntries(entries.filter(([, url]) => !!url)) as Record<string, string>)
+    }
+
+    if (backups.length > 0) loadDownloadUrls()
+    else setDownloadUrls({})
+
+    return () => {
+      cancelled = true
+    }
+  }, [backups])
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -43,8 +68,15 @@ export default function BackupManager({ clientId, equipmentType, equipmentId }: 
     setUploading(true)
     setError(null)
 
+    if (!user) {
+      setUploading(false)
+      setError('Usuário não autenticado')
+      return
+    }
+
     const { data, error: err } = await uploadDeviceBackup(
       file,
+      user.id,
       clientId,
       equipmentType,
       equipmentId,
@@ -157,7 +189,9 @@ export default function BackupManager({ clientId, equipmentType, equipmentId }: 
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-2 max-h-[220px] overflow-y-auto pr-1">
-            {backups.map((backup) => (
+            {backups.map((backup) => {
+              const downloadUrl = downloadUrls[backup.id]
+              return (
               <div
                 key={backup.id}
                 className="flex items-center justify-between p-2.5 bg-slate-800/40 border border-border-light/40 rounded-lg text-xs hover:border-border-light transition-colors"
@@ -182,16 +216,22 @@ export default function BackupManager({ clientId, equipmentType, equipmentId }: 
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
-                  <a
-                    href={getBackupDownloadUrl(backup.file_path)}
-                    download={backup.file_name}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1.5 text-text-muted hover:text-accent rounded transition-colors"
-                    title="Baixar arquivo de backup"
-                  >
-                    <Download className="w-4 h-4" />
-                  </a>
+                  {downloadUrl ? (
+                    <a
+                      href={downloadUrl}
+                      download={backup.file_name}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 text-text-muted hover:text-accent rounded transition-colors"
+                      title="Baixar arquivo de backup"
+                    >
+                      <Download className="w-4 h-4" />
+                    </a>
+                  ) : (
+                    <span className="p-1.5 text-text-muted" title="Preparando link seguro">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleDelete(backup.id, backup.file_path)}
@@ -202,7 +242,7 @@ export default function BackupManager({ clientId, equipmentType, equipmentId }: 
                   </button>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>

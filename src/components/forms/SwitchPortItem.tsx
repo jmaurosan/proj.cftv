@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Check, Pencil, X } from 'lucide-react'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 
@@ -40,6 +41,8 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
   
   const [localNotes, setLocalNotes] = useState(dbNotes)
   const [localDeviceValue, setLocalDeviceValue] = useState(selectedDeviceValue)
+  const [localDeviceName, setLocalDeviceName] = useState(deviceName)
+  const [editingName, setEditingName] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -51,6 +54,10 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
     setLocalDeviceValue(selectedDeviceValue)
   }, [selectedDeviceValue])
 
+  useEffect(() => {
+    setLocalDeviceName(deviceName)
+  }, [deviceName])
+
   const handleNotesBlur = async () => {
     if (localNotes !== dbNotes) {
       setSaveError(null)
@@ -58,7 +65,7 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
         port_number: portNum, 
         device_type: deviceType || null, 
         device_id: deviceId || null,
-        device_name: deviceName || null, 
+        device_name: localDeviceName || deviceName || null, 
         is_active: isActive, 
         notes: localNotes || undefined
       })
@@ -72,7 +79,7 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
       port_number: portNum, 
       device_type: deviceType || null, 
       device_id: deviceId || null,
-      device_name: deviceName || null, 
+      device_name: localDeviceName || deviceName || null, 
       is_active: checked, 
       notes: localNotes || undefined
     })
@@ -89,7 +96,7 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
         port_number: portNum,
         device_type: null,
         device_id: null,
-        device_name: null,
+        device_name: localDeviceName || null,
         is_active: isActive,
         notes: localNotes || undefined
       })
@@ -104,6 +111,7 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
     const [newDeviceType, newDeviceId] = selectedValue.split(':')
     const selectedDevice = availableDevices.find((device) => device.type === newDeviceType && device.id === newDeviceId)
     const selectedName = selectedDevice?.name ?? ''
+    setLocalDeviceName(selectedName)
     const result = await savePort({
       port_number: portNum,
       device_type: newDeviceType || null,
@@ -117,6 +125,31 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
       setLocalDeviceValue(selectedDeviceValue)
     }
     setSaving(false)
+  }
+
+  const handleSaveDisplayName = async () => {
+    setSaving(true)
+    setSaveError(null)
+    const result = await savePort({
+      port_number: portNum,
+      device_type: deviceType || null,
+      device_id: deviceId || null,
+      device_name: localDeviceName.trim() || null,
+      is_active: isActive,
+      notes: localNotes || undefined
+    })
+    if (result.error) {
+      setSaveError(result.error)
+    } else {
+      setEditingName(false)
+    }
+    setSaving(false)
+  }
+
+  const handleCancelDisplayName = () => {
+    setLocalDeviceName(deviceName)
+    setEditingName(false)
+    setSaveError(null)
   }
 
   return (
@@ -145,6 +178,61 @@ export default function SwitchPortItem({ portNum, port, deviceOptions, savePort 
         />
         {saveError && (
           <p className="mt-1 text-xs text-danger">{saveError}</p>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-[220px]">
+        {editingName ? (
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Nome exibido na porta"
+              value={localDeviceName}
+              onChange={(e) => setLocalDeviceName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleSaveDisplayName()
+                }
+                if (e.key === 'Escape') handleCancelDisplayName()
+              }}
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={handleSaveDisplayName}
+              disabled={saving}
+              className="p-2 rounded-lg bg-success/10 text-success hover:bg-success/20 transition-colors"
+              title="Salvar nome exibido"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelDisplayName}
+              disabled={saving}
+              className="p-2 rounded-lg bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+              title="Cancelar edição"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-border-light bg-bg-primary/50 px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-text-muted">Nome exibido</p>
+              <p className="truncate text-xs font-medium text-text-primary">
+                {localDeviceName || 'Sem rótulo'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditingName(true)}
+              className="p-1.5 rounded text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+              title="Editar nome exibido"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </div>
         )}
       </div>
 

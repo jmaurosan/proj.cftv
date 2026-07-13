@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, type FormEvent } from 'react'
 import type { Switch } from '../../lib/types'
 import { STATUS_OPTIONS, POE_STANDARDS } from '../../lib/constants'
+import { buildSwitchModelNotes, findEquipmentModelByText, parseSwitchModelDetails } from '../../lib/equipmentModelCatalog'
 import { useSwitchPorts } from '../../hooks/useSwitchPorts'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import { supabase } from '../../lib/supabase'
@@ -23,6 +24,8 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
   const [name, setName] = useState(initialData?.name ?? '')
   const [brand, setBrand] = useState(initialData?.brand ?? '')
   const [model, setModel] = useState(initialData?.model ?? '')
+  const [serialNumber, setSerialNumber] = useState(initialData?.serial_number ?? '')
+  const [installationDate, setInstallationDate] = useState(initialData?.installation_date ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [totalPorts, setTotalPorts] = useState(initialData?.total_ports ?? 8)
   const [isPoe, setIsPoe] = useState(initialData?.is_poe ?? false)
@@ -82,11 +85,21 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
   const handleModelSelect = (modelId: string) => {
     const m = switchModels.find((x) => x.id === modelId)
     if (!m) return
+    const details = parseSwitchModelDetails(m.notes)
+    setOtherBrandMode(false)
     if (m.brand) setBrand(m.brand)
     if (m.model) setModel(m.model)
     if (m.max_ports) setTotalPorts(m.max_ports)
     if (m.is_poe) setIsPoe(true)
     if (m.poe_standard) setPoeStandard(m.poe_standard)
+    if (details.poeBudgetWatts) setPoeBudgetWatts(details.poeBudgetWatts)
+  }
+
+  const handleModelTextChange = (nextModel: string) => {
+    setModel(nextModel)
+    const m = findEquipmentModelByText(switchModels, nextModel, brand)
+    if (!m?.id) return
+    handleModelSelect(m.id)
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -97,6 +110,8 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
       name,
       brand: brand || null,
       model: model || null,
+      serial_number: serialNumber || null,
+      installation_date: installationDate || null,
       location,
       total_ports: totalPorts,
       is_poe: isPoe,
@@ -107,8 +122,18 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
     })
     if (result.error) {
       setError(result.error)
-    } else if (brand) {
-      await saveModel({ type: 'switch', brand, model: name || model, max_ports: totalPorts, is_poe: isPoe, poe_standard: poeStandard || null, resolution: null, channel_count: null, notes: null })
+    } else if (brand && model) {
+      await saveModel({
+        type: 'switch',
+        brand,
+        model,
+        max_ports: totalPorts,
+        is_poe: isPoe,
+        poe_standard: poeStandard || null,
+        resolution: null,
+        channel_count: null,
+        notes: isPoe ? buildSwitchModelNotes(poeBudgetWatts) : null,
+      })
     }
     setLoading(false)
   }
@@ -167,7 +192,10 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
         ) : (
           <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: TP-Link" />
         )}
-        <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: TL-SG1016" />
+        <Input label="Modelo" value={model} onChange={(e) => handleModelTextChange(e.target.value)} placeholder="Ex: TL-SG1016" list="switch-models" />
+        <datalist id="switch-models">
+          {switchModels.map((item) => <option key={item.id} value={item.model} />)}
+        </datalist>
       </div>
       {/* Campo para digitar nova marca quando selecionar "Outra" */}
       {otherBrandMode && (
@@ -181,6 +209,10 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
           />
         </div>
       )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input label="SN / Número de série" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="Número de série do equipamento" />
+        <Input label="Data de instalação" type="date" value={installationDate} onChange={(e) => setInstallationDate(e.target.value)} />
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Localização" value={location} onChange={(e) => setLocation(e.target.value)} required placeholder="Ex: Rack Sala Técnica" />
         <Input label="Total de Portas" type="number" value={totalPorts.toString()} onChange={(e) => setTotalPorts(Number(e.target.value))} min={1} required />

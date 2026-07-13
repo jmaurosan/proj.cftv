@@ -1,4 +1,5 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useMemo, useRef, useState, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import {
   Network,
@@ -9,16 +10,30 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Minimize2,
+  ExternalLink,
   Edit2,
   RefreshCw,
   Info,
-  MapPin,
   CheckCircle2,
   XCircle,
-  AlertCircle
+  Save,
+  Trash2,
+  Plus,
+  Link2,
+  Package,
+  Cable,
+  Upload,
+  Monitor,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useClient } from '../contexts/ClientContext'
+import { useAuth } from '../hooks/useAuth'
+import {
+  deleteInstallationPhoto,
+  getInstallationPhotoUrl,
+  uploadInstallationPhoto,
+} from '../services/storageService'
 import { useToast } from './ui/Toast'
 import Button from './ui/Button'
 import LoadingSpinner from './ui/LoadingSpinner'
@@ -26,7 +41,7 @@ import LoadingSpinner from './ui/LoadingSpinner'
 interface TopologyNode {
   id: string
   name: string
-  type: 'internet' | 'router' | 'switch' | 'dvr' | 'camera'
+  type: 'internet' | 'router' | 'switch' | 'dvr' | 'camera' | 'rack' | 'balun' | 'monitor'
   status: string
   ip_address: string | null
   location: string
@@ -40,6 +55,8 @@ interface TopologyConnection {
   target: string
   active: boolean
   label?: string
+  style?: 'dashed' | 'solid'
+  manual?: boolean
 }
 
 interface SwitchPortTopologyRow {
@@ -55,28 +72,86 @@ interface TopologyBuildContext {
   connections: TopologyConnection[]
 }
 
+interface TopologyRack {
+  id: string
+  databaseId?: string
+  name: string
+  location: string
+  notes?: string
+  equipmentIds?: string[]
+  hasNobreak?: boolean
+  powerNotes?: string
+  cableNotes?: string
+  mediaPaths?: string[]
+}
+
+const TOPOLOGY_NODE_WIDTH = 168
+const TOPOLOGY_NODE_HEIGHT = 58
+const TOPOLOGY_CANVAS_MIN_WIDTH = 1500
+const TOPOLOGY_CANVAS_MIN_HEIGHT = 820
+const TOPOLOGY_CANVAS_MARGIN = 90
+const TOPOLOGY_GRID_SIZE = 24
+
+const getTopologyCanvasSize = (allNodes: TopologyNode[]) => {
+  const cameraCount = allNodes.filter((node) => node.type === 'camera').length
+  const dvrCount = allNodes.filter((node) => node.type === 'dvr').length
+  const infrastructureCount = allNodes.filter((node) => ['router', 'switch', 'rack', 'balun', 'monitor'].includes(node.type)).length
+  const cameraRows = Math.ceil(Math.max(cameraCount, 1) / 6)
+  const dvrRows = Math.ceil(Math.max(dvrCount, 1) / 5)
+
+  return {
+    width: Math.max(TOPOLOGY_CANVAS_MIN_WIDTH, 760 + Math.max(cameraCount, dvrCount, infrastructureCount) * 82),
+    height: Math.max(TOPOLOGY_CANVAS_MIN_HEIGHT, 560 + dvrRows * 120 + cameraRows * 112),
+  }
+}
+
 export default function NetworkTopology() {
   const { selectedClientId, selectedClientName } = useClient()
+  const { user } = useAuth()
   const { toast } = useToast()
+  const navigate = useNavigate()
+  const location = useLocation()
 
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [zoom, setZoom] = useState(0.95)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [zoom, setZoom] = useState(0.8)
+  const [snapToGrid, setSnapToGrid] = useState(true)
 
   // Layout persistido no campo `notes` do cliente
   const [textNotes, setTextNotes] = useState('')
   const [floorPlanConfig, setFloorPlanConfig] = useState<any>(null)
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
+  const [useManualConnections, setUseManualConnections] = useState(false)
+  const [manualConnections, setManualConnections] = useState<TopologyConnection[]>([])
+  const [manualSource, setManualSource] = useState('')
+  const [manualTarget, setManualTarget] = useState('')
+  const [manualLabel, setManualLabel] = useState('')
+  const [manualStyle, setManualStyle] = useState<'dashed' | 'solid'>('dashed')
+  const [topologyRacks, setTopologyRacks] = useState<TopologyRack[]>([])
+  const [editingRackId, setEditingRackId] = useState('')
+  const [newRackName, setNewRackName] = useState('')
+  const [newRackLocation, setNewRackLocation] = useState('')
+  const [newRackEquipmentIds, setNewRackEquipmentIds] = useState<string[]>([])
+  const [newRackHasNobreak, setNewRackHasNobreak] = useState(false)
+  const [newRackPowerNotes, setNewRackPowerNotes] = useState('')
+  const [newRackCableNotes, setNewRackCableNotes] = useState('')
+  const [newRackMediaPaths, setNewRackMediaPaths] = useState<string[]>([])
+  const [rackMediaPreviews, setRackMediaPreviews] = useState<Record<string, string | null>>({})
+  const [uploadingRackMedia, setUploadingRackMedia] = useState(false)
 
   // Nós e conexões
   const [nodes, setNodes] = useState<TopologyNode[]>([])
   const [connections, setConnections] = useState<TopologyConnection[]>([])
+  const [autoConnections, setAutoConnections] = useState<TopologyConnection[]>([])
   
   // Equipamento selecionado para detalhamento
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
+  const canvasSize = useMemo(() => getTopologyCanvasSize(nodes), [nodes])
 
   // Carregar dados de nota do cliente e construir topologia
   const loadTopology = async () => {
@@ -93,6 +168,10 @@ export default function NetworkTopology() {
       if (clientErr) throw clientErr
 
       let savedPositions: Record<string, { x: number; y: number }> = {}
+      let savedUseManualConnections = false
+      let savedManualConnections: TopologyConnection[] = []
+      let savedTopologyRacks: TopologyRack[] = []
+      let savedSnapToGrid = true
 
       if (client?.notes) {
         try {
@@ -103,6 +182,26 @@ export default function NetworkTopology() {
             if (parsed.topologyLayout) {
               savedPositions = parsed.topologyLayout
             }
+            savedSnapToGrid = parsed.topologySnapToGrid !== false
+            savedUseManualConnections = Boolean(parsed.topologyUseManualConnections)
+            savedManualConnections = Array.isArray(parsed.topologyConnections)
+              ? parsed.topologyConnections
+              : []
+            savedTopologyRacks = Array.isArray(parsed.topologyRacks)
+              ? parsed.topologyRacks
+                  .filter((rack: Partial<TopologyRack>) => rack.id && rack.name)
+                  .map((rack: Partial<TopologyRack>) => ({
+                    id: String(rack.id),
+                    name: String(rack.name),
+                    location: rack.location ? String(rack.location) : 'Rack técnico',
+                    notes: rack.notes ? String(rack.notes) : undefined,
+                    equipmentIds: Array.isArray(rack.equipmentIds) ? rack.equipmentIds.map(String) : [],
+                    hasNobreak: Boolean(rack.hasNobreak),
+                    powerNotes: rack.powerNotes ? String(rack.powerNotes) : '',
+                    cableNotes: rack.cableNotes ? String(rack.cableNotes) : '',
+                    mediaPaths: Array.isArray(rack.mediaPaths) ? rack.mediaPaths.map(String) : [],
+                  }))
+              : []
           }
         } catch {
           setTextNotes(client.notes)
@@ -110,13 +209,46 @@ export default function NetworkTopology() {
       }
 
       // 2. Carregar todos os equipamentos
-      const [camerasRes, dvrsRes, switchesRes, routersRes, switchPortsRes] = await Promise.all([
+      const [camerasRes, dvrsRes, switchesRes, routersRes, balunsRes, switchPortsRes, racksRes, monitorsRes] = await Promise.all([
         supabase.from('cameras').select('id, name, status, ip_address, location, brand, model, switch_id, switch_port, dvr_id, channel_number').eq('client_id', selectedClientId),
         supabase.from('dvrs').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
         supabase.from('switches').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
         supabase.from('routers').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
-        supabase.from('switch_ports').select('switch_id, port_number, device_type, device_id, device_name, is_active')
+        supabase.from('power_baluns').select('*').eq('client_id', selectedClientId),
+        supabase.from('switch_ports').select('switch_id, port_number, device_type, device_id, device_name, is_active'),
+        supabase.from('racks').select('*').eq('client_id', selectedClientId).order('name'),
+        supabase.from('monitors').select('id, name, status, location, brand, model, rack_id').eq('client_id', selectedClientId).order('name')
       ])
+
+      if (!racksRes.error && racksRes.data?.length) {
+        savedTopologyRacks = racksRes.data.map((rack) => ({
+          id: rack.topology_id || rack.id,
+          databaseId: rack.id,
+          name: rack.name,
+          location: rack.location || 'Rack técnico',
+          notes: rack.notes || undefined,
+          equipmentIds: rack.equipment_ids || [],
+          hasNobreak: Boolean(rack.has_nobreak),
+          powerNotes: rack.power_notes || '',
+          cableNotes: rack.cable_notes || '',
+          mediaPaths: rack.media_paths || [],
+        }))
+      } else if (!racksRes.error && savedTopologyRacks.length > 0 && user) {
+        const legacyPayload = savedTopologyRacks.map((rack) => ({
+          topology_id: rack.id,
+          client_id: selectedClientId,
+          user_id: user.id,
+          name: rack.name,
+          location: rack.location || 'Rack técnico',
+          equipment_ids: rack.equipmentIds || [],
+          has_nobreak: Boolean(rack.hasNobreak),
+          power_notes: rack.powerNotes || null,
+          cable_notes: rack.cableNotes || null,
+          media_paths: rack.mediaPaths || [],
+          notes: rack.notes || null,
+        }))
+        void supabase.from('racks').upsert(legacyPayload, { onConflict: 'client_id,topology_id' })
+      }
 
       const list: TopologyNode[] = [
         {
@@ -167,6 +299,20 @@ export default function NetworkTopology() {
         })
       }
 
+      const shouldShowLogicalSwitch = (!switchesRes.data || switchesRes.data.length === 0) && (dvrsRes.data?.length ?? 0) > 0
+      if (shouldShowLogicalSwitch) {
+        const node: TopologyNode = {
+          id: 'logical-switch-main',
+          name: 'Switch Principal',
+          type: 'switch',
+          status: 'ativo',
+          ip_address: null,
+          location: 'Rack Principal'
+        }
+        list.push(node)
+        tempNodesMap[node.id] = node
+      }
+
       // DVRs
       if (dvrsRes.data) {
         dvrsRes.data.forEach((d) => {
@@ -203,6 +349,67 @@ export default function NetworkTopology() {
         })
       }
 
+      if (balunsRes.data) {
+        balunsRes.data.forEach((balun: {
+          id: string
+          name: string
+          status?: string | null
+          location?: string | null
+          balun_type?: string | null
+          total_ports?: number | null
+        }) => {
+          const node: TopologyNode = {
+            id: balun.id,
+            name: balun.name,
+            type: 'balun',
+            status: balun.status || 'ativo',
+            ip_address: null,
+            location: balun.location || 'Rack técnico',
+            brand: balun.balun_type === 'power' ? 'Power Balun' : 'Balun',
+            model: `${balun.total_ports ?? 0} porta(s)`,
+          }
+          list.push(node)
+          tempNodesMap[balun.id] = node
+        })
+      }
+
+      if (monitorsRes.data) {
+        monitorsRes.data.forEach((monitor) => {
+          const node: TopologyNode = {
+            id: monitor.id,
+            name: monitor.name,
+            type: 'monitor',
+            status: monitor.status || 'ativo',
+            ip_address: null,
+            location: monitor.location || 'Central de monitoramento',
+            brand: monitor.brand,
+            model: monitor.model,
+          }
+          list.push(node)
+          tempNodesMap[monitor.id] = node
+        })
+      }
+
+      savedTopologyRacks.forEach((rack) => {
+        const node: TopologyNode = {
+          id: rack.id,
+          name: rack.name,
+          type: 'rack',
+          status: 'ativo',
+          ip_address: null,
+          location: rack.location || 'Rack técnico',
+          brand: 'Rack',
+          model: [
+            (rack.equipmentIds?.length ?? 0) > 0 ? `${rack.equipmentIds?.length} item(ns)` : null,
+            rack.hasNobreak ? 'com nobreak' : 'sem nobreak',
+          ].filter(Boolean).join(' · ') || rack.notes || null,
+        }
+        list.push(node)
+        tempNodesMap[node.id] = node
+      })
+
+      setTopologyRacks(savedTopologyRacks)
+      setSnapToGrid(savedSnapToGrid)
       setNodes(list)
 
       // 3. Mapear conexões lógicas e físicas
@@ -225,7 +432,8 @@ export default function NetworkTopology() {
           source: 'internet',
           target: r.id,
           active: r.status === 'ativo' || r.status === 'online',
-          label: 'Fibra / Link'
+          label: 'Fibra / Link',
+          style: 'dashed'
         })
       })
 
@@ -237,7 +445,8 @@ export default function NetworkTopology() {
             id: `conn-internet-switch-${s.id}`,
             source: 'internet',
             target: s.id,
-            active: s.status === 'ativo' || s.status === 'online'
+            active: s.status === 'ativo' || s.status === 'online',
+            style: 'dashed'
           })
         })
       }
@@ -261,7 +470,8 @@ export default function NetworkTopology() {
             source,
             target,
             active: targetNode.status === 'ativo' || targetNode.status === 'online',
-            label: `P${port.port_number}`
+            label: `P${port.port_number}`,
+            style: 'dashed'
           })
         })
 
@@ -275,22 +485,25 @@ export default function NetworkTopology() {
             source: connectedRouter.id,
             target: sw.id,
             active: sw.status === 'ativo' || sw.status === 'online',
-            label: 'Porta LAN'
+            label: 'Porta LAN',
+            style: 'dashed'
           })
         }
       })
 
-      // Conectar DVRs apenas quando houver mapeamento físico ou quando não existir switch cadastrado.
+      // Conectar DVRs sempre pelo switch quando houver switch no projeto.
       const dvrs = list.filter((n) => n.type === 'dvr')
       dvrs.forEach((dvr) => {
         if (connectedTargets.has(dvr.id)) return
-        const connectedRouter = routers[0]
-        if (switches.length === 0 && connectedRouter) {
+        const connectedSwitch = switches[0]
+        if (connectedSwitch) {
           addConnection({
-            id: `conn-router-dvr-${dvr.id}`,
-            source: connectedRouter.id,
+            id: `conn-switch-dvr-fallback-${dvr.id}`,
+            source: connectedSwitch.id,
             target: dvr.id,
-            active: dvr.status === 'ativo' || dvr.status === 'online'
+            active: dvr.status === 'ativo' || dvr.status === 'online',
+            label: 'LAN',
+            style: 'dashed'
           })
         }
       })
@@ -307,7 +520,8 @@ export default function NetworkTopology() {
               source: cam.switch_id,
               target: cam.id,
               active: isCamActive,
-              label: cam.switch_port ? `P${cam.switch_port}` : 'PoE'
+              label: cam.switch_port ? `P${cam.switch_port}` : 'PoE',
+              style: 'dashed'
             })
           } else if (cam.dvr_id) {
             // Conecta ao DVR correspondente
@@ -316,7 +530,8 @@ export default function NetworkTopology() {
               source: cam.dvr_id,
               target: cam.id,
               active: isCamActive,
-              label: cam.channel_number ? `CH${cam.channel_number}` : 'Coaxial'
+              label: cam.channel_number ? `CH${cam.channel_number}` : 'Coaxial',
+              style: 'dashed'
             })
           } else {
             // Se for IP sem switch explícito, liga no primeiro switch ou primeiro roteador
@@ -328,7 +543,8 @@ export default function NetworkTopology() {
                 source: connectedSwitch.id,
                 target: cam.id,
                 active: isCamActive,
-                label: 'IP'
+                label: 'IP',
+                style: 'dashed'
               })
             } else if (connectedRouter) {
               addConnection({
@@ -336,17 +552,35 @@ export default function NetworkTopology() {
                 source: connectedRouter.id,
                 target: cam.id,
                 active: isCamActive,
-                label: 'IP'
+                label: 'IP',
+                style: 'dashed'
               })
             }
           }
         })
       }
 
-      setConnections(conns)
+      const validNodeIds = new Set(list.map((node) => node.id))
+      const manual = savedManualConnections
+        .filter((conn) => validNodeIds.has(conn.source) && validNodeIds.has(conn.target) && conn.source !== conn.target)
+        .map((conn) => {
+          const targetNode = list.find((node) => node.id === conn.target)
+          return {
+            ...conn,
+            id: conn.id || `manual-${conn.source}-${conn.target}`,
+            active: targetNode?.status === 'ativo' || targetNode?.status === 'online',
+            style: conn.style ?? 'dashed',
+            manual: true
+          }
+        })
+
+      setAutoConnections(conns)
+      setManualConnections(manual)
+      setUseManualConnections(savedUseManualConnections)
+      setConnections(savedUseManualConnections ? manual : conns)
 
       // 4. Calcular layout default ou usar o salvo
-      const computedLayout = computeLayout(list, savedPositions, { connections: conns })
+      const computedLayout = computeLayout(list, savedPositions, { connections: savedUseManualConnections ? manual : conns })
       setNodePositions(computedLayout)
     } catch (err: any) {
       console.error(err)
@@ -368,13 +602,41 @@ export default function NetworkTopology() {
     const internet = allNodes.filter((n) => n.type === 'internet')
     const routers = allNodes.filter((n) => n.type === 'router')
     const switches = allNodes.filter((n) => n.type === 'switch')
+    const racks = allNodes.filter((n) => n.type === 'rack')
+    const baluns = allNodes.filter((n) => n.type === 'balun')
     const dvrs = allNodes.filter((n) => n.type === 'dvr')
     const cameras = allNodes.filter((n) => n.type === 'camera')
+    const monitors = allNodes.filter((n) => n.type === 'monitor')
 
-    const containerWidth = 980
+    const { width: containerWidth, height: containerHeight } = getTopologyCanvasSize(allNodes)
     const centerX = containerWidth / 2
+    const clampX = (x: number) => Math.max(TOPOLOGY_CANVAS_MARGIN, Math.min(containerWidth - TOPOLOGY_CANVAS_MARGIN, x))
+    const clampY = (y: number) => Math.max(TOPOLOGY_CANVAS_MARGIN, Math.min(containerHeight - TOPOLOGY_CANVAS_MARGIN, y))
+    const savedValues = Object.values(saved)
+    const savedLooksLegacy = savedValues.length > 0
+      && Math.max(...savedValues.map((pos) => pos.x)) <= 1100
+      && Math.max(...savedValues.map((pos) => pos.y)) <= 700
+      && (containerWidth > 1200 || containerHeight > 760)
+    const normalizedSaved = savedLooksLegacy
+      ? Object.fromEntries(Object.entries(saved).map(([id, pos]) => [
+          id,
+          {
+            x: clampX(pos.x * (containerWidth / 1050)),
+            y: clampY(pos.y * (containerHeight / 650)),
+          },
+        ]))
+      : saved
     const placeNode = (node: TopologyNode, fallback: { x: number; y: number }) => {
-      layout[node.id] = saved[node.id] ?? fallback
+      layout[node.id] = normalizedSaved[node.id] ?? fallback
+    }
+    const placeRow = (items: TopologyNode[], y: number, maxPerRow: number) => {
+      items.forEach((node, index) => {
+        const row = Math.floor(index / maxPerRow)
+        const rowItems = items.slice(row * maxPerRow, row * maxPerRow + maxPerRow)
+        const column = index % maxPerRow
+        const step = containerWidth / (rowItems.length + 1)
+        placeNode(node, { x: step * (column + 1), y: y + row * 118 })
+      })
     }
 
     internet.forEach((node) => placeNode(node, { x: centerX, y: 45 }))
@@ -384,76 +646,23 @@ export default function NetworkTopology() {
       placeNode(node, { x: routers.length === 1 ? centerX : step * (index + 1), y: 145 })
     })
 
-    const routerBySwitch = new Map<string, string>()
-    const dvrConnectionsBySwitch = new Map<string, TopologyConnection[]>()
-    const connections = context?.connections ?? []
+    // Camadas globais evitam que grupos com o mesmo pai se sobreponham.
+    // As posições já salvas continuam sendo respeitadas; este arranjo é usado
+    // para novos nós e ao acionar "Redefinir árvore".
+    void context
+    placeRow(switches, 245, 6)
+    placeRow(racks, 365, 5)
+    placeRow(dvrs, 485, 6)
 
-    connections.forEach((connection) => {
-      const sourceNode = allNodes.find((node) => node.id === connection.source)
-      const targetNode = allNodes.find((node) => node.id === connection.target)
-      if (sourceNode?.type === 'router' && targetNode?.type === 'switch') {
-        routerBySwitch.set(targetNode.id, sourceNode.id)
-      }
-    })
+    const supportDevices = [...baluns, ...monitors]
+    const supportStartY = dvrs.length > 0 ? 605 : 485
+    placeRow(supportDevices, supportStartY, 6)
 
-    connections.forEach((connection) => {
-      const sourceNode = allNodes.find((node) => node.id === connection.source)
-      const targetNode = allNodes.find((node) => node.id === connection.target)
-      if (sourceNode?.type === 'switch' && targetNode?.type === 'dvr') {
-        const rows = dvrConnectionsBySwitch.get(sourceNode.id) ?? []
-        rows.push(connection)
-        dvrConnectionsBySwitch.set(sourceNode.id, rows)
-      }
-    })
-
-    switches.forEach((node, index) => {
-      const routerId = routerBySwitch.get(node.id)
-      const routerPos = routerId ? layout[routerId] : undefined
-      const step = containerWidth / (switches.length + 1)
-      placeNode(node, { x: routerPos?.x ?? step * (index + 1), y: 260 })
-    })
-
-    const positionedDvrs = new Set<string>()
-    switches.forEach((sw) => {
-      const switchPos = layout[sw.id]
-      const mappedDvrConnections = (dvrConnectionsBySwitch.get(sw.id) ?? [])
-        .sort((a, b) => Number(a.label?.replace('P', '') ?? 0) - Number(b.label?.replace('P', '') ?? 0))
-      const spread = Math.min(360, Math.max(160, mappedDvrConnections.length * 120))
-      mappedDvrConnections.forEach((connection, index) => {
-        const dvr = dvrs.find((node) => node.id === connection.target)
-        if (!dvr || !switchPos) return
-        const offset = mappedDvrConnections.length === 1 ? 0 : -spread / 2 + (spread / (mappedDvrConnections.length - 1)) * index
-        placeNode(dvr, { x: Math.max(80, Math.min(970, switchPos.x + offset)), y: 395 })
-        positionedDvrs.add(dvr.id)
-      })
-    })
-
-    dvrs
-      .filter((node) => !positionedDvrs.has(node.id))
-      .forEach((node, index, unpositioned) => {
-        const step = containerWidth / (unpositioned.length + 1)
-        placeNode(node, { x: step * (index + 1), y: switches.length > 0 ? 500 : 300 })
-      })
-
-    const positionedCameras = new Set<string>()
-    cameras.forEach((camera) => {
-      const cameraConnection = connections.find((connection) => connection.target === camera.id)
-      const parentPos = cameraConnection ? layout[cameraConnection.source] : undefined
-      if (!parentPos) return
-      const siblings = cameras.filter((cam) => connections.some((connection) => connection.source === cameraConnection!.source && connection.target === cam.id))
-      const siblingIndex = siblings.findIndex((cam) => cam.id === camera.id)
-      const spread = Math.min(520, Math.max(180, siblings.length * 70))
-      const offset = siblings.length <= 1 ? 0 : -spread / 2 + (spread / (siblings.length - 1)) * siblingIndex
-      placeNode(camera, { x: Math.max(70, Math.min(980, parentPos.x + offset)), y: Math.min(590, parentPos.y + 115) })
-      positionedCameras.add(camera.id)
-    })
-
-    cameras
-      .filter((node) => !positionedCameras.has(node.id))
-      .forEach((node, index, unpositioned) => {
-        const step = containerWidth / (unpositioned.length + 1)
-        placeNode(node, { x: step * (index + 1), y: 590 })
-      })
+    const supportRows = Math.ceil(Math.max(supportDevices.length, 1) / 6)
+    const cameraStartY = supportDevices.length > 0
+      ? supportStartY + supportRows * 118
+      : dvrs.length > 0 ? 605 : racks.length > 0 ? 485 : 365
+    placeRow(cameras, cameraStartY, 7)
 
     return layout
   }
@@ -467,10 +676,45 @@ export default function NetworkTopology() {
     if (!selectedClientId) return
     setSaving(true)
     try {
+      const { data: currentClient, error: currentClientError } = await supabase
+        .from('clients')
+        .select('notes')
+        .eq('id', selectedClientId)
+        .single()
+
+      if (currentClientError) throw currentClientError
+
+      let existingNotes: Record<string, unknown> = {}
+      if (currentClient?.notes) {
+        try {
+          const parsed = JSON.parse(currentClient.notes)
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            existingNotes = parsed
+          } else {
+            existingNotes = { textNotes: currentClient.notes }
+          }
+        } catch {
+          existingNotes = { textNotes: currentClient.notes }
+        }
+      }
+
       const notesPayload = JSON.stringify({
+        ...existingNotes,
         textNotes,
         floorPlan: floorPlanConfig,
-        topologyLayout: updatedPositions
+        topologyLayout: updatedPositions,
+        topologySnapToGrid: snapToGrid,
+        topologyUseManualConnections: useManualConnections,
+        topologyRacks,
+        topologyConnections: manualConnections.map((conn) => ({
+          id: conn.id,
+          source: conn.source,
+          target: conn.target,
+          active: conn.active,
+          label: conn.label,
+          style: conn.style ?? 'dashed',
+          manual: true
+        }))
       })
 
       const { error } = await supabase
@@ -479,6 +723,26 @@ export default function NetworkTopology() {
         .eq('id', selectedClientId)
 
       if (error) throw error
+
+      if (user) {
+        const rackPayload = topologyRacks.map((rack) => ({
+          topology_id: rack.id,
+          client_id: selectedClientId,
+          user_id: user.id,
+          name: rack.name,
+          location: rack.location || 'Rack técnico',
+          equipment_ids: rack.equipmentIds || [],
+          has_nobreak: Boolean(rack.hasNobreak),
+          power_notes: rack.powerNotes || null,
+          cable_notes: rack.cableNotes || null,
+          media_paths: rack.mediaPaths || [],
+          notes: rack.notes || null,
+        }))
+        if (rackPayload.length > 0) {
+          const rackResult = await supabase.from('racks').upsert(rackPayload, { onConflict: 'client_id,topology_id' })
+          if (rackResult.error) throw rackResult.error
+        }
+      }
 
       toast('Topologia de rede salva com sucesso!')
       setIsEditing(false)
@@ -492,10 +756,237 @@ export default function NetworkTopology() {
 
   // Redefinir para o layout padrão em árvore
   const handleResetLayout = () => {
-    const defaultLayout = computeLayout(nodes, {}, { connections })
+    const defaultConnections = connections.length > 0 ? connections : manualConnections
+    const defaultLayout = computeLayout(nodes, {}, { connections: defaultConnections })
     setNodePositions(defaultLayout)
-    handleSaveTopology(defaultLayout)
-    toast('Layout redefinido para a distribuição automática em árvore.')
+    toast('Layout redefinido. Clique em Salvar Topologia para gravar.')
+  }
+
+  const refreshConnectionActivity = (items: TopologyConnection[]) => {
+    return items.map((conn) => {
+      const targetNode = nodes.find((node) => node.id === conn.target)
+      return {
+        ...conn,
+        active: targetNode?.status === 'ativo' || targetNode?.status === 'online'
+      }
+    })
+  }
+
+  const handleManualModeChange = (enabled: boolean) => {
+    setUseManualConnections(enabled)
+    setConnections(enabled ? refreshConnectionActivity(manualConnections) : autoConnections)
+  }
+
+  const handleAddManualConnection = () => {
+    if (!manualSource || !manualTarget || manualSource === manualTarget) {
+      toast('Selecione origem e destino diferentes para a conexão.', 'error')
+      return
+    }
+
+    const targetNode = nodes.find((node) => node.id === manualTarget)
+    const nextConnection: TopologyConnection = {
+      id: `manual-${manualSource}-${manualTarget}-${Date.now()}`,
+      source: manualSource,
+      target: manualTarget,
+      active: targetNode?.status === 'ativo' || targetNode?.status === 'online',
+      label: manualLabel.trim() || undefined,
+      style: manualStyle,
+      manual: true
+    }
+    const nextManualConnections = [...manualConnections, nextConnection]
+    setManualConnections(nextManualConnections)
+    if (useManualConnections) setConnections(nextManualConnections)
+    setManualLabel('')
+    toast('Conexão manual adicionada. Clique em Salvar Topologia para gravar.')
+  }
+
+  const handleRemoveManualConnection = (id: string) => {
+    const nextManualConnections = manualConnections.filter((conn) => conn.id !== id)
+    setManualConnections(nextManualConnections)
+    if (useManualConnections) setConnections(nextManualConnections)
+  }
+
+  const handleAddRack = () => {
+    const rackName = newRackName.trim()
+    if (!rackName) {
+      toast('Informe um nome para o rack.', 'error')
+      return
+    }
+
+    const rack: TopologyRack = {
+      id: editingRackId || `rack-${Date.now()}`,
+      name: rackName,
+      location: newRackLocation.trim() || 'Rack técnico',
+      equipmentIds: newRackEquipmentIds,
+      hasNobreak: newRackHasNobreak,
+      powerNotes: newRackPowerNotes.trim(),
+      cableNotes: newRackCableNotes.trim(),
+      mediaPaths: newRackMediaPaths,
+    }
+    const rackNode: TopologyNode = {
+      id: rack.id,
+      name: rack.name,
+      type: 'rack',
+      status: 'ativo',
+      ip_address: null,
+      location: rack.location,
+      brand: 'Rack',
+      model: [
+        newRackEquipmentIds.length > 0 ? `${newRackEquipmentIds.length} item(ns)` : null,
+        newRackHasNobreak ? 'com nobreak' : 'sem nobreak',
+      ].filter(Boolean).join(' · '),
+    }
+
+    if (editingRackId) {
+      setTopologyRacks((current) => current.map((item) => item.id === editingRackId ? rack : item))
+      setNodes((current) => current.map((node) => node.id === editingRackId ? rackNode : node))
+      setSelectedNode((current) => current?.id === editingRackId ? rackNode : current)
+      setEditingRackId('')
+      setNewRackName('')
+      setNewRackLocation('')
+      setNewRackEquipmentIds([])
+      setNewRackHasNobreak(false)
+      setNewRackPowerNotes('')
+      setNewRackCableNotes('')
+      setNewRackMediaPaths([])
+      toast('Rack atualizado. Clique em Salvar Topologia para gravar.')
+      return
+    }
+
+    setTopologyRacks((current) => [...current, rack])
+    setNodes((current) => [...current, rackNode])
+    setNodePositions((current) => ({
+      ...current,
+      [rack.id]: { x: canvasSize.width / 2, y: 360 + Math.min(topologyRacks.length, 2) * 90 },
+    }))
+    setNewRackName('')
+    setNewRackLocation('')
+    setNewRackEquipmentIds([])
+    setNewRackHasNobreak(false)
+    setNewRackPowerNotes('')
+    setNewRackCableNotes('')
+    setNewRackMediaPaths([])
+    toast('Rack adicionado. Crie conexões manuais e clique em Salvar Topologia para gravar.')
+  }
+
+  const handleEditRack = (rack: TopologyRack) => {
+    setEditingRackId(rack.id)
+    setNewRackName(rack.name)
+    setNewRackLocation(rack.location)
+    setNewRackEquipmentIds(rack.equipmentIds ?? [])
+    setNewRackHasNobreak(Boolean(rack.hasNobreak))
+    setNewRackPowerNotes(rack.powerNotes ?? '')
+    setNewRackCableNotes(rack.cableNotes ?? '')
+    setNewRackMediaPaths(rack.mediaPaths ?? [])
+  }
+
+  const handleRemoveRack = (rackId: string) => {
+    setTopologyRacks((current) => current.filter((rack) => rack.id !== rackId))
+    setNodes((current) => current.filter((node) => node.id !== rackId))
+    setSelectedNode((current) => current?.id === rackId ? null : current)
+    setSelectedNodeIds((current) => current.filter((id) => id !== rackId))
+    setNodePositions((current) => {
+      const next = { ...current }
+      delete next[rackId]
+      return next
+    })
+    const nextManualConnections = manualConnections.filter((conn) => conn.source !== rackId && conn.target !== rackId)
+    setManualConnections(nextManualConnections)
+    if (useManualConnections) setConnections(nextManualConnections)
+    toast('Rack removido. Clique em Salvar Topologia para gravar.')
+  }
+
+  const clampTopologyPosition = (position: { x: number; y: number }) => ({
+    x: Math.max(TOPOLOGY_CANVAS_MARGIN, Math.min(canvasSize.width - TOPOLOGY_CANVAS_MARGIN, position.x)),
+    y: Math.max(TOPOLOGY_CANVAS_MARGIN, Math.min(canvasSize.height - TOPOLOGY_CANVAS_MARGIN, position.y)),
+  })
+
+  const snapTopologyPosition = (position: { x: number; y: number }) => {
+    const clamped = clampTopologyPosition(position)
+    if (!snapToGrid) return clamped
+    return clampTopologyPosition({
+      x: Math.round(clamped.x / TOPOLOGY_GRID_SIZE) * TOPOLOGY_GRID_SIZE,
+      y: Math.round(clamped.y / TOPOLOGY_GRID_SIZE) * TOPOLOGY_GRID_SIZE,
+    })
+  }
+
+  const getSelectedMovableNodeIds = () => {
+    const ids = selectedNodeIds.length > 0 ? selectedNodeIds : selectedNode ? [selectedNode.id] : []
+    return ids.filter((id) => nodes.some((node) => node.id === id && node.type !== 'internet') && nodePositions[id])
+  }
+
+  const handleNodeClick = (node: TopologyNode, event: React.MouseEvent<HTMLDivElement>) => {
+    setSelectedNode(node)
+    if (!isEditing || node.type === 'internet') return
+
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      setSelectedNodeIds((current) => (
+        current.includes(node.id)
+          ? current.filter((id) => id !== node.id)
+          : [...current, node.id]
+      ))
+      return
+    }
+
+    setSelectedNodeIds([node.id])
+  }
+
+  const alignSelectedNodes = (axis: 'x' | 'y') => {
+    const ids = getSelectedMovableNodeIds()
+    if (ids.length < 2) {
+      toast('Selecione pelo menos 2 blocos no modo Organizar para alinhar.', 'error')
+      return
+    }
+
+    const reference = Math.round(
+      ids.reduce((sum, id) => sum + nodePositions[id][axis], 0) / ids.length
+    )
+
+    setNodePositions((current) => {
+      const next = { ...current }
+      ids.forEach((id) => {
+        const currentPos = current[id]
+        if (!currentPos) return
+        next[id] = snapTopologyPosition(axis === 'x'
+          ? { ...currentPos, x: reference }
+          : { ...currentPos, y: reference }
+        )
+      })
+      return next
+    })
+  }
+
+  const distributeSelectedNodes = (axis: 'x' | 'y') => {
+    const ids = getSelectedMovableNodeIds()
+    if (ids.length < 3) {
+      toast('Selecione pelo menos 3 blocos para distribuir com espaçamento igual.', 'error')
+      return
+    }
+
+    const sorted = [...ids].sort((a, b) => nodePositions[a][axis] - nodePositions[b][axis])
+    const first = nodePositions[sorted[0]][axis]
+    const last = nodePositions[sorted[sorted.length - 1]][axis]
+    const step = (last - first) / (sorted.length - 1)
+
+    setNodePositions((current) => {
+      const next = { ...current }
+      sorted.forEach((id, index) => {
+        const currentPos = current[id]
+        if (!currentPos) return
+        next[id] = snapTopologyPosition(axis === 'x'
+          ? { ...currentPos, x: first + step * index }
+          : { ...currentPos, y: first + step * index }
+        )
+      })
+      return next
+    })
+  }
+
+  const snapAllNodesToGrid = () => {
+    setNodePositions((current) => Object.fromEntries(
+      Object.entries(current).map(([id, position]) => [id, snapTopologyPosition(position)])
+    ))
+    toast('Blocos ajustados à grade. Clique em Salvar Topologia para gravar.')
   }
 
   // Lógica ao soltar o nó após arrastar no Canvas da Topologia
@@ -517,16 +1008,13 @@ export default function NetworkTopology() {
     const x = prevPos.x + deltaX
     const y = prevPos.y + deltaY
 
-    // Limites lógicos do canvas técnico (1050x650)
-    const constrainedX = Math.max(75, Math.min(975, x))
-    const constrainedY = Math.max(45, Math.min(605, y))
+    const snapped = snapTopologyPosition({ x, y })
 
     const newPositions = {
       ...nodePositions,
-      [id]: { x: constrainedX, y: constrainedY }
+      [id]: snapped
     }
     setNodePositions(newPositions)
-    handleSaveTopology(newPositions)
   }
 
   // Obter detalhes de conexão por nó
@@ -557,12 +1045,110 @@ export default function NetworkTopology() {
         return <Wifi className={className} />
       case 'switch':
         return <Network className={className} />
+      case 'rack':
+        return <Package className={className} />
+      case 'balun':
+        return <Cable className={className} />
+      case 'monitor':
+        return <Monitor className={className} />
       case 'dvr':
         return <Server className={className} />
       case 'camera':
       default:
         return <Video className={className} />
     }
+  }
+
+  const getNodeTypeLabel = (type: TopologyNode['type']) => {
+    const labels: Record<TopologyNode['type'], string> = {
+      internet: 'Internet',
+      router: 'Roteador',
+      switch: 'Switch',
+      dvr: 'DVR',
+      camera: 'Câmera',
+      rack: 'Rack',
+      balun: 'Power Balun',
+      monitor: 'Monitor'
+    }
+    return labels[type]
+  }
+
+  const getRackEquipmentNodes = (rack: TopologyRack) => {
+    const ids = new Set(rack.equipmentIds ?? [])
+    return nodes.filter((node) => ids.has(node.id))
+  }
+
+  const toggleRackEquipment = (equipmentId: string) => {
+    setNewRackEquipmentIds((current) => (
+      current.includes(equipmentId)
+        ? current.filter((id) => id !== equipmentId)
+        : [...current, equipmentId]
+    ))
+  }
+
+  const isVideoMedia = (path: string) => /\.(mp4|webm|mov|m4v)$/i.test(path.split('?')[0] || path)
+
+  useEffect(() => {
+    const mediaPaths = Array.from(new Set([
+      ...newRackMediaPaths,
+      ...topologyRacks.flatMap((rack) => rack.mediaPaths ?? []),
+    ]))
+    if (mediaPaths.length === 0) {
+      setRackMediaPreviews({})
+      return
+    }
+
+    let cancelled = false
+    async function loadRackMediaPreviews() {
+      const entries = await Promise.all(
+        mediaPaths.map(async (path) => [path, await getInstallationPhotoUrl(path)] as const),
+      )
+      if (!cancelled) setRackMediaPreviews(Object.fromEntries(entries))
+    }
+
+    loadRackMediaPreviews()
+    return () => {
+      cancelled = true
+    }
+  }, [newRackMediaPaths, topologyRacks])
+
+  const handleRackMediaUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    if (files.length === 0) return
+    if (!user) {
+      toast('Faça login para anexar mídias ao rack.', 'error')
+      event.target.value = ''
+      return
+    }
+
+    setUploadingRackMedia(true)
+    const uploadedPaths: string[] = []
+
+    for (const file of files) {
+      const result = await uploadInstallationPhoto(file, user.id, editingRackId || `rack-${Date.now()}`)
+      if (result.error) {
+        toast('Erro ao anexar mídia do rack: ' + result.error, 'error')
+        break
+      }
+      if (result.url) uploadedPaths.push(result.url)
+    }
+
+    if (uploadedPaths.length > 0) {
+      setNewRackMediaPaths((current) => [...current, ...uploadedPaths])
+    }
+
+    setUploadingRackMedia(false)
+    event.target.value = ''
+  }
+
+  const handleRemoveRackMedia = async (mediaPath: string) => {
+    await deleteInstallationPhoto(mediaPath)
+    setNewRackMediaPaths((current) => current.filter((path) => path !== mediaPath))
+    setTopologyRacks((current) => current.map((rack) => (
+      rack.id === editingRackId
+        ? { ...rack, mediaPaths: (rack.mediaPaths ?? []).filter((path) => path !== mediaPath) }
+        : rack
+    )))
   }
 
   if (!selectedClientId) {
@@ -579,9 +1165,27 @@ export default function NetworkTopology() {
 
   if (loading) return <LoadingSpinner />
 
+  const isDedicatedTopologyPage = location.pathname === '/topologia'
+  const shellClass = isFullscreen
+    ? 'fixed inset-0 z-[80] bg-bg-primary p-3 sm:p-5 overflow-auto space-y-4'
+    : 'space-y-6'
+  const canvasViewportClass = isFullscreen
+    ? 'h-[calc(100vh-150px)] min-h-[560px]'
+    : 'h-[72vh] min-h-[560px] xl:h-[760px]'
+  const viewportWidth = canvasSize.width * zoom
+  const viewportHeight = canvasSize.height * zoom
+  const rackEquipmentOptions = nodes.filter((node) => node.type !== 'internet' && node.type !== 'rack')
+  const selectedRack = selectedNode?.type === 'rack'
+    ? topologyRacks.find((rack) => rack.id === selectedNode.id)
+    : null
+  const selectedRackEquipment = selectedRack ? getRackEquipmentNodes(selectedRack) : []
+  const selectedRackConnections = selectedRack
+    ? connections.filter((connection) => connection.source === selectedRack.id || connection.target === selectedRack.id)
+    : []
+
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-bg-secondary p-5 rounded-xl border border-border-light">
+    <div className={shellClass}>
+      <header className={`flex flex-col md:flex-row md:items-center justify-between gap-4 bg-bg-secondary p-5 rounded-xl border border-border-light ${isFullscreen ? 'sticky top-0 z-30 shadow-xl' : ''}`}>
         <div>
           <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
             <Network className="w-5 h-5 text-accent animate-pulse" />
@@ -593,6 +1197,35 @@ export default function NetworkTopology() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {!isDedicatedTopologyPage && (
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/topologia')}
+              className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider rounded-lg"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Abrir Tela
+            </Button>
+          )}
+
+          <Button
+            variant="secondary"
+            onClick={() => setIsFullscreen((value) => !value)}
+            className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider rounded-lg"
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            {isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
+          </Button>
+
+          <Button
+            onClick={() => handleSaveTopology()}
+            disabled={saving}
+            className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider rounded-lg"
+          >
+            <Save className="w-3.5 h-3.5" />
+            {saving ? 'Salvando...' : 'Salvar Topologia'}
+          </Button>
+
           <Button
             variant="secondary"
             onClick={handleResetLayout}
@@ -608,6 +1241,7 @@ export default function NetworkTopology() {
                 handleSaveTopology()
               } else {
                 setIsEditing(true)
+                setSelectedNodeIds(selectedNode?.type !== 'internet' && selectedNode ? [selectedNode.id] : [])
               }
             }}
             className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-2 border ${
@@ -617,20 +1251,20 @@ export default function NetworkTopology() {
             }`}
           >
             <Edit2 className="w-3.5 h-3.5" />
-            {isEditing ? 'Salvar Posições' : 'Organizar Blocos'}
+            {isEditing ? 'Finalizar Organização' : 'Organizar Blocos'}
           </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className={`grid grid-cols-1 2xl:grid-cols-[300px_minmax(0,1fr)] gap-4 ${isFullscreen ? 'items-start' : ''}`}>
         {/* Painel de Zoom & Detalhamento */}
-        <div className="lg:col-span-1 flex flex-col gap-4">
+        <div className="2xl:order-1 order-2 flex flex-col gap-3 min-w-0 2xl:sticky 2xl:top-4 2xl:max-h-[calc(100vh-2rem)] 2xl:overflow-y-auto 2xl:pr-1">
           {/* Zoom controls */}
           <div className="bg-bg-secondary p-4 rounded-xl border border-border-light space-y-3">
             <h3 className="font-bold text-text-primary text-sm uppercase tracking-wider">Controle do Mapa</h3>
             <div className="flex items-center justify-between bg-bg-primary rounded-lg border border-border-light p-1">
               <button
-                onClick={() => setZoom((z) => Math.min(z + 0.1, 2))}
+                onClick={() => setZoom((z) => Math.min(Number((z + 0.1).toFixed(2)), 1.6))}
                 className="p-2 hover:bg-bg-tertiary rounded text-text-primary transition-all"
                 title="Aumentar Zoom"
               >
@@ -640,20 +1274,414 @@ export default function NetworkTopology() {
                 {Math.round(zoom * 100)}%
               </span>
               <button
-                onClick={() => setZoom((z) => Math.max(z - 0.1, 0.4))}
+                onClick={() => setZoom((z) => Math.max(Number((z - 0.1).toFixed(2)), 0.45))}
                 className="p-2 hover:bg-bg-tertiary rounded text-text-primary transition-all"
                 title="Diminuir Zoom"
               >
                 <ZoomOut className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setZoom(0.95)}
+                onClick={() => setZoom(0.8)}
                 className="p-2 hover:bg-bg-tertiary rounded text-text-primary transition-all"
                 title="Zoom 100%"
               >
                 <Maximize2 className="w-4 h-4" />
               </button>
             </div>
+
+            <div className="rounded-lg border border-border-light bg-bg-primary p-2">
+              <label className="flex items-center justify-between gap-3 text-xs text-text-secondary">
+                <span>Encaixar na grade</span>
+                <input
+                  type="checkbox"
+                  checked={snapToGrid}
+                  onChange={(event) => setSnapToGrid(event.target.checked)}
+                  className="accent-cyan-500"
+                />
+              </label>
+              <p className="mt-1 text-[10px] text-text-muted">
+                No modo Organizar, use Shift/Ctrl para selecionar vários blocos.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => alignSelectedNodes('x')}
+                disabled={!isEditing}
+                className="rounded-lg border border-border-light bg-bg-primary px-2 py-2 text-[10px] font-semibold text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                title="Alinhar selecionados na mesma coluna"
+              >
+                Alinhar vertical
+              </button>
+              <button
+                type="button"
+                onClick={() => alignSelectedNodes('y')}
+                disabled={!isEditing}
+                className="rounded-lg border border-border-light bg-bg-primary px-2 py-2 text-[10px] font-semibold text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                title="Alinhar selecionados na mesma linha"
+              >
+                Alinhar horizontal
+              </button>
+              <button
+                type="button"
+                onClick={() => distributeSelectedNodes('x')}
+                disabled={!isEditing}
+                className="rounded-lg border border-border-light bg-bg-primary px-2 py-2 text-[10px] font-semibold text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                title="Distribuir selecionados com espaçamento horizontal igual"
+              >
+                Distribuir X
+              </button>
+              <button
+                type="button"
+                onClick={() => distributeSelectedNodes('y')}
+                disabled={!isEditing}
+                className="rounded-lg border border-border-light bg-bg-primary px-2 py-2 text-[10px] font-semibold text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                title="Distribuir selecionados com espaçamento vertical igual"
+              >
+                Distribuir Y
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={snapAllNodesToGrid}
+                disabled={!isEditing}
+                className="flex-1 justify-center"
+              >
+                Ajustar à grade
+              </Button>
+              <button
+                type="button"
+                onClick={() => setSelectedNodeIds([])}
+                className="rounded-lg border border-border-light px-3 py-2 text-[10px] text-text-muted transition-colors hover:bg-bg-tertiary hover:text-text-primary"
+              >
+                Limpar
+              </button>
+            </div>
+
+            {isEditing && selectedNodeIds.length > 0 && (
+              <p className="text-[10px] font-mono text-accent">
+                {selectedNodeIds.length} bloco(s) selecionado(s)
+              </p>
+            )}
+          </div>
+
+          <div className="bg-bg-secondary p-4 rounded-xl border border-border-light space-y-3">
+            <div>
+              <h3 className="font-bold text-text-primary text-sm uppercase tracking-wider flex items-center gap-2">
+                <Package className="w-4 h-4 text-accent" />
+                Racks / Quadros
+              </h3>
+              <p className="text-[10px] text-text-muted mt-1">
+                Documente o ponto técnico com os equipamentos, alimentação e cabos que chegam nele.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <input
+                value={newRackName}
+                onChange={(event) => setNewRackName(event.target.value)}
+                placeholder="Nome: Rack Portaria"
+                className="w-full px-3 py-2 bg-bg-primary border border-border-light rounded-lg text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+              />
+              <input
+                value={newRackLocation}
+                onChange={(event) => setNewRackLocation(event.target.value)}
+                placeholder="Local: Guarita / Bloco B"
+                className="w-full px-3 py-2 bg-bg-primary border border-border-light rounded-lg text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+              />
+
+              <div className="rounded-lg border border-border-light bg-bg-primary/60 p-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                    Equipamentos internos
+                  </span>
+                  <span className="font-mono text-[10px] text-accent">
+                    {newRackEquipmentIds.length} selecionado(s)
+                  </span>
+                </div>
+                <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
+                  {rackEquipmentOptions.length === 0 ? (
+                    <p className="px-2 py-2 text-[10px] text-text-muted">
+                      Cadastre switch, DVR, roteador ou Power Balun para vincular ao rack.
+                    </p>
+                  ) : (
+                    rackEquipmentOptions.map((node) => (
+                      <label
+                        key={`rack-equipment-${node.id}`}
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[10px] text-text-secondary hover:bg-bg-tertiary"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={newRackEquipmentIds.includes(node.id)}
+                          onChange={() => toggleRackEquipment(node.id)}
+                          className="accent-cyan-500"
+                        />
+                        <span className="min-w-14 text-text-muted">{getNodeTypeLabel(node.type)}</span>
+                        <span className="min-w-0 flex-1 truncate text-text-primary">{node.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-border-light bg-bg-primary px-3 py-2 text-xs text-text-secondary">
+                <span>Nobreak instalado neste rack/quadro</span>
+                <input
+                  type="checkbox"
+                  checked={newRackHasNobreak}
+                  onChange={(event) => setNewRackHasNobreak(event.target.checked)}
+                  className="accent-cyan-500"
+                />
+              </label>
+
+              <textarea
+                value={newRackPowerNotes}
+                onChange={(event) => setNewRackPowerNotes(event.target.value)}
+                placeholder="Alimentação/fontes: fonte 12V 10A, régua, circuito, disjuntor..."
+                rows={2}
+                className="w-full resize-none px-3 py-2 bg-bg-primary border border-border-light rounded-lg text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+              />
+
+              <textarea
+                value={newRackCableNotes}
+                onChange={(event) => setNewRackCableNotes(event.target.value)}
+                placeholder="Cabos/interligações: fibra, UTP, coaxial, saída para DVR, link para switch..."
+                rows={2}
+                className="w-full resize-none px-3 py-2 bg-bg-primary border border-border-light rounded-lg text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+              />
+
+              <div className="rounded-lg border border-border-light bg-bg-primary/60 p-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                    Fotos / vídeos do rack
+                  </span>
+                  <label className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-accent px-2 py-1 text-[10px] font-semibold text-on-accent transition-colors hover:brightness-110">
+                    <Upload className="h-3 w-3" />
+                    {uploadingRackMedia ? 'Enviando...' : 'Anexar'}
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      disabled={uploadingRackMedia}
+                      onChange={handleRackMediaUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {newRackMediaPaths.length === 0 ? (
+                  <p className="px-2 py-2 text-[10px] text-text-muted">
+                    Anexe fotos do interior do rack, fontes, nobreak e organização dos cabos.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {newRackMediaPaths.map((path) => {
+                      const previewUrl = rackMediaPreviews[path]
+                      return (
+                        <div key={`rack-media-form-${path}`} className="relative overflow-hidden rounded-lg border border-border-light bg-bg-secondary">
+                          {previewUrl ? (
+                            isVideoMedia(path) ? (
+                              <video src={previewUrl} className="aspect-video w-full bg-black object-cover" muted controls preload="metadata" />
+                            ) : (
+                              <img src={previewUrl} alt="Mídia do rack" className="aspect-video w-full object-cover" />
+                            )
+                          ) : (
+                            <div className="flex aspect-video items-center justify-center text-[10px] text-text-muted">
+                              Preparando...
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRackMedia(path)}
+                            className="absolute right-1 top-1 rounded bg-bg-primary/90 p-1 text-text-muted transition-colors hover:text-danger"
+                            title="Remover mídia"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <Button
+                size="sm"
+                onClick={handleAddRack}
+                className="w-full justify-center"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {editingRackId ? 'Atualizar Rack' : 'Adicionar Rack'}
+              </Button>
+              {editingRackId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingRackId('')
+                    setNewRackName('')
+                    setNewRackLocation('')
+                    setNewRackEquipmentIds([])
+                    setNewRackHasNobreak(false)
+                    setNewRackPowerNotes('')
+                    setNewRackCableNotes('')
+                    setNewRackMediaPaths([])
+                  }}
+                  className="w-full rounded-lg px-3 py-2 text-xs text-text-muted transition-colors hover:bg-bg-tertiary hover:text-text-primary"
+                >
+                  Cancelar edição
+                </button>
+              )}
+            </div>
+
+            {topologyRacks.length > 0 && (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {topologyRacks.map((rack) => (
+                  <div
+                    key={rack.id}
+                    className="flex items-center justify-between gap-2 px-2 py-2 rounded-lg bg-bg-primary/70 border border-border-light text-[10px]"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-text-primary truncate">{rack.name}</p>
+                      <p className="text-text-muted truncate">{rack.location}</p>
+                      <p className="mt-0.5 font-mono text-[9px] text-accent">
+                        {(rack.equipmentIds?.length ?? 0)} item(ns) · {rack.hasNobreak ? 'com nobreak' : 'sem nobreak'}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleEditRack(rack)}
+                        className="p-1.5 rounded text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+                        title="Editar rack"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRack(rack.id)}
+                        className="p-1.5 rounded text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+                        title="Remover rack"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-bg-secondary p-4 rounded-xl border border-border-light space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-text-primary text-sm uppercase tracking-wider flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-accent" />
+                  Conexões Manuais
+                </h3>
+                <p className="text-[10px] text-text-muted mt-1">
+                  Defina manualmente quais blocos devem se conectar.
+                </p>
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={useManualConnections}
+                  onChange={(event) => handleManualModeChange(event.target.checked)}
+                  className="accent-cyan-500"
+                />
+                Usar
+              </label>
+            </div>
+
+            <div className="space-y-2">
+              <select
+                value={manualSource}
+                onChange={(event) => setManualSource(event.target.value)}
+                className="w-full px-3 py-2 bg-bg-primary border border-border-light rounded-lg text-xs text-text-primary focus:outline-none focus:border-accent"
+              >
+                <option value="">Origem</option>
+                {nodes.map((node) => (
+                  <option key={node.id} value={node.id}>
+                    {getNodeTypeLabel(node.type)} - {node.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={manualTarget}
+                onChange={(event) => setManualTarget(event.target.value)}
+                className="w-full px-3 py-2 bg-bg-primary border border-border-light rounded-lg text-xs text-text-primary focus:outline-none focus:border-accent"
+              >
+                <option value="">Destino</option>
+                {nodes.map((node) => (
+                  <option key={node.id} value={node.id}>
+                    {getNodeTypeLabel(node.type)} - {node.name}
+                  </option>
+                ))}
+              </select>
+
+              <div className="grid grid-cols-[1fr_110px] gap-2">
+                <input
+                  value={manualLabel}
+                  onChange={(event) => setManualLabel(event.target.value)}
+                  placeholder="Rótulo: LAN, P1..."
+                  className="w-full px-3 py-2 bg-bg-primary border border-border-light rounded-lg text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+                />
+                <select
+                  value={manualStyle}
+                  onChange={(event) => setManualStyle(event.target.value as 'dashed' | 'solid')}
+                  className="w-full px-2 py-2 bg-bg-primary border border-border-light rounded-lg text-xs text-text-primary focus:outline-none focus:border-accent"
+                >
+                  <option value="dashed">Pontilhada</option>
+                  <option value="solid">Contínua</option>
+                </select>
+              </div>
+
+              <Button
+                size="sm"
+                onClick={handleAddManualConnection}
+                className="w-full justify-center"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Adicionar Conexão
+              </Button>
+            </div>
+
+            {manualConnections.length > 0 && (
+              <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                {manualConnections.map((conn) => {
+                  const sourceNode = nodes.find((node) => node.id === conn.source)
+                  const targetNode = nodes.find((node) => node.id === conn.target)
+                  return (
+                    <div
+                      key={conn.id}
+                      className="flex items-center justify-between gap-2 px-2 py-2 rounded-lg bg-bg-primary/70 border border-border-light text-[10px]"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-text-primary truncate">
+                          {sourceNode?.name || conn.source} → {targetNode?.name || conn.target}
+                        </p>
+                        <p className="text-text-muted font-mono">
+                          {conn.label || 'sem rótulo'} · {conn.style === 'solid' ? 'contínua' : 'pontilhada'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveManualConnection(conn.id)}
+                        className="p-1.5 rounded text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+                        title="Remover conexão"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* Card de Detalhamento do Nó selecionado */}
@@ -686,43 +1714,149 @@ export default function NetworkTopology() {
 
                   <hr className="border-border-light" />
 
-                  <div className="space-y-2 font-mono">
-                    <div className="flex justify-between py-1 border-b border-border-light/40">
-                      <span className="text-text-muted">Endereço IP:</span>
-                      <span className="text-text-primary font-bold">{selectedNode.ip_address || 'Não configurado'}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-border-light/40">
-                      <span className="text-text-muted">Status:</span>
-                      <span className={`font-bold flex items-center gap-1 ${
-                        selectedNode.status === 'ativo' || selectedNode.status === 'online' ? 'text-emerald-400' : 'text-rose-400'
-                      }`}>
-                        {selectedNode.status === 'ativo' || selectedNode.status === 'online' ? (
-                          <CheckCircle2 className="w-3.5 h-3.5" />
+                  {selectedRack ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-lg border border-border-light bg-bg-primary px-3 py-2">
+                          <span className="block text-[10px] text-text-muted">Equipamentos</span>
+                          <span className="mt-1 block font-mono text-sm font-bold text-text-primary">
+                            {selectedRackEquipment.length}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-border-light bg-bg-primary px-3 py-2">
+                          <span className="block text-[10px] text-text-muted">Nobreak</span>
+                          <span className={`mt-1 flex items-center gap-1 font-mono text-sm font-bold ${selectedRack.hasNobreak ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {selectedRack.hasNobreak ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                            {selectedRack.hasNobreak ? 'Sim' : 'Não'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                          Dentro do rack
+                        </p>
+                        {selectedRackEquipment.length === 0 ? (
+                          <p className="rounded-lg border border-dashed border-border-light px-3 py-2 text-[10px] text-text-muted">
+                            Nenhum equipamento vinculado. Edite o cadastro do rack para informar switch, Power Balun, fonte, roteador ou DVR.
+                          </p>
                         ) : (
-                          <XCircle className="w-3.5 h-3.5" />
+                          selectedRackEquipment.map((item) => (
+                            <div key={`rack-detail-${item.id}`} className="flex items-center gap-2 rounded-lg border border-border-light bg-bg-primary px-2 py-2">
+                              <span className={`rounded-md border p-1.5 ${getNodeColorClass(item.status, item.type)}`}>
+                                {getNodeIcon(item.type, 'h-3.5 w-3.5')}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-[11px] font-semibold text-text-primary">{item.name}</p>
+                                <p className="truncate font-mono text-[9px] text-text-muted">
+                                  {getNodeTypeLabel(item.type)} · {item.ip_address || 'sem IP'}
+                                </p>
+                              </div>
+                            </div>
+                          ))
                         )}
-                        {selectedNode.status.toUpperCase()}
-                      </span>
+                      </div>
+
+                      <div className="space-y-2 text-[10px]">
+                        <div className="rounded-lg border border-border-light bg-bg-primary px-3 py-2">
+                          <span className="block font-semibold text-text-muted">Alimentação / fontes</span>
+                          <p className="mt-1 text-text-secondary">{selectedRack.powerNotes || 'Não informado'}</p>
+                        </div>
+                        <div className="rounded-lg border border-border-light bg-bg-primary px-3 py-2">
+                          <span className="block font-semibold text-text-muted">Cabos / interligações</span>
+                          <p className="mt-1 text-text-secondary">{selectedRack.cableNotes || 'Não informado'}</p>
+                        </div>
+                        <div className="rounded-lg border border-border-light bg-bg-primary px-3 py-2">
+                          <span className="block font-semibold text-text-muted">Conexões no mapa</span>
+                          <p className="mt-1 text-text-secondary">
+                            {selectedRackConnections.length > 0
+                              ? `${selectedRackConnections.length} conexão(ões) manual(is) vinculada(s).`
+                              : 'Nenhuma conexão manual vinculada a este rack.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                          Fotos / vídeos
+                        </p>
+                        {(selectedRack.mediaPaths ?? []).length === 0 ? (
+                          <p className="rounded-lg border border-dashed border-border-light px-3 py-2 text-[10px] text-text-muted">
+                            Nenhuma mídia anexada ao rack.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            {(selectedRack.mediaPaths ?? []).map((path) => {
+                              const previewUrl = rackMediaPreviews[path]
+                              return (
+                                <div key={`rack-media-detail-${path}`} className="overflow-hidden rounded-lg border border-border-light bg-bg-primary">
+                                  {previewUrl ? (
+                                    isVideoMedia(path) ? (
+                                      <video src={previewUrl} className="aspect-video w-full bg-black object-cover" controls preload="metadata" />
+                                    ) : (
+                                      <img src={previewUrl} alt={`Mídia do rack ${selectedRack.name}`} className="aspect-video w-full object-cover" />
+                                    )
+                                  ) : (
+                                    <div className="flex aspect-video items-center justify-center text-[10px] text-text-muted">
+                                      Preparando mídia...
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-border-light/40">
-                      <span className="text-text-muted">Localização:</span>
-                      <span className="text-text-primary max-w-[150px] truncate block text-right">
-                        {selectedNode.location}
-                      </span>
+                  ) : (
+                    <div className="space-y-2 font-mono">
+                      <div className="flex justify-between py-1 border-b border-border-light/40">
+                        <span className="text-text-muted">Endereço IP:</span>
+                        <span className="text-text-primary font-bold">{selectedNode.ip_address || 'Não configurado'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border-light/40">
+                        <span className="text-text-muted">Status:</span>
+                        <span className={`font-bold flex items-center gap-1 ${
+                          selectedNode.status === 'ativo' || selectedNode.status === 'online' ? 'text-emerald-400' : 'text-rose-400'
+                        }`}>
+                          {selectedNode.status === 'ativo' || selectedNode.status === 'online' ? (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5" />
+                          )}
+                          {selectedNode.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border-light/40">
+                        <span className="text-text-muted">Localização:</span>
+                        <span className="text-text-primary max-w-[150px] truncate block text-right">
+                          {selectedNode.location}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border-light/40">
+                        <span className="text-text-muted">Modelo/Marca:</span>
+                        <span className="text-text-primary truncate block max-w-[150px] text-right">
+                          {selectedNode.brand || '-'} {selectedNode.model || ''}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-border-light/40">
-                      <span className="text-text-muted">Modelo/Marca:</span>
-                      <span className="text-text-primary truncate block max-w-[150px] text-right">
-                        {selectedNode.brand || '-'} {selectedNode.model || ''}
-                      </span>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
 
             {selectedNode && (
-              <div className="pt-4 border-t border-border-light">
+              <div className="space-y-2 pt-4 border-t border-border-light">
+                {selectedRack && (
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => handleEditRack(selectedRack)}
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Editar inventário do rack
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="secondary"
@@ -737,7 +1871,7 @@ export default function NetworkTopology() {
         </div>
 
         {/* Canvas do Diagrama de Topologia */}
-        <div className="lg:col-span-3 bg-bg-secondary rounded-xl border border-border-light relative overflow-hidden h-[550px] flex items-center justify-center">
+        <div className={`2xl:order-2 order-1 bg-bg-secondary rounded-xl border border-border-light relative overflow-auto ${canvasViewportClass} min-w-0`}>
           {/* Fundo do Canvas Técnico */}
           <div
             className="absolute inset-0 opacity-[0.03] pointer-events-none"
@@ -749,16 +1883,19 @@ export default function NetworkTopology() {
             }}
           />
 
-          <div
-            ref={containerRef}
-            className="relative w-[1050px] h-[650px] origin-center shrink-0"
-            style={{
-              transform: `scale(${zoom})`,
-              transition: 'transform 0.15s ease-out'
-            }}
-          >
+          <div className="relative p-4" style={{ width: viewportWidth + 32, height: viewportHeight + 32 }}>
+            <div
+              ref={containerRef}
+              className="absolute left-4 top-4 origin-top-left shrink-0"
+              style={{
+                width: canvasSize.width,
+                height: canvasSize.height,
+                transform: `scale(${zoom})`,
+                transition: 'transform 0.15s ease-out'
+              }}
+            >
             {/* SVG das Linhas de Conexão */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+            <svg className="absolute inset-0 pointer-events-none z-0" width={canvasSize.width} height={canvasSize.height}>
               <defs>
                 <linearGradient id="active-grad" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
@@ -793,8 +1930,9 @@ export default function NetworkTopology() {
                       d={pathData}
                       stroke={conn.active ? 'url(#active-grad)' : 'url(#inactive-grad)'}
                       strokeWidth={conn.active ? 2.5 : 1.5}
+                      strokeDasharray={conn.style === 'solid' ? undefined : '6 4'}
                       fill="none"
-                      className={conn.active ? 'animate-dash' : ''}
+                      className={conn.active && conn.style !== 'solid' ? 'animate-dash' : ''}
                     />
 
                     {/* Pequena label opcional com o número da porta */}
@@ -822,26 +1960,32 @@ export default function NetworkTopology() {
               if (!pos) return null
 
               const isActive = selectedNode?.id === node.id
+              const isMultiSelected = selectedNodeIds.includes(node.id)
               const nodeStyle = getNodeColorClass(node.status, node.type)
               const statusColor = node.status === 'ativo' || node.status === 'online' ? 'bg-emerald-500' : 'bg-rose-500'
+              const rack = node.type === 'rack' ? topologyRacks.find((item) => item.id === node.id) : null
+              const rackSummary = rack
+                ? `${rack.equipmentIds?.length ?? 0} item(ns)${rack.hasNobreak ? ' · nobreak' : ''}`
+                : null
 
               return (
                 <motion.div
-                  key={`${node.id}-${pos.x}-${pos.y}`}
+                  key={node.id}
                   drag={isEditing && node.type !== 'internet'}
                   dragMomentum={false}
                   dragElastic={0}
                   onDragEnd={(e, info) => handleNodeDragEnd(node.id, info)}
-                  onClick={() => setSelectedNode(node)}
+                  onClick={(event) => handleNodeClick(node, event)}
                   className={`absolute z-10 p-3 bg-bg-secondary border-2 rounded-xl flex items-center gap-3 shadow-2xl cursor-pointer select-none transition-colors ${
-                    isActive ? 'ring-2 ring-accent scale-105 border-accent' : 'border-border-light hover:border-accent/40'
+                    isActive || isMultiSelected ? 'ring-2 ring-accent scale-105 border-accent' : 'border-border-light hover:border-accent/40'
                   }`}
                   style={{
                     left: pos.x,
                     top: pos.y,
                     x: '-50%',
                     y: '-50%',
-                    width: node.type === 'internet' ? '180px' : '150px'
+                    width: node.type === 'internet' ? 190 : TOPOLOGY_NODE_WIDTH,
+                    minHeight: TOPOLOGY_NODE_HEIGHT
                   }}
                   whileHover={{ scale: isEditing ? 1.02 : 1.05 }}
                 >
@@ -854,7 +1998,7 @@ export default function NetworkTopology() {
                       {node.name}
                     </p>
                     <p className="text-[8px] font-mono text-text-muted mt-0.5 truncate">
-                      {node.ip_address || 'Sem IP'}
+                      {rackSummary || node.ip_address || 'Sem IP'}
                     </p>
                   </div>
 
@@ -865,6 +2009,7 @@ export default function NetworkTopology() {
                 </motion.div>
               )
             })}
+            </div>
           </div>
         </div>
       </div>

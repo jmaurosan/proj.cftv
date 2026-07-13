@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import type { Router, Client } from '../lib/types'
+import { useClient } from '../contexts/ClientContext'
 import DataTable from '../components/ui/DataTable'
 import Modal from '../components/ui/Modal'
 import RouterForm from '../components/forms/RouterForm'
@@ -9,9 +10,41 @@ import Button from '../components/ui/Button'
 import { Wifi, Search, Plus } from 'lucide-react'
 import { STATUS_COLORS } from '../lib/constants'
 import { useToast } from '../components/ui/Toast'
+import ClientFilterBanner from '../components/ui/ClientFilterBanner'
+
+const getMissingColumn = (error: unknown) => {
+  const message = String((error as { message?: string })?.message || error || '')
+  if (!message.toLowerCase().includes('schema cache')) return null
+  return message.match(/could not find the ['"]([^'"]+)['"] column/i)?.[1] ?? null
+}
+
+const updateRouterWithSchemaFallback = async (id: string, payload: Record<string, unknown>) => {
+  const compatiblePayload = { ...payload }
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { error } = await supabase.from('routers').update(compatiblePayload).eq('id', id)
+    if (!error) return null
+    const missingColumn = getMissingColumn(error)
+    if (!missingColumn || !(missingColumn in compatiblePayload)) return error
+    delete compatiblePayload[missingColumn]
+  }
+  return new Error('Não foi possível compatibilizar a atualização com a estrutura atual do banco.')
+}
+
+const insertRouterWithSchemaFallback = async (payload: Record<string, unknown>) => {
+  const compatiblePayload = { ...payload }
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { data, error } = await supabase.from('routers').insert(compatiblePayload).select().single()
+    if (!error) return { data, error: null }
+    const missingColumn = getMissingColumn(error)
+    if (!missingColumn || !(missingColumn in compatiblePayload)) return { data: null, error }
+    delete compatiblePayload[missingColumn]
+  }
+  return { data: null, error: new Error('Não foi possível compatibilizar o cadastro com a estrutura atual do banco.') }
+}
 
 export default function RoutersPage() {
   const { user } = useAuth()
+  const { selectedClientId, selectedClientName } = useClient()
   const { toast } = useToast()
   const [routers, setRouters] = useState<Router[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -21,19 +54,27 @@ export default function RoutersPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [showForm, setShowForm] = useState(false)
   const [editingRouter, setEditingRouter] = useState<Router | null>(null)
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
+    setLoading(true)
+    if (!selectedClientId) {
+      setRouters([])
+      supabase.from('clients').select('id, name').eq('user_id', user.id).order('name').then(({ data }) => {
+        setClients((data as Client[]) || [])
+        setLoading(false)
+      })
+      return
+    }
     Promise.all([
-      supabase.from('routers').select('*').eq('user_id', user.id).order('name'),
+      supabase.from('routers').select('*').eq('user_id', user.id).eq('client_id', selectedClientId).order('name'),
       supabase.from('clients').select('id, name').eq('user_id', user.id).order('name'),
     ]).then(([routersRes, clientsRes]) => {
       setRouters((routersRes.data as Router[]) || [])
       setClients((clientsRes.data as Client[]) || [])
       setLoading(false)
     })
-  }, [user])
+  }, [user, selectedClientId])
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -46,11 +87,6 @@ export default function RoutersPage() {
 
   const filteredRouters = useMemo(() => {
     let data = [...routers]
-
-    // Filter by client if selected
-    if (selectedClientId) {
-      data = data.filter((r) => r.client_id === selectedClientId)
-    }
 
     // Filter by search
     if (search) {
@@ -73,7 +109,7 @@ export default function RoutersPage() {
     })
 
     return data
-  }, [routers, search, sortKey, sortDir, selectedClientId])
+  }, [routers, search, sortKey, sortDir])
 
   const getClientName = (clientId: string | null) => {
     if (!clientId) return '-'
@@ -92,9 +128,10 @@ export default function RoutersPage() {
 
   const handleSubmit = async (data: Record<string, unknown>) => {
     if (!user) return { error: 'Não autenticado' }
+    if (!selectedClientId && !editingRouter) return { error: 'Selecione um cliente antes de cadastrar roteador' }
 
     if (editingRouter) {
-      const { error } = await supabase.from('routers').update(data).eq('id', editingRouter.id)
+      const error = await updateRouterWithSchemaFallback(editingRouter.id, data)
       if (error) {
         toast(error.message, 'error')
         return { error: error.message }
@@ -102,7 +139,7 @@ export default function RoutersPage() {
       setRouters((prev) => prev.map((r) => (r.id === editingRouter.id ? { ...r, ...data } as Router : r)))
       toast('Roteador atualizado com sucesso')
     } else {
-      const { data: newRouter, error } = await supabase.from('routers').insert({ ...data, user_id: user.id }).select().single()
+      const { data: newRouter, error } = await insertRouterWithSchemaFallback({ ...data, user_id: user.id, client_id: selectedClientId })
       if (error) {
         toast(error.message, 'error')
         return { error: error.message }
@@ -157,6 +194,8 @@ export default function RoutersPage() {
 
   return (
     <div className="space-y-4">
+      <ClientFilterBanner />
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
@@ -182,16 +221,11 @@ export default function RoutersPage() {
             className="w-full pl-10 pr-4 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
-        <select
-          value={selectedClientId || ''}
-          onChange={(e) => setSelectedClientId(e.target.value || null)}
-          className="px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50"
-        >
-          <option value="">Todos os clientes</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+        {selectedClientName && (
+          <div className="px-3 py-2 bg-bg-secondary border border-border rounded-lg text-sm text-text-secondary">
+            Cliente: <span className="text-text-primary font-medium">{selectedClientName}</span>
+          </div>
+        )}
       </div>
 
       <DataTable

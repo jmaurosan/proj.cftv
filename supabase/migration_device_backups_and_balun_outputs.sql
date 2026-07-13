@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS balun_4x1_outputs (
 ALTER TABLE balun_4x1_outputs ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS para balun_4x1_outputs
+DROP POLICY IF EXISTS "Users can view own balun 4x1 outputs" ON balun_4x1_outputs;
+DROP POLICY IF EXISTS "Users can insert own balun 4x1 outputs" ON balun_4x1_outputs;
+DROP POLICY IF EXISTS "Users can update own balun 4x1 outputs" ON balun_4x1_outputs;
+DROP POLICY IF EXISTS "Users can delete own balun 4x1 outputs" ON balun_4x1_outputs;
+
 CREATE POLICY "Users can view own balun 4x1 outputs" ON balun_4x1_outputs FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own balun 4x1 outputs" ON balun_4x1_outputs FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own balun 4x1 outputs" ON balun_4x1_outputs FOR UPDATE USING (auth.uid() = user_id);
@@ -40,6 +45,8 @@ BEGIN
    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_balun_4x1_outputs_updated_at ON balun_4x1_outputs;
 
 CREATE TRIGGER trigger_balun_4x1_outputs_updated_at
   BEFORE UPDATE ON balun_4x1_outputs
@@ -67,6 +74,11 @@ CREATE TABLE IF NOT EXISTS device_backups (
 ALTER TABLE device_backups ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS para device_backups
+DROP POLICY IF EXISTS "Users can view own device backups" ON device_backups;
+DROP POLICY IF EXISTS "Users can insert own device backups" ON device_backups;
+DROP POLICY IF EXISTS "Users can update own device backups" ON device_backups;
+DROP POLICY IF EXISTS "Users can delete own device backups" ON device_backups;
+
 CREATE POLICY "Users can view own device backups" ON device_backups FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own device backups" ON device_backups FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own device backups" ON device_backups FOR UPDATE USING (auth.uid() = user_id);
@@ -84,20 +96,126 @@ CREATE INDEX IF NOT EXISTS idx_device_backups_client ON device_backups(client_id
 
 -- Insere o bucket se ele não existir
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('device-backups', 'device-backups', true)
+VALUES ('device-backups', 'device-backups', false)
 ON CONFLICT (id) DO NOTHING;
+
+UPDATE storage.buckets
+SET public = false
+WHERE id = 'device-backups';
 
 -- Políticas de Storage para o bucket 'device-backups'
 -- (Exclui políticas antigas se existirem para evitar conflito)
 DROP POLICY IF EXISTS "Allow public select on backups" ON storage.objects;
 DROP POLICY IF EXISTS "Allow authenticated insert on backups" ON storage.objects;
 DROP POLICY IF EXISTS "Allow authenticated delete on backups" ON storage.objects;
+DROP POLICY IF EXISTS "Users can select own private backups" ON storage.objects;
+DROP POLICY IF EXISTS "Users can insert own private backups" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update own private backups" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own private backups" ON storage.objects;
 
-CREATE POLICY "Allow public select on backups" ON storage.objects 
-  FOR SELECT USING (bucket_id = 'device-backups');
+CREATE POLICY "Users can select own private backups" ON storage.objects
+  FOR SELECT TO authenticated USING (
+    bucket_id = 'device-backups'
+    AND (
+      split_part(name, '/', 1) = auth.uid()::text
+      OR (
+        split_part(name, '/', 1) IN ('documents', 'media')
+        AND split_part(name, '/', 2) ~* '^[0-9a-f-]{36}$'
+        AND EXISTS (
+          SELECT 1 FROM public.clients
+          WHERE clients.id = split_part(name, '/', 2)::uuid
+          AND clients.user_id = auth.uid()
+        )
+      )
+      OR EXISTS (
+        SELECT 1 FROM public.device_backups
+        WHERE device_backups.file_path = storage.objects.name
+        AND device_backups.user_id = auth.uid()
+      )
+    )
+  );
 
-CREATE POLICY "Allow authenticated insert on backups" ON storage.objects 
-  FOR INSERT TO authenticated WITH CHECK (bucket_id = 'device-backups');
+CREATE POLICY "Users can insert own private backups" ON storage.objects
+  FOR INSERT TO authenticated WITH CHECK (
+    bucket_id = 'device-backups'
+    AND (
+      split_part(name, '/', 1) = auth.uid()::text
+      OR (
+        split_part(name, '/', 1) IN ('documents', 'media')
+        AND split_part(name, '/', 2) ~* '^[0-9a-f-]{36}$'
+        AND EXISTS (
+          SELECT 1 FROM public.clients
+          WHERE clients.id = split_part(name, '/', 2)::uuid
+          AND clients.user_id = auth.uid()
+        )
+      )
+      OR EXISTS (
+        SELECT 1 FROM public.device_backups
+        WHERE device_backups.file_path = storage.objects.name
+        AND device_backups.user_id = auth.uid()
+      )
+    )
+  );
 
-CREATE POLICY "Allow authenticated delete on backups" ON storage.objects 
-  FOR DELETE TO authenticated USING (bucket_id = 'device-backups');
+CREATE POLICY "Users can update own private backups" ON storage.objects
+  FOR UPDATE TO authenticated USING (
+    bucket_id = 'device-backups'
+    AND (
+      split_part(name, '/', 1) = auth.uid()::text
+      OR (
+        split_part(name, '/', 1) IN ('documents', 'media')
+        AND split_part(name, '/', 2) ~* '^[0-9a-f-]{36}$'
+        AND EXISTS (
+          SELECT 1 FROM public.clients
+          WHERE clients.id = split_part(name, '/', 2)::uuid
+          AND clients.user_id = auth.uid()
+        )
+      )
+      OR EXISTS (
+        SELECT 1 FROM public.device_backups
+        WHERE device_backups.file_path = storage.objects.name
+        AND device_backups.user_id = auth.uid()
+      )
+    )
+  ) WITH CHECK (
+    bucket_id = 'device-backups'
+    AND (
+      split_part(name, '/', 1) = auth.uid()::text
+      OR (
+        split_part(name, '/', 1) IN ('documents', 'media')
+        AND split_part(name, '/', 2) ~* '^[0-9a-f-]{36}$'
+        AND EXISTS (
+          SELECT 1 FROM public.clients
+          WHERE clients.id = split_part(name, '/', 2)::uuid
+          AND clients.user_id = auth.uid()
+        )
+      )
+      OR EXISTS (
+        SELECT 1 FROM public.device_backups
+        WHERE device_backups.file_path = storage.objects.name
+        AND device_backups.user_id = auth.uid()
+      )
+    )
+  );
+
+CREATE POLICY "Users can delete own private backups" ON storage.objects
+  FOR DELETE TO authenticated USING (
+    bucket_id = 'device-backups'
+    AND (
+      split_part(name, '/', 1) = auth.uid()::text
+      OR (
+        split_part(name, '/', 1) IN ('documents', 'media')
+        AND split_part(name, '/', 2) ~* '^[0-9a-f-]{36}$'
+        AND EXISTS (
+          SELECT 1 FROM public.clients
+          WHERE clients.id = split_part(name, '/', 2)::uuid
+          AND clients.user_id = auth.uid()
+        )
+      )
+      OR EXISTS (
+        SELECT 1 FROM public.device_backups
+        WHERE device_backups.file_path = storage.objects.name
+        AND device_backups.user_id = auth.uid()
+      )
+    )
+  );

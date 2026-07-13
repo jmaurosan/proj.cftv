@@ -78,19 +78,27 @@ export const POE_STANDARDS = [
 // ============================================
 
 export const CABLE_TYPES = [
+  { value: 'coaxial_rg59', label: 'Coaxial RG59 (vídeo)' },
   { value: 'coaxial_alimentado', label: 'Coaxial com Alimentação' },
   { value: 'utp_cat5', label: 'UTP Cat5' },
   { value: 'utp_cat5_blindado', label: 'UTP Cat5 Blindado' },
   { value: 'utp_cat6', label: 'UTP Cat6' },
   { value: 'utp_cat6_blindado', label: 'UTP Cat6 Blindado' },
+  { value: 'fiber_optic', label: 'Fibra Óptica' },
+  { value: 'power_12v', label: 'Alimentação 12V' },
+  { value: 'power_24v', label: 'Alimentação 24V' },
 ] as const
 
 export const CABLE_TYPE_LABELS: Record<string, string> = {
+  coaxial_rg59: 'Coaxial RG59',
   coaxial_alimentado: 'Coaxial',
   utp_cat5: 'Cat5',
   utp_cat5_blindado: 'Cat5 Blind.',
   utp_cat6: 'Cat6',
   utp_cat6_blindado: 'Cat6 Blind.',
+  fiber_optic: 'Fibra Óptica',
+  power_12v: 'Alimentação 12V',
+  power_24v: 'Alimentação 24V',
 }
 
 export const WIRING_STANDARDS = [
@@ -101,6 +109,7 @@ export const WIRING_STANDARDS = [
 ] as const
 
 export const PAIR_FUNCTIONS = [
+  { value: 'video', label: 'Sinal de vídeo' },
   { value: 'dados', label: 'Dados' },
   { value: 'alimentacao', label: 'Alimentação' },
   { value: 'nao_utilizado', label: 'Não utilizado' },

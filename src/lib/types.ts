@@ -29,6 +29,8 @@ export interface Dvr {
   brand: string | null
   ip_address: string
   model: string | null
+  serial_number: string | null
+  installation_date: string | null
   location: string
   total_channels: number
   hd_capacity_tb: number | null
@@ -48,6 +50,11 @@ export interface Camera {
   id: string
   name: string
   brand: string | null
+  model: string | null
+  lens_type: string | null
+  ir_distance_meters: number | null
+  serial_number: string | null
+  installation_date: string | null
   technology: string | null
   connection_type: string
   dvr_id: string | null
@@ -58,6 +65,8 @@ export interface Camera {
   power_source_type: string | null
   power_supply_voltage: string | null
   power_supply_current_a: number | null
+  operating_voltage: string | null
+  current_consumption_a: number | null
   power_supply_brand: string | null
   power_supply_model: string | null
   location: string
@@ -67,6 +76,7 @@ export interface Camera {
   rtsp_url: string | null
   streaming_user: string | null
   streaming_password: string | null
+  media_mtx_stream_name?: string | null
   balun_id: string | null
   balun_port: number | null
   switch_id: string | null
@@ -81,11 +91,24 @@ export interface Camera {
   dvrs?: { name: string }
 }
 
+export interface CameraInstallationPhoto {
+  id: string
+  camera_id: string
+  storage_path: string
+  label: string | null
+  sort_order: number
+  user_id: string
+  created_at: string
+  updated_at: string
+}
+
 export type BalunType = 'passive' | 'power'
 
 export interface PowerBalun {
   id: string
   name: string
+  serial_number: string | null
+  installation_date: string | null
   balun_type: BalunType
   location: string
   total_ports: number
@@ -114,6 +137,8 @@ export interface Switch {
   name: string
   brand: string | null
   model: string | null
+  serial_number: string | null
+  installation_date: string | null
   location: string
   total_ports: number
   is_poe: boolean
@@ -244,6 +269,10 @@ export interface EquipmentModel {
   brand: string
   model: string
   resolution: string | null
+  lens_type?: string | null
+  ir_distance_meters?: number | null
+  operating_voltage?: string | null
+  current_consumption_a?: number | null
   channel_count: number | null
   poe_standard: string | null
   max_ports: number | null
@@ -254,11 +283,55 @@ export interface EquipmentModel {
   updated_at: string
 }
 
+export interface Rack {
+  id: string
+  topology_id: string
+  client_id: string
+  user_id: string
+  name: string
+  location: string
+  equipment_ids: string[]
+  has_nobreak: boolean
+  power_notes: string | null
+  cable_notes: string | null
+  media_paths: string[]
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type RackInsert = Omit<Rack, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+export type RackUpdate = Partial<Omit<Rack, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+
+export interface ProjectMonitor {
+  id: string
+  client_id: string
+  user_id: string
+  rack_id: string | null
+  name: string
+  brand: string
+  model: string
+  power_watts: number | null
+  input_voltage: string
+  location: string | null
+  serial_number: string | null
+  status: string
+  notes: string | null
+  created_at: string
+  updated_at: string
+  racks?: { name: string } | null
+}
+
+export type ProjectMonitorInsert = Omit<ProjectMonitor, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'racks'>
+export type ProjectMonitorUpdate = Partial<Omit<ProjectMonitor, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'racks'>>
+
 export interface Router {
   id: string
   name: string
   brand: string | null
   model: string | null
+  serial_number: string | null
+  installation_date: string | null
   device_type: string
   location: string | null
   ip_address: string | null

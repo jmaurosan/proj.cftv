@@ -1,13 +1,15 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { useState, useEffect, useMemo, type FormEvent } from 'react'
 import type { Router, InternetConnection } from '../../lib/types'
 import { STATUS_OPTIONS, ROUTER_TYPES, CONNECTION_TYPES_INTERNET, IP_TYPE_OPTIONS } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { useEquipmentModels } from '../../hooks/useEquipmentModels'
+import { findEquipmentModelByText } from '../../lib/equipmentModelCatalog'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
 import BackupManager from '../ui/BackupManager'
-import { Globe, Plus, Trash2 } from 'lucide-react'
+import { Globe, Package, Plus, Trash2 } from 'lucide-react'
 
 interface RouterFormProps {
   initialData?: Router | null
@@ -18,11 +20,14 @@ interface RouterFormProps {
 
 export default function RouterForm({ initialData, clientId, onSubmit, onCancel }: RouterFormProps) {
   const { user } = useAuth()
+  const { models: routerModels, saveModel } = useEquipmentModels('router')
 
   // Router basic data
   const [name, setName] = useState(initialData?.name ?? '')
   const [brand, setBrand] = useState(initialData?.brand ?? '')
   const [model, setModel] = useState(initialData?.model ?? '')
+  const [serialNumber, setSerialNumber] = useState(initialData?.serial_number ?? '')
+  const [installationDate, setInstallationDate] = useState(initialData?.installation_date ?? '')
   const [deviceType, setDeviceType] = useState(initialData?.device_type ?? 'generic')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [ipAddress, setIpAddress] = useState(initialData?.ip_address ?? '')
@@ -37,6 +42,25 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
   
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const brandOptions = useMemo(() => Array.from(new Set(
+    routerModels.map((item) => item.brand).filter(Boolean),
+  )).sort((a, b) => a.localeCompare(b, 'pt-BR')), [routerModels])
+
+  const applyRouterModel = (modelId: string) => {
+    const selected = routerModels.find((item) => item.id === modelId)
+    if (!selected) return
+    setBrand(selected.brand)
+    setModel(selected.model)
+    const deviceTypeMatch = selected.notes?.match(/Tipo:\s*([^|;]+)/i)
+    if (deviceTypeMatch?.[1]) setDeviceType(deviceTypeMatch[1].trim())
+  }
+
+  const handleModelTextChange = (nextModel: string) => {
+    setModel(nextModel)
+    const selected = findEquipmentModelByText(routerModels, nextModel, brand)
+    if (selected?.id) applyRouterModel(selected.id)
+  }
 
   // Clientes para seleção dinâmica se clientId não for fornecido por prop
   const [clients, setClients] = useState<{ id: string; name: string }[]>([])
@@ -60,6 +84,8 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
     setName(initialData?.name ?? '')
     setBrand(initialData?.brand ?? '')
     setModel(initialData?.model ?? '')
+    setSerialNumber(initialData?.serial_number ?? '')
+    setInstallationDate(initialData?.installation_date ?? '')
     setDeviceType(initialData?.device_type ?? 'generic')
     setLocation(initialData?.location ?? '')
     setIpAddress(initialData?.ip_address ?? '')
@@ -139,6 +165,8 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
       name,
       brand: brand || null,
       model: model || null,
+      serial_number: serialNumber || null,
+      installation_date: installationDate || null,
       device_type: deviceType,
       location: location || null,
       ip_address: ipAddress || null,
@@ -153,6 +181,20 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
       setError(result.error)
       setLoading(false)
       return
+    }
+
+    if (brand && model) {
+      await saveModel({
+        type: 'router',
+        brand,
+        model,
+        resolution: null,
+        channel_count: null,
+        poe_standard: null,
+        max_ports: null,
+        is_poe: false,
+        notes: `Tipo: ${deviceType}`,
+      })
     }
 
     setLoading(false)
@@ -242,6 +284,24 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
         </div>
       )}
 
+      {routerModels.length > 0 && (
+        <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3">
+          <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5 mb-2">
+            <Package className="w-3.5 h-3.5" />
+            Modelo cadastrado (opcional)
+          </label>
+          <Select
+            value=""
+            onChange={(e) => applyRouterModel(e.target.value)}
+            options={routerModels.map((item) => ({
+              value: item.id,
+              label: `${item.brand ? `${item.brand} ` : ''}${item.model}`,
+            }))}
+            placeholder="Selecione para preencher automaticamente"
+          />
+        </div>
+      )}
+
       {!clientId && !initialData?.client_id && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select
@@ -279,12 +339,35 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
           value={brand}
           onChange={(e) => setBrand(e.target.value)}
           placeholder="Ex: Ubiquiti, MikroTik, TP-Link"
+          list="router-brands"
         />
         <Input
           label="Modelo"
           value={model}
-          onChange={(e) => setModel(e.target.value)}
+          onChange={(e) => handleModelTextChange(e.target.value)}
           placeholder="Ex: EdgeRouter X, RB750, Archer AX6000"
+          list="router-models"
+        />
+        <datalist id="router-brands">
+          {brandOptions.map((item) => <option key={item} value={item} />)}
+        </datalist>
+        <datalist id="router-models">
+          {routerModels.map((item) => <option key={item.id} value={item.model} />)}
+        </datalist>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          label="SN / Número de série"
+          value={serialNumber}
+          onChange={(e) => setSerialNumber(e.target.value)}
+          placeholder="Número de série do equipamento"
+        />
+        <Input
+          label="Data de instalação"
+          type="date"
+          value={installationDate}
+          onChange={(e) => setInstallationDate(e.target.value)}
         />
       </div>
 

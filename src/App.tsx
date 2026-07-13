@@ -5,21 +5,26 @@ import { ClientProvider } from './contexts/ClientContext'
 import { ToastProvider } from './components/ui/Toast'
 import AppLayout from './components/layout/AppLayout'
 import PWAUpdatePrompt from './components/ui/PWAUpdatePrompt'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import DvrsPage from './pages/DvrsPage'
-import CamerasPage from './pages/CamerasPage'
-import BalunsPage from './pages/BalunsPage'
-import SwitchesPage from './pages/SwitchesPage'
-import RoutersPage from './pages/RoutersPage'
-import CredentialsPage from './pages/CredentialsPage'
-import ClientsPage from './pages/ClientsPage'
-import ChannelMappingPage from './pages/ChannelMappingPage'
 import LoadingSpinner from './components/ui/LoadingSpinner'
-import CrimpPage from './pages/CrimpPage'
-import FloorPlanPage from './pages/FloorPlanPage'
-import TopologyPage from './pages/TopologyPage'
 
+const Login = lazy(() => import('./pages/Login'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const DvrsPage = lazy(() => import('./pages/DvrsPage'))
+const CamerasPage = lazy(() => import('./pages/CamerasPage'))
+const LocalViewerPage = lazy(() => import('./pages/LocalViewerPage'))
+const BalunsPage = lazy(() => import('./pages/BalunsPage'))
+const SwitchesPage = lazy(() => import('./pages/SwitchesPage'))
+const RoutersPage = lazy(() => import('./pages/RoutersPage'))
+const RacksPage = lazy(() => import('./pages/RacksPage'))
+const MonitorsPage = lazy(() => import('./pages/MonitorsPage'))
+const CredentialsPage = lazy(() => import('./pages/CredentialsPage'))
+const ClientsPage = lazy(() => import('./pages/ClientsPage'))
+const ChannelMappingPage = lazy(() => import('./pages/ChannelMappingPage'))
+const CrimpPage = lazy(() => import('./pages/CrimpPage'))
+const FloorPlanPage = lazy(() => import('./pages/FloorPlanPage'))
+const TopologyPage = lazy(() => import('./pages/TopologyPage'))
+const PowerProtectionPage = lazy(() => import('./pages/PowerProtectionPage'))
+const DocumentsMediaPage = lazy(() => import('./pages/DocumentsMediaPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 
 export default function App() {
@@ -28,24 +33,31 @@ export default function App() {
       <AuthProvider>
         <ClientProvider>
           <ToastProvider>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route element={<AppLayout />}>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/clientes" element={<ClientsPage />} />
-                <Route path="/dvrs" element={<DvrsPage />} />
-                <Route path="/cameras" element={<CamerasPage />} />
-                <Route path="/mapeamento" element={<ChannelMappingPage />} />
-                <Route path="/baluns" element={<BalunsPage />} />
-                <Route path="/switches" element={<SwitchesPage />} />
-                <Route path="/roteadores" element={<RoutersPage />} />
-                <Route path="/credenciais" element={<CredentialsPage />} />
-                <Route path="/crimpagem" element={<CrimpPage />} />
-                <Route path="/plantabaixa" element={<FloorPlanPage />} />
-                <Route path="/topologia" element={<TopologyPage />} />
-                <Route path="/relatorios" element={<Suspense fallback={<LoadingSpinner />}><ReportsPage /></Suspense>} />
-              </Route>
-            </Routes>
+            <Suspense fallback={<LoadingSpinner />}>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route element={<AppLayout />}>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/clientes" element={<ClientsPage />} />
+                  <Route path="/dvrs" element={<DvrsPage />} />
+                  <Route path="/cameras" element={<CamerasPage />} />
+                  <Route path="/visualizacao-local" element={<LocalViewerPage />} />
+                  <Route path="/mapeamento" element={<ChannelMappingPage />} />
+                  <Route path="/baluns" element={<BalunsPage />} />
+                  <Route path="/switches" element={<SwitchesPage />} />
+                  <Route path="/roteadores" element={<RoutersPage />} />
+                  <Route path="/racks" element={<RacksPage />} />
+                  <Route path="/monitores" element={<MonitorsPage />} />
+                  <Route path="/credenciais" element={<CredentialsPage />} />
+                  <Route path="/crimpagem" element={<CrimpPage />} />
+                  <Route path="/plantabaixa" element={<FloorPlanPage />} />
+                  <Route path="/topologia" element={<TopologyPage />} />
+                  <Route path="/relatorios" element={<ReportsPage />} />
+                  <Route path="/energia-documentos" element={<PowerProtectionPage />} />
+                  <Route path="/documentos-midias" element={<DocumentsMediaPage />} />
+                </Route>
+              </Routes>
+            </Suspense>
             <PWAUpdatePrompt />
           </ToastProvider>
         </ClientProvider>

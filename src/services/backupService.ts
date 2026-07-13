@@ -1,19 +1,24 @@
 import { supabase } from './supabase'
 import type { DeviceBackup } from '../lib/types'
+import { DEVICE_BACKUP_SIGNED_URL_EXPIRES_SECONDS, buildDeviceBackupPath } from '../lib/storageSecurity'
 
 const BUCKET_NAME = 'device-backups'
 
 export async function uploadDeviceBackup(
   file: File,
+  userId: string,
   clientId: string | null,
   equipmentType: 'router' | 'switch' | 'dvr',
   equipmentId: string,
   notes?: string
 ): Promise<{ data: DeviceBackup | null; error: string | null }> {
   try {
-    const timestamp = Date.now()
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-    const filePath = `${equipmentType}/${equipmentId}/${timestamp}_${sanitizedFileName}`
+    const filePath = buildDeviceBackupPath({
+      userId,
+      equipmentType,
+      equipmentId,
+      fileName: file.name,
+    })
 
     // 1. Upload no Supabase Storage
     const { error: uploadError } = await supabase.storage
@@ -38,6 +43,7 @@ export async function uploadDeviceBackup(
         file_path: filePath,
         file_size: file.size,
         notes: notes || null,
+        user_id: userId,
       })
       .select()
       .single()
@@ -99,7 +105,10 @@ export async function deleteDeviceBackup(backupId: string, filePath: string): Pr
   }
 }
 
-export function getBackupDownloadUrl(filePath: string): string {
-  const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath)
-  return data?.publicUrl || ''
+export async function getBackupDownloadUrl(filePath: string): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .createSignedUrl(filePath, DEVICE_BACKUP_SIGNED_URL_EXPIRES_SECONDS)
+  if (error) return null
+  return data?.signedUrl || null
 }

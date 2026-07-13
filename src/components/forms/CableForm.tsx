@@ -7,6 +7,11 @@ import {
   WIRE_COLORS,
 } from '../../lib/constants'
 import { useCableConnection } from '../../hooks/useCableConnection'
+import {
+  applyPairFunctionPreset,
+  detectPairFunctionPreset,
+  type PairFunctionPreset,
+} from '../../lib/balunConfiguration'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
@@ -19,6 +24,14 @@ interface CableFormProps {
 
 const isUtp = (type: string) => type.startsWith('utp_')
 
+const PAIR_PRESET_OPTIONS = [
+  { value: 'custom', label: 'Personalizado' },
+  { value: 'video_only', label: '1 par para vídeo' },
+  { value: 'video_power_1', label: '1 par vídeo + 1 par alimentação' },
+  { value: 'video_power_2', label: '1 par vídeo + 2 pares alimentação' },
+  { value: 'network_data', label: 'Todos os pares para dados' },
+]
+
 /** Split "Azul / Branco-Azul" into ["Azul", "Branco-Azul"] */
 function splitColors(pair: string): [string, string] {
   const parts = pair.split(' / ')
@@ -30,11 +43,78 @@ function joinColors(a: string, b: string): string {
   return `${a} / ${b}`
 }
 
+const PIN_ORDERS: Record<string, string[]> = {
+  T568A: ['Branco-Verde', 'Verde', 'Branco-Laranja', 'Azul', 'Branco-Azul', 'Laranja', 'Branco-Marrom', 'Marrom'],
+  T568B: ['Branco-Laranja', 'Laranja', 'Branco-Verde', 'Azul', 'Branco-Azul', 'Verde', 'Branco-Marrom', 'Marrom'],
+  sequencial: ['Azul', 'Branco-Azul', 'Laranja', 'Branco-Laranja', 'Verde', 'Branco-Verde', 'Marrom', 'Branco-Marrom'],
+}
+
+const WIRE_HEX: Record<string, string> = {
+  Azul: '#2563eb',
+  Laranja: '#f97316',
+  Verde: '#16a34a',
+  Marrom: '#7c3f16',
+}
+
+const parseStoredStandards = (value: string | null) => {
+  const stored = value || 'T568B'
+  if (stored.includes('->')) {
+    const [camera, equipment] = stored.split('->')
+    return { camera: camera || 'T568B', equipment: equipment || 'T568B' }
+  }
+  return { camera: stored, equipment: stored }
+}
+
+function CrimpPreview({ title, standard, customOrder }: { title: string; standard: string; customOrder: string[] }) {
+  const order = standard === 'personalizado' ? customOrder : PIN_ORDERS[standard] || PIN_ORDERS.T568B
+
+  return (
+    <div className="rounded-lg border border-border-light bg-bg-primary/70 p-3">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div>
+          <p className="text-xs font-semibold text-text-primary">{title}</p>
+          <p className="text-[9px] text-text-muted">Contatos para cima · pino 1 à esquerda</p>
+        </div>
+        <span className="text-[10px] font-mono text-accent">{standard}</span>
+      </div>
+      <div className="grid grid-cols-8 gap-1 rounded-md border border-border-light bg-slate-900/70 p-2">
+        {order.map((wire, index) => {
+          const isWhite = wire.startsWith('Branco-')
+          const base = wire.replace('Branco-', '')
+          const color = WIRE_HEX[base] || '#64748b'
+          return (
+            <div key={`${wire}-${index}`} className="min-w-0 text-center">
+              <span className="block text-[8px] font-mono text-slate-300 mb-1">{index + 1}</span>
+              <span
+                className="block h-12 rounded-sm border border-white/20"
+                style={{
+                  background: isWhite
+                    ? `repeating-linear-gradient(135deg, #f8fafc 0 5px, ${color} 5px 8px)`
+                    : color,
+                }}
+                title={`${index + 1}: ${wire}`}
+              />
+            </div>
+          )
+        })}
+      </div>
+      <div className="grid grid-cols-8 gap-1 mt-1">
+        {order.map((wire, index) => (
+          <span key={`${wire}-label-${index}`} className="text-[7px] text-text-muted text-center truncate" title={wire}>
+            {wire.replace('Branco-', 'B/')}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps) {
   const { data, loading: fetching, save, remove, fetch } = useCableConnection(cameraId)
 
   const [cableType, setCableType] = useState('utp_cat5')
-  const [wiringStandard, setWiringStandard] = useState('T568B')
+  const [cameraEndStandard, setCameraEndStandard] = useState('T568B')
+  const [equipmentEndStandard, setEquipmentEndStandard] = useState('T568B')
   const [customColorOrder, setCustomColorOrder] = useState('')
 
   // Each pair: two wire colors + function
@@ -70,7 +150,9 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
   useEffect(() => {
     if (!data) return
     setCableType(data.cable_type)
-    setWiringStandard(data.wiring_standard ?? 'T568B')
+    const standards = parseStoredStandards(data.wiring_standard)
+    setCameraEndStandard(standards.camera)
+    setEquipmentEndStandard(standards.equipment)
     setCustomColorOrder(data.custom_color_order ?? '')
 
     const [p1a, p1b] = splitColors(data.pair1_colors)
@@ -99,8 +181,8 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
   }, [data])
 
   // Auto-fill colors when wiring standard changes
-  const handleStandardChange = (standard: string) => {
-    setWiringStandard(standard)
+  const handleCameraStandardChange = (standard: string) => {
+    setCameraEndStandard(standard)
     const colors = DEFAULT_PAIR_COLORS[standard]
     if (colors) {
       const [p1a, p1b] = splitColors(colors[0])
@@ -114,6 +196,16 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
     }
   }
 
+  const handlePairPresetChange = (preset: string) => {
+    if (preset === 'custom') return
+    const [pair1, pair2, pair3, pair4] = applyPairFunctionPreset(preset as PairFunctionPreset)
+    setPair1Function(pair1)
+    setPair2Function(pair2)
+    setPair3Function(pair3)
+    setPair4Function(pair4)
+    if ([pair1, pair2, pair3, pair4].includes('alimentacao')) setHasExternalPower(true)
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setSaving(true)
@@ -121,8 +213,12 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
 
     const payload: Record<string, unknown> = {
       cable_type: cableType,
-      wiring_standard: isUtp(cableType) ? wiringStandard : null,
-      custom_color_order: wiringStandard === 'personalizado' ? customColorOrder : null,
+      wiring_standard: isUtp(cableType)
+        ? cameraEndStandard === equipmentEndStandard
+          ? cameraEndStandard
+          : `${cameraEndStandard}->${equipmentEndStandard}`
+        : null,
+      custom_color_order: cameraEndStandard === 'personalizado' || equipmentEndStandard === 'personalizado' ? customColorOrder : null,
       pair1_function: isUtp(cableType) ? pair1Function : null,
       pair1_colors: isUtp(cableType) ? joinColors(pair1Wire1, pair1Wire2) : null,
       pair2_function: isUtp(cableType) ? pair2Function : null,
@@ -174,6 +270,13 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
     { n: 3, w1: pair3Wire1, setW1: setPair3Wire1, w2: pair3Wire2, setW2: setPair3Wire2, fn: pair3Function, setFn: setPair3Function },
     { n: 4, w1: pair4Wire1, setW1: setPair4Wire1, w2: pair4Wire2, setW2: setPair4Wire2, fn: pair4Function, setFn: setPair4Function },
   ]
+  const currentPairPreset = detectPairFunctionPreset(pairs.map((pair) => pair.fn))
+  const customWireOrder = [
+    pair1Wire1, pair1Wire2,
+    pair2Wire1, pair2Wire2,
+    pair3Wire1, pair3Wire2,
+    pair4Wire1, pair4Wire2,
+  ]
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -208,15 +311,45 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
         <>
           <div className="border-t border-border-light pt-4">
             <h4 className="text-sm font-semibold text-text-primary mb-3">Configuração dos Pares</h4>
-            <Select
-              label="Padrão de Cores"
-              value={wiringStandard}
-              onChange={(e) => handleStandardChange(e.target.value)}
-              options={WIRING_STANDARDS}
-            />
+            <div className="mb-4 rounded-lg border border-border-light bg-bg-primary/40 p-3">
+              <Select
+                label="Distribuição rápida dos pares"
+                value={currentPairPreset}
+                onChange={(event) => handlePairPresetChange(event.target.value)}
+                options={PAIR_PRESET_OPTIONS}
+              />
+              <p className="mt-2 text-[10px] text-text-muted">
+                O preset altera apenas a função dos pares. As cores permanecem editáveis abaixo.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select
+                label="Ponta da câmera"
+                value={cameraEndStandard}
+                onChange={(e) => handleCameraStandardChange(e.target.value)}
+                options={WIRING_STANDARDS}
+              />
+              <Select
+                label="Ponta do DVR / switch / balun"
+                value={equipmentEndStandard}
+                onChange={(e) => setEquipmentEndStandard(e.target.value)}
+                options={WIRING_STANDARDS}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 mt-4">
+              <CrimpPreview title="Ponta da câmera" standard={cameraEndStandard} customOrder={customWireOrder} />
+              <CrimpPreview title="Ponta do equipamento" standard={equipmentEndStandard} customOrder={customWireOrder} />
+            </div>
+
+            <div className="mt-3 rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 text-xs text-text-secondary">
+              {cameraEndStandard === equipmentEndStandard
+                ? `Ligação direta: ${cameraEndStandard}-${equipmentEndStandard}`
+                : `Ligação cruzada/personalizada: ${cameraEndStandard}-${equipmentEndStandard}`}
+            </div>
           </div>
 
-          {wiringStandard === 'personalizado' && (
+          {(cameraEndStandard === 'personalizado' || equipmentEndStandard === 'personalizado') && (
             <Input
               label="Descrição do padrão personalizado"
               value={customColorOrder}
@@ -227,6 +360,37 @@ export default function CableForm({ cameraId, onClose, onSaved }: CableFormProps
 
           {/* Pairs with color selects */}
           <div className="space-y-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              {pairs.map(({ n, w1, w2, fn }) => {
+                const functionLabel = PAIR_FUNCTIONS.find((option) => option.value === fn)?.label || fn
+                const wireStyle = (wire: string) => {
+                  const isWhite = wire.startsWith('Branco-')
+                  const base = wire.replace('Branco-', '')
+                  const color = WIRE_HEX[base] || '#64748b'
+                  return isWhite
+                    ? `repeating-linear-gradient(135deg, #f8fafc 0 5px, ${color} 5px 8px)`
+                    : color
+                }
+                return (
+                  <div key={`pair-summary-${n}`} className="rounded-lg border border-border-light bg-bg-primary/70 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold text-text-primary">Par {n}</span>
+                      <span className="text-[9px] text-accent text-right">{functionLabel}</span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-1">
+                      {[w1, w2].map((wire, index) => (
+                        <span
+                          key={`${wire}-${index}`}
+                          className="h-5 rounded-sm border border-white/20"
+                          style={{ background: wireStyle(wire) }}
+                          title={wire}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
             {pairs.map(({ n, w1, setW1, w2, setW2, fn, setFn }) => (
               <div key={n} className="bg-bg-primary/50 border border-border-light/50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">

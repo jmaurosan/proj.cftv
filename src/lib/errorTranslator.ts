@@ -14,8 +14,16 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
     'Já existe uma câmera cadastrada neste canal do DVR. Escolha outro canal ou edite a câmera existente.',
   uq_cameras_ip_address:
     'Já existe uma câmera cadastrada com este endereço IP.',
+  uq_cameras_client_name:
+    'Já existe uma câmera cadastrada com este nome para o cliente.',
+  uq_cameras_balun_port:
+    'Esta porta do Power Balun já está vinculada a outra câmera.',
+  uq_cameras_switch_port:
+    'Esta porta do switch já está vinculada a outro dispositivo.',
   uq_dvrs_ip_address:
     'Já existe um DVR cadastrado com este endereço IP.',
+  uq_dvrs_client_name:
+    'Já existe um DVR cadastrado com este nome para o cliente.',
   uq_switches_ip_address:
     'Já existe um switch cadastrado com este endereço IP.',
   uq_balun_ports_balun_port:

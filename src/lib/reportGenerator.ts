@@ -2,6 +2,10 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Dvr, Camera, Switch, PowerBalun, CableConnection, Router, Credential } from './types'
 import { CABLE_TYPE_LABELS } from './constants'
+import type { FloorPlanReportConfig, FloorPlanReportSummary } from './floorPlanReport'
+import { describeBatteryBank, type EquipmentDocument, type Nobreak } from './projectAssets'
+import { getEquipmentDocumentUrl } from '../services/projectAssetsService'
+import { getInstallationPhotoUrl, getQRCodeImageUrl } from '../services/storageService'
 
 interface ReportData {
   dvrs: Dvr[]
@@ -14,6 +18,10 @@ interface ReportData {
   userEmail: string
   clientName: string
   projectName: string
+  floorPlan?: FloorPlanReportConfig | null
+  floorPlanSummary?: FloorPlanReportSummary | null
+  nobreaks?: Nobreak[]
+  equipmentDocuments?: EquipmentDocument[]
 }
 
 const COLORS = {
@@ -161,6 +169,197 @@ function drawSummaryBox(doc: jsPDF, x: number, y: number, w: number, h: number, 
   doc.text(label, x + w / 2, y + 20, { align: 'center' })
 }
 
+function drawFloorPlanPage(doc: jsPDF, data: ReportData, headerSubtitle: string) {
+  const floorPlan = data.floorPlan
+  const summary = data.floorPlanSummary
+  if (!floorPlan || !summary) return
+
+  doc.addPage()
+  addPageHeader(doc, 'Planta Técnica & Cobertura', headerSubtitle)
+  let y = addSectionTitle(doc, 36, '5', 'Mapa Técnico Consolidado')
+
+  const boxW = 42.5
+  drawSummaryBox(doc, 14, y, boxW, 22, `${summary.coveragePercentage}%`, 'Cobertura estimada', COLORS.primary)
+  drawSummaryBox(doc, 60.5, y, boxW, 22, `${summary.estimatedCableMeters} m`, 'Cabos estimados', COLORS.warning)
+  drawSummaryBox(doc, 107, y, boxW, 22, `${summary.usedSwitchPorts}/${summary.totalSwitchPorts}`, 'Portas de switch', COLORS.success)
+  drawSummaryBox(doc, 153.5, y, boxW, 22, `${summary.usedRecorderChannels}/${summary.totalRecorderChannels}`, 'Canais DVR/NVR', [99, 102, 241])
+  y += 30
+
+  const mapX = 14
+  const mapY = y
+  const mapW = 182
+  const mapH = 135
+  doc.setFillColor(248, 250, 252)
+  doc.setDrawColor(...COLORS.border)
+  doc.roundedRect(mapX, mapY, mapW, mapH, 2, 2, 'FD')
+
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.15)
+  for (let column = 1; column < 10; column += 1) doc.line(mapX + column * mapW / 10, mapY, mapX + column * mapW / 10, mapY + mapH)
+  for (let row = 1; row < 8; row += 1) doc.line(mapX, mapY + row * mapH / 8, mapX + mapW, mapY + row * mapH / 8)
+
+  const symbolById = new Map(floorPlan.technicalSymbols.map((symbol) => [symbol.id, symbol]))
+  const pointFor = (id: string) => floorPlan.positions[id] || symbolById.get(id)
+  const toMap = (point: { x: number; y: number }) => ({
+    x: mapX + point.x / 100 * mapW,
+    y: mapY + point.y / 100 * mapH,
+  })
+
+  doc.setLineWidth(0.45)
+  for (const camera of data.cameras) {
+    const source = floorPlan.positions[camera.id]
+    const target = floorPlan.positions[camera.switch_id || camera.dvr_id || '']
+    if (!source || !target) continue
+    const a = toMap(source)
+    const b = toMap(target)
+    doc.setDrawColor(...COLORS.primary)
+    doc.setLineDashPattern([1.5, 1], 0)
+    doc.line(a.x, a.y, b.x, b.y)
+  }
+  for (const connection of floorPlan.manualConnections) {
+    const source = pointFor(connection.sourceId)
+    const target = pointFor(connection.targetId)
+    if (!source || !target) continue
+    const a = toMap(source)
+    const b = toMap(target)
+    doc.setDrawColor(14, 165, 233)
+    doc.setLineDashPattern(connection.lineStyle === 'dashed' ? [2, 1.2] : [], 0)
+    doc.line(a.x, a.y, b.x, b.y)
+  }
+  doc.setLineDashPattern([], 0)
+
+  const equipmentNames = new Map<string, string>([
+    ...data.cameras.map((item) => [item.id, item.name] as [string, string]),
+    ...data.dvrs.map((item) => [item.id, item.name] as [string, string]),
+    ...data.switches.map((item) => [item.id, item.name] as [string, string]),
+    ...data.routers.map((item) => [item.id, item.name] as [string, string]),
+    ...data.baluns.map((item) => [item.id, item.name] as [string, string]),
+  ])
+  for (const [id, position] of Object.entries(floorPlan.positions)) {
+    const point = toMap(position)
+    const isCamera = position.type === 'camera'
+    doc.setFillColor(...(isCamera ? COLORS.primary : COLORS.headerBg))
+    doc.setDrawColor(...COLORS.white)
+    doc.circle(point.x, point.y, isCamera ? 2.3 : 3, 'FD')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(5.5)
+    doc.setTextColor(...COLORS.text)
+    doc.text((equipmentNames.get(id) || position.type || 'Equipamento').slice(0, 24), point.x + 3.5, point.y + 1.5)
+  }
+  for (const symbol of floorPlan.technicalSymbols) {
+    const point = toMap(symbol)
+    doc.setFillColor(16, 185, 129)
+    doc.setDrawColor(...COLORS.white)
+    doc.circle(point.x, point.y, 2.5, 'FD')
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(5.5)
+    doc.setTextColor(...COLORS.text)
+    doc.text(symbol.label.slice(0, 24), point.x + 3.5, point.y + 1.5)
+  }
+
+  y = mapY + mapH + 8
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(...COLORS.muted)
+  doc.text(`Dimensões de referência: ${floorPlan.planWidthMeters} m x ${floorPlan.planHeightMeters} m`, 14, y)
+  doc.text(`${summary.positionedEquipment} equipamento(s), ${summary.technicalSymbols} símbolo(s) e ${summary.manualConnections} conexão(ões) manual(is).`, 196, y, { align: 'right' })
+  doc.text('Cobertura e metragem são estimativas técnicas baseadas nas posições e parâmetros configurados na planta.', 14, y + 5)
+}
+
+async function drawPowerProtectionPage(doc: jsPDF, data: ReportData, headerSubtitle: string) {
+  const nobreaks = data.nobreaks || []
+  const documents = data.equipmentDocuments || []
+  if (nobreaks.length === 0 && documents.length === 0) return
+
+  doc.addPage()
+  addPageHeader(doc, 'Proteção Elétrica & Documentação', headerSubtitle)
+  let y = addSectionTitle(doc, 36, '6', 'Nobreaks, Baterias e Arquivos Técnicos')
+  const protectedCount = nobreaks.filter((item) => item.hasProtection).length
+  const batteryCount = nobreaks.reduce((sum, item) => sum + item.batteryQuantity, 0)
+  drawSummaryBox(doc, 14, y, 42.5, 22, String(nobreaks.length), 'Nobreaks', [99, 102, 241])
+  drawSummaryBox(doc, 60.5, y, 42.5, 22, String(protectedCount), 'Com proteção', COLORS.success)
+  drawSummaryBox(doc, 107, y, 42.5, 22, String(batteryCount), 'Baterias', COLORS.warning)
+  drawSummaryBox(doc, 153.5, y, 42.5, 22, String(documents.length), 'Documentos', COLORS.primary)
+  y += 30
+
+  if (nobreaks.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      head: [['Nobreak', 'Potência', 'Entrada / Saída', 'Banco de baterias', 'Proteção', 'Escopo']],
+      body: nobreaks.map((item) => [
+        `${item.name}\n${item.brand} ${item.model}`,
+        `${item.ratedPowerVa} VA / ${item.ratedPowerWatts} W`,
+        `${item.inputVoltage} V / ${item.outputVoltage} V`,
+        `${describeBatteryBank(item)}${item.batteryBrand ? `\n${item.batteryBrand} ${item.batteryModel}` : ''}`,
+        item.hasProtection ? item.protections.join(', ') : 'Não possui',
+        item.powersWholeProject ? 'Todo o sistema' : `${item.poweredEquipmentIds.length} equipamento(s)`,
+      ]),
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 6.5, cellPadding: 2, textColor: COLORS.text },
+      headStyles: { fillColor: COLORS.headerBg, textColor: COLORS.white, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: COLORS.rowAlt },
+    })
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 9
+  }
+
+  if (documents.length > 0) {
+    if (y > 220) {
+      doc.addPage()
+      addPageHeader(doc, 'Índice de Documentação Técnica', headerSubtitle)
+      y = 38
+    }
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...COLORS.text)
+    doc.text('Documentos e links oficiais', 14, y)
+    y += 3
+    autoTable(doc, {
+      startY: y,
+      head: [['Título', 'Categoria', 'Equipamento', 'Arquivo', 'Link oficial']],
+      body: documents.map((item) => [
+        item.title,
+        item.category,
+        item.equipmentName,
+        item.fileName || '-',
+        item.manufacturerUrl ? 'Disponível' : '-',
+      ]),
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 7, cellPadding: 2, textColor: COLORS.text },
+      headStyles: { fillColor: COLORS.headerBg, textColor: COLORS.white, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: COLORS.rowAlt },
+    })
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
+  }
+
+  const documentFileLinks = await Promise.all(
+    documents
+      .filter((item) => item.filePath)
+      .map(async (item) => ({
+        label: `Arquivo: ${item.title}`,
+        url: await getEquipmentDocumentUrl(item.filePath as string),
+      }))
+  )
+  const links = [
+    ...nobreaks.filter((item) => item.manufacturerUrl).map((item) => ({ label: `Ficha oficial: ${item.name}`, url: item.manufacturerUrl })),
+    ...documentFileLinks.filter((item): item is { label: string; url: string } => !!item.url),
+    ...documents.filter((item) => item.manufacturerUrl).map((item) => ({ label: `Link oficial: ${item.title}`, url: item.manufacturerUrl })),
+  ] as { label: string; url: string }[]
+  for (const link of links) {
+    if (y > 278) {
+      doc.addPage()
+      addPageHeader(doc, 'Links da Documentação Técnica', headerSubtitle)
+      y = 38
+    }
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(...COLORS.text)
+    doc.text(link.label.slice(0, 80), 14, y)
+    doc.setTextColor(...COLORS.primary)
+    doc.textWithLink('Abrir documento', 196, y, { url: link.url, align: 'right' })
+    y += 5
+  }
+}
+
 // Auxiliar para carregar imagem remota e converter para base64
 function loadImageBase64(url: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -198,8 +397,10 @@ export async function generateReport(data: ReportData) {
   // 1. Pré-carregar todas as fotos de câmeras e QR codes em base64 para evitar bloqueios assíncronos no loop
   const cameraImages = await Promise.all(
     data.cameras.map(async (c) => {
-      const qrBase64 = c.qr_code_url ? await loadImageBase64(c.qr_code_url) : null
-      const photoBase64 = c.installation_photo_url ? await loadImageBase64(c.installation_photo_url) : null
+      const qrUrl = c.qr_code_url ? await getQRCodeImageUrl(c.qr_code_url) : null
+      const photoUrl = c.installation_photo_url ? await getInstallationPhotoUrl(c.installation_photo_url) : null
+      const qrBase64 = qrUrl ? await loadImageBase64(qrUrl) : null
+      const photoBase64 = photoUrl ? await loadImageBase64(photoUrl) : null
       return {
         id: c.id,
         qrBase64,
@@ -402,14 +603,22 @@ export async function generateReport(data: ReportData) {
   }
 
   // =========================================================
-  // PAGE 4+ — Fichas Técnicas das Câmeras (Premium Card Layout)
+  // PAGE 4 — Planta técnica salva no projeto
+  // =========================================================
+  drawFloorPlanPage(doc, data, headerSubtitle)
+
+  // Proteção elétrica, baterias e documentação dos equipamentos
+  await drawPowerProtectionPage(doc, data, headerSubtitle)
+
+  // =========================================================
+  // PAGE 6+ — Fichas Técnicas das Câmeras (Premium Card Layout)
   // =========================================================
   if (data.cameras.length > 0) {
     doc.addPage()
     addPageHeader(doc, 'Fichas Individuais de Câmeras', headerSubtitle)
     y = 36
 
-    y = addSectionTitle(doc, y, '5', 'Fichas Técnicas das Câmeras')
+    y = addSectionTitle(doc, y, '7', 'Fichas Técnicas das Câmeras')
 
     // Mapeamento de cabeamento indexado por câmera
     const cableMap = new Map(data.cables.map(c => [c.camera_id, c]))
@@ -556,7 +765,7 @@ export async function generateReport(data: ReportData) {
   addPageHeader(doc, 'Log de Entrega Técnica', headerSubtitle)
   y = 36
 
-  y = addSectionTitle(doc, y, '6', 'Log de Entrega Técnica & Aceite')
+  y = addSectionTitle(doc, y, '8', 'Log de Entrega Técnica & Aceite')
 
   const logItems = [
     ['Data/Hora de Geração', formatDate(now)],
@@ -568,6 +777,10 @@ export async function generateReport(data: ReportData) {
     ['Total de Switches', `${data.switches.length} (${countByStatus(data.switches).ativos} ativos)`],
     ['Total de Roteadores', `${data.routers.length} (${countByStatus(data.routers).ativos} ativos)`],
     ['Fichas de Cabeamento', `${data.cables.length} cadastradas`],
+    ['Cobertura da Planta', data.floorPlanSummary ? `${data.floorPlanSummary.coveragePercentage}% estimada` : 'Planta não configurada'],
+    ['Metragem Estimada', data.floorPlanSummary ? `${data.floorPlanSummary.estimatedCableMeters} metros` : '-'],
+    ['Nobreaks', `${data.nobreaks?.length || 0} cadastrado(s)`],
+    ['Documentos Técnicos', `${data.equipmentDocuments?.length || 0} item(ns)`],
   ]
 
   autoTable(doc, {

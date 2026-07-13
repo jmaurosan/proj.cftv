@@ -1,6 +1,7 @@
 import { useState, useMemo, type FormEvent, useEffect } from 'react'
 import type { Dvr } from '../../lib/types'
 import { STATUS_OPTIONS, CHANNEL_OPTIONS } from '../../lib/constants'
+import { findEquipmentModelByText } from '../../lib/equipmentModelCatalog'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import { useDvrChannels } from '../../hooks/useDvrChannels'
 import Input from '../ui/Input'
@@ -101,6 +102,8 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
   const [brand, setBrand] = useState(initialData?.brand ?? '')
   const [ipAddress, setIpAddress] = useState(initialData?.ip_address ?? '')
   const [model, setModel] = useState(initialData?.model ?? '')
+  const [serialNumber, setSerialNumber] = useState(initialData?.serial_number ?? '')
+  const [installationDate, setInstallationDate] = useState(initialData?.installation_date ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [totalChannels, setTotalChannels] = useState(initialData?.total_channels ?? 8)
   const [hdCapacityTb, setHdCapacityTb] = useState(initialData?.hd_capacity_tb?.toString() ?? '')
@@ -128,10 +131,18 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
   const handleModelSelect = (modelId: string) => {
     const m = dvrModels.find((x) => x.id === modelId)
     if (!m) return
+    setOtherBrandMode(false)
     if (m.brand) setBrand(m.brand)
     if (m.model) setModel(m.model)
     if (m.channel_count) setTotalChannels(m.channel_count)
     // Não preenche name - é o identificador do DVR específico
+  }
+
+  const handleModelTextChange = (nextModel: string) => {
+    setModel(nextModel)
+    const m = findEquipmentModelByText(dvrModels, nextModel, brand)
+    if (!m?.id) return
+    handleModelSelect(m.id)
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -143,6 +154,8 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
       brand: brand || null,
       ip_address: ipAddress,
       model: model || null,
+      serial_number: serialNumber || null,
+      installation_date: installationDate || null,
       location,
       total_channels: totalChannels,
       hd_capacity_tb: hdCapacityTb ? Number(hdCapacityTb) : null,
@@ -155,8 +168,8 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
     })
     if (result.error) {
       setError(result.error)
-    } else if (brand) {
-      await saveModel({ type: 'dvr', brand, model: name || model, channel_count: totalChannels, resolution: null, poe_standard: null, max_ports: null, is_poe: false, notes: null })
+    } else if (brand && model) {
+      await saveModel({ type: 'dvr', brand, model, channel_count: totalChannels, resolution: null, poe_standard: null, max_ports: null, is_poe: false, notes: null })
     }
     setLoading(false)
   }
@@ -224,7 +237,14 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
         ) : (
           <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: Intelbras" />
         )}
-        <Input label="Modelo" value={model} onChange={(e) => setModel(e.target.value)} placeholder="Ex: MHDX 3116" />
+        <Input label="Modelo" value={model} onChange={(e) => handleModelTextChange(e.target.value)} placeholder="Ex: MHDX 3116" list="dvr-models" />
+        <datalist id="dvr-models">
+          {dvrModels.map((item) => <option key={item.id} value={item.model} />)}
+        </datalist>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input label="SN / Número de série" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="Número de série do equipamento" />
+        <Input label="Data de instalação" type="date" value={installationDate} onChange={(e) => setInstallationDate(e.target.value)} />
       </div>
       {/* Campo para digitar nova marca quando selecionar "Outra" */}
       {otherBrandMode && (

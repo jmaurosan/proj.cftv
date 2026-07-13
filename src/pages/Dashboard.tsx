@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -12,20 +12,23 @@ import {
   MonitorCheck,
   Activity,
   CircleDot,
+  BatteryCharging,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import DonutChart from '../components/ui/DonutChart'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import { useClient } from '../contexts/ClientContext'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
-import PingStatusCard from '../components/ui/PingStatusCard'
+import PingStatusCard, { type PingResult } from '../components/ui/PingStatusCard'
+import { parseProjectAssets, type Nobreak } from '../lib/projectAssets'
 
 interface DashData {
   dvrs: { id: string; name: string; status: string; ip_address: string; total_channels: number }[]
-  cameras: { id: string; name: string; status: string; connection_type: string; poe_powered: boolean; type: string; location: string }[]
+  cameras: { id: string; name: string; status: string; connection_type: string; poe_powered: boolean; type: string; location: string; ip_address: string | null }[]
   switches: { id: string; name: string; status: string; is_poe: boolean; poe_standard: string | null; poe_budget_watts: number | null; total_ports: number; ip_address?: string | null }[]
   baluns: { id: string; status: string; balun_type?: 'passive' | 'power' | null }[]
   routers?: { id: string; name: string; status: string; ip_address: string | null }[]
+  nobreaks: Nobreak[]
   dvrChannelIssues: { id: string; dvr_id: string; channel_number: number; notes: string | null; dvrName: string }[]
   cableCount: number
 }
@@ -42,32 +45,42 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [data, setData] = useState<DashData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [pingResults, setPingResults] = useState<Record<string, PingResult>>({})
 
   useEffect(() => {
     async function load() {
-      let dvrsQuery = supabase.from('dvrs').select('id, name, status, ip_address, total_channels').order('name')
-      let camerasQuery = supabase.from('cameras').select('id, name, status, connection_type, poe_powered, type, location').order('name')
-      let switchesQuery = supabase.from('switches').select('id, name, status, is_poe, poe_standard, poe_budget_watts, total_ports, ip_address').order('name')
-      let balunsQuery = supabase.from('power_baluns').select('id, status, balun_type')
-      let cablesQuery = supabase.from('cable_connections').select('id')
-      let routersQuery = supabase.from('routers').select('id, name, status, ip_address').order('name')
-
-      if (selectedClientId) {
-        dvrsQuery = dvrsQuery.eq('client_id', selectedClientId)
-        camerasQuery = camerasQuery.eq('client_id', selectedClientId)
-        switchesQuery = switchesQuery.eq('client_id', selectedClientId)
-        balunsQuery = balunsQuery.eq('client_id', selectedClientId)
-        cablesQuery = cablesQuery.eq('client_id', selectedClientId)
-        routersQuery = routersQuery.eq('client_id', selectedClientId)
+      setLoading(true)
+      if (!selectedClientId) {
+        setData({
+          dvrs: [],
+          cameras: [],
+          switches: [],
+          baluns: [],
+          routers: [],
+          nobreaks: [],
+          dvrChannelIssues: [],
+          cableCount: 0,
+        })
+        setLoading(false)
+        return
       }
 
-      const [dvrs, cameras, switches, baluns, cables, routers] = await Promise.all([
+      const dvrsQuery = supabase.from('dvrs').select('id, name, status, ip_address, total_channels').eq('client_id', selectedClientId).order('name')
+      const camerasQuery = supabase.from('cameras').select('id, name, status, connection_type, poe_powered, type, location, ip_address').eq('client_id', selectedClientId).order('name')
+      const switchesQuery = supabase.from('switches').select('id, name, status, is_poe, poe_standard, poe_budget_watts, total_ports, ip_address').eq('client_id', selectedClientId).order('name')
+      const balunsQuery = supabase.from('power_baluns').select('id, status, balun_type').eq('client_id', selectedClientId)
+      const cablesQuery = supabase.from('cable_connections').select('id').eq('client_id', selectedClientId)
+      const routersQuery = supabase.from('routers').select('id, name, status, ip_address').eq('client_id', selectedClientId).order('name')
+      const clientQuery = supabase.from('clients').select('notes').eq('id', selectedClientId).single()
+
+      const [dvrs, cameras, switches, baluns, cables, routers, client] = await Promise.all([
         dvrsQuery,
         camerasQuery,
         switchesQuery,
         balunsQuery,
         cablesQuery,
-        routersQuery
+        routersQuery,
+        clientQuery,
       ])
 
       const dvrIds = (dvrs.data || []).map((d) => d.id)
@@ -86,6 +99,7 @@ export default function Dashboard() {
         switches: (switches.data || []) as DashData['switches'],
         baluns: (baluns.data || []) as DashData['baluns'],
         routers: (routers.data || []) as DashData['routers'],
+        nobreaks: parseProjectAssets(client.data?.notes).nobreaks,
         dvrChannelIssues: ((dvrChannelIssues.data || []) as unknown as {
           id: string
           dvr_id: string
@@ -106,14 +120,40 @@ export default function Dashboard() {
     load()
   }, [selectedClientId])
 
+  const pingDevices = useMemo(() => data ? [
+    ...data.dvrs.filter(d => d.ip_address).map(d => ({ id: d.id, name: d.name, type: 'DVR' as const, ip: d.ip_address })),
+    ...data.cameras
+      .filter(c => c.ip_address && (c.connection_type === 'ip' || c.connection_type === 'wifi'))
+      .map(c => ({ id: c.id, name: c.name, type: 'Câmera' as const, ip: c.ip_address! })),
+    ...data.switches.filter(s => s.ip_address).map(s => ({ id: s.id, name: s.name, type: 'Switch' as const, ip: s.ip_address! })),
+    ...(data.routers || []).filter(r => r.ip_address).map(r => ({ id: r.id, name: r.name, type: 'Roteador' as const, ip: r.ip_address! }))
+  ] : [], [data])
+
+  const handlePingResultsChange = useCallback((nextResults: Record<string, PingResult>) => {
+    setPingResults(nextResults)
+  }, [])
+
   if (loading) return <LoadingSpinner />
   if (!data) return null
 
   // Derived metrics
-  const allDevices = [...data.dvrs, ...data.cameras, ...data.switches, ...data.baluns]
+
+  const isOnlineByStatus = (device: { id: string; status: string }) => {
+    const live = pingResults[device.id]
+    if (live?.tested && live.status !== 'unverified') return live.online
+    return device.status === 'ativo'
+  }
+
+  const allDevices = [...data.dvrs, ...data.cameras, ...data.switches, ...data.baluns, ...(data.routers || []), ...data.nobreaks]
   const totalDevices = allDevices.length
-  const activeDevices = allDevices.filter(d => d.status === 'ativo').length
+  const activeDevices = allDevices.filter(isOnlineByStatus).length
   const integrity = totalDevices > 0 ? Math.round((activeDevices / totalDevices) * 100) : 0
+  const maintenanceDevices = allDevices.filter(d => (!pingResults[d.id]?.tested || pingResults[d.id]?.status === 'unverified') && d.status === 'manutencao').length
+  const offlineDevices = allDevices.filter(d => {
+    const live = pingResults[d.id]
+    if (live?.tested && live.status !== 'unverified') return !live.online
+    return d.status === 'inativo'
+  }).length
 
   const camStats = countStatus(data.cameras)
   const camAnalog = data.cameras.filter(c => c.connection_type === 'analogica').length
@@ -132,27 +172,28 @@ export default function Dashboard() {
   const channelsWithIssues = data.dvrChannelIssues.length
   const operationalChannels = Math.max(0, totalChannels - channelsWithIssues)
   const cableCoverage = data.cameras.length > 0 ? Math.round((data.cableCount / data.cameras.length) * 100) : 0
+  const nobreakWarnings = data.nobreaks.filter((item) => !item.hasProtection || item.batteryQuantity < 1 || item.batteryCapacityAh <= 0)
 
   const healthSegments = [
-    { value: activeDevices, color: '#22c55e', label: 'Online' },
-    { value: allDevices.filter(d => d.status === 'manutencao').length, color: '#f59e0b', label: 'Manutencao' },
-    { value: allDevices.filter(d => d.status === 'inativo').length, color: '#ef4444', label: 'Offline' },
+    { value: activeDevices, color: '#22c55e', label: 'Ativo no cadastro' },
+    { value: maintenanceDevices, color: '#f59e0b', label: 'Manutencao' },
+    { value: offlineDevices, color: '#ef4444', label: 'Offline' },
   ]
 
+  const getDeviceStatus = (device: { id: string; status: string }) => {
+    const live = pingResults[device.id]
+    if (live?.tested && live.status !== 'unverified') return live.online ? 'ativo' : 'inativo'
+    return device.status
+  }
+
   const recentDevices = [
-    ...data.dvrs.map(d => ({ name: d.name, type: 'DVR', status: d.status, detail: d.ip_address })),
-    ...data.cameras.slice(0, 4).map(c => ({ name: c.name, type: 'Camera', status: c.status, detail: c.location })),
-    ...data.switches.map(s => ({ name: s.name, type: 'Switch', status: s.status, detail: s.is_poe ? 'PoE' : 'Standard' })),
+    ...data.dvrs.map(d => ({ name: d.name, type: 'DVR', status: getDeviceStatus(d), detail: d.ip_address })),
+    ...data.cameras.slice(0, 4).map(c => ({ name: c.name, type: 'Camera', status: getDeviceStatus(c), detail: c.location })),
+    ...data.switches.map(s => ({ name: s.name, type: 'Switch', status: getDeviceStatus(s), detail: s.is_poe ? 'PoE' : 'Standard' })),
   ].slice(0, 8)
 
   const integrityColor = integrity >= 80 ? 'text-success' : integrity >= 50 ? 'text-warning' : 'text-danger'
   const integrityGlow = integrity >= 80 ? 'shadow-success/20' : integrity >= 50 ? 'shadow-warning/20' : 'shadow-danger/20'
-
-  const pingDevices = data ? [
-    ...data.dvrs.filter(d => d.ip_address).map(d => ({ id: d.id, name: d.name, type: 'DVR' as const, ip: d.ip_address })),
-    ...data.switches.filter(s => s.ip_address).map(s => ({ id: s.id, name: s.name, type: 'Switch' as const, ip: s.ip_address! })),
-    ...(data.routers || []).filter(r => r.ip_address).map(r => ({ id: r.id, name: r.name, type: 'Roteador' as const, ip: r.ip_address! }))
-  ] : []
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -161,7 +202,7 @@ export default function Dashboard() {
 
       {/* Diagnóstico de Rede Local */}
       {selectedClientId && pingDevices.length > 0 && (
-        <PingStatusCard devices={pingDevices} />
+        <PingStatusCard devices={pingDevices} onResultsChange={handlePingResultsChange} />
       )}
 
       {/* Header */}
@@ -215,6 +256,15 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {data.nobreaks.length > 0 && (
+        <div onClick={() => navigate('/energia-documentos')} className={`rounded-xl border p-4 cursor-pointer transition-colors ${nobreakWarnings.length > 0 ? 'border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15' : 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15'}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3"><div className={`rounded-lg p-2 ${nobreakWarnings.length > 0 ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300'}`}><BatteryCharging className="h-5 w-5" /></div><div><h3 className="text-sm font-bold text-text-primary">Proteção elétrica do sistema</h3><p className="mt-1 text-xs text-text-secondary">{data.nobreaks.length} nobreak(s), {data.nobreaks.reduce((sum, item) => sum + item.batteryQuantity, 0)} bateria(s) cadastrada(s).</p></div></div>
+            <span className={`rounded px-2 py-1 text-xs font-semibold ${nobreakWarnings.length > 0 ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300'}`}>{nobreakWarnings.length > 0 ? `${nobreakWarnings.length} atenção` : 'Protegido'}</span>
           </div>
         </div>
       )}
@@ -322,8 +372,8 @@ export default function Dashboard() {
               {totalDevices > 0 && (
                 <>
                   <div className="h-full bg-success rounded-l-full" style={{ width: `${(activeDevices / totalDevices) * 100}%` }} />
-                  <div className="h-full bg-warning" style={{ width: `${(allDevices.filter(d => d.status === 'manutencao').length / totalDevices) * 100}%` }} />
-                  <div className="h-full bg-danger rounded-r-full" style={{ width: `${(allDevices.filter(d => d.status === 'inativo').length / totalDevices) * 100}%` }} />
+                  <div className="h-full bg-warning" style={{ width: `${(maintenanceDevices / totalDevices) * 100}%` }} />
+                  <div className="h-full bg-danger rounded-r-full" style={{ width: `${(offlineDevices / totalDevices) * 100}%` }} />
                 </>
               )}
             </div>
