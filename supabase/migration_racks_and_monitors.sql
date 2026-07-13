@@ -48,13 +48,15 @@ create policy racks_owner_all on public.racks for all using (auth.uid() = user_i
 drop policy if exists monitors_owner_all on public.monitors;
 create policy monitors_owner_all on public.monitors for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-create or replace function public.touch_updated_at()
+create or replace function public.touch_racks_monitors_updated_at()
 returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end;
 $$;
 
 drop trigger if exists racks_touch_updated_at on public.racks;
-create trigger racks_touch_updated_at before update on public.racks for each row execute function public.touch_updated_at();
+create trigger racks_touch_updated_at before update on public.racks for each row execute function public.touch_racks_monitors_updated_at();
 drop trigger if exists monitors_touch_updated_at on public.monitors;
-create trigger monitors_touch_updated_at before update on public.monitors for each row execute function public.touch_updated_at();
+create trigger monitors_touch_updated_at before update on public.monitors for each row execute function public.touch_racks_monitors_updated_at();
 
+-- Atualiza imediatamente o cache de schema usado pela API REST do Supabase.
+notify pgrst, 'reload schema';
