@@ -37,6 +37,7 @@ import {
 import { useToast } from './ui/Toast'
 import Button from './ui/Button'
 import LoadingSpinner from './ui/LoadingSpinner'
+import { buildAutomaticTopologyConnections } from '../lib/automaticTopology'
 
 interface TopologyNode {
   id: string
@@ -209,13 +210,14 @@ export default function NetworkTopology() {
       }
 
       // 2. Carregar todos os equipamentos
-      const [camerasRes, dvrsRes, switchesRes, routersRes, balunsRes, switchPortsRes, racksRes, monitorsRes] = await Promise.all([
-        supabase.from('cameras').select('id, name, status, ip_address, location, brand, model, switch_id, switch_port, dvr_id, channel_number').eq('client_id', selectedClientId),
+      const [camerasRes, dvrsRes, switchesRes, routersRes, balunsRes, switchPortsRes, balunPortsRes, racksRes, monitorsRes] = await Promise.all([
+        supabase.from('cameras').select('id, name, status, ip_address, location, brand, model, connection_type, switch_id, switch_port, dvr_id, channel_number, balun_id, balun_port').eq('client_id', selectedClientId),
         supabase.from('dvrs').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
         supabase.from('switches').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
         supabase.from('routers').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
         supabase.from('power_baluns').select('*').eq('client_id', selectedClientId),
         supabase.from('switch_ports').select('switch_id, port_number, device_type, device_id, device_name, is_active'),
+        supabase.from('balun_ports').select('balun_id, port_number, camera_id, is_active'),
         supabase.from('racks').select('*').eq('client_id', selectedClientId).order('name'),
         supabase.from('monitors').select('id, name, status, location, brand, model, rack_id').eq('client_id', selectedClientId).order('name')
       ])
@@ -413,152 +415,22 @@ export default function NetworkTopology() {
       setNodes(list)
 
       // 3. Mapear conexões lógicas e físicas
-      const conns: TopologyConnection[] = []
-      const connectedTargets = new Set<string>()
-      const connectionKeys = new Set<string>()
-      const addConnection = (connection: TopologyConnection) => {
-        const key = `${connection.source}:${connection.target}:${connection.label ?? ''}`
-        if (connectionKeys.has(key)) return
-        connectionKeys.add(key)
-        connectedTargets.add(connection.target)
-        conns.push(connection)
-      }
-
-      // Primeiro conectamos os roteadores à Internet
-      const routers = list.filter((n) => n.type === 'router')
-      routers.forEach((r) => {
-        addConnection({
-          id: `conn-internet-router-${r.id}`,
-          source: 'internet',
-          target: r.id,
-          active: r.status === 'ativo' || r.status === 'online',
-          label: 'Fibra / Link',
-          style: 'dashed'
-        })
+      const conns: TopologyConnection[] = buildAutomaticTopologyConnections({
+        nodes: list,
+        cameras: camerasRes.data ?? [],
+        switchPorts: ((switchPortsRes.data ?? []) as SwitchPortTopologyRow[]).map((port) => ({
+          switch_id: port.switch_id,
+          port_number: port.port_number,
+          device_id: port.device_id,
+          is_active: port.is_active,
+        })),
+        balunPorts: (balunPortsRes.data ?? []).map((port) => ({
+          balun_id: port.balun_id,
+          port_number: port.port_number,
+          camera_id: port.camera_id,
+          is_active: port.is_active,
+        })),
       })
-
-      // Se não houver roteador, liga switches diretamente à internet
-      if (routers.length === 0) {
-        const switches = list.filter((n) => n.type === 'switch')
-        switches.forEach((s) => {
-          addConnection({
-            id: `conn-internet-switch-${s.id}`,
-            source: 'internet',
-            target: s.id,
-            active: s.status === 'ativo' || s.status === 'online',
-            style: 'dashed'
-          })
-        })
-      }
-
-      const switches = list.filter((n) => n.type === 'switch')
-      const nodeById = new Map(list.map((node) => [node.id, node]))
-      const switchIds = new Set(switches.map((node) => node.id))
-      const switchPortRows = (switchPortsRes.data ?? []) as SwitchPortTopologyRow[]
-
-      switchPortRows
-        .filter((port) => port.is_active && switchIds.has(port.switch_id) && port.device_id && nodeById.has(port.device_id))
-        .forEach((port) => {
-          const targetNode = nodeById.get(port.device_id!)
-          if (!targetNode) return
-
-          const source = targetNode.type === 'router' ? targetNode.id : port.switch_id
-          const target = targetNode.type === 'router' ? port.switch_id : targetNode.id
-
-          addConnection({
-            id: `conn-switch-port-${port.switch_id}-${port.port_number}-${targetNode.id}`,
-            source,
-            target,
-            active: targetNode.status === 'ativo' || targetNode.status === 'online',
-            label: `P${port.port_number}`,
-            style: 'dashed'
-          })
-        })
-
-      // Conectar switches aos roteadores quando não houver porta física mapeada
-      switches.forEach((sw) => {
-        if (connectedTargets.has(sw.id)) return
-        const connectedRouter = routers[0] // fallback de gateway padrão
-        if (connectedRouter) {
-          addConnection({
-            id: `conn-router-switch-${sw.id}`,
-            source: connectedRouter.id,
-            target: sw.id,
-            active: sw.status === 'ativo' || sw.status === 'online',
-            label: 'Porta LAN',
-            style: 'dashed'
-          })
-        }
-      })
-
-      // Conectar DVRs sempre pelo switch quando houver switch no projeto.
-      const dvrs = list.filter((n) => n.type === 'dvr')
-      dvrs.forEach((dvr) => {
-        if (connectedTargets.has(dvr.id)) return
-        const connectedSwitch = switches[0]
-        if (connectedSwitch) {
-          addConnection({
-            id: `conn-switch-dvr-fallback-${dvr.id}`,
-            source: connectedSwitch.id,
-            target: dvr.id,
-            active: dvr.status === 'ativo' || dvr.status === 'online',
-            label: 'LAN',
-            style: 'dashed'
-          })
-        }
-      })
-
-      // Conectar câmeras
-      if (camerasRes.data) {
-        camerasRes.data.forEach((cam) => {
-          if (connectedTargets.has(cam.id)) return
-          const isCamActive = cam.status === 'ativo' || cam.status === 'online'
-          if (cam.switch_id) {
-            // Conecta ao switch correspondente
-            addConnection({
-              id: `conn-cam-sw-${cam.id}`,
-              source: cam.switch_id,
-              target: cam.id,
-              active: isCamActive,
-              label: cam.switch_port ? `P${cam.switch_port}` : 'PoE',
-              style: 'dashed'
-            })
-          } else if (cam.dvr_id) {
-            // Conecta ao DVR correspondente
-            addConnection({
-              id: `conn-cam-dvr-${cam.id}`,
-              source: cam.dvr_id,
-              target: cam.id,
-              active: isCamActive,
-              label: cam.channel_number ? `CH${cam.channel_number}` : 'Coaxial',
-              style: 'dashed'
-            })
-          } else {
-            // Se for IP sem switch explícito, liga no primeiro switch ou primeiro roteador
-            const connectedSwitch = switches[0]
-            const connectedRouter = routers[0]
-            if (connectedSwitch) {
-              addConnection({
-                id: `conn-sw-cam-fallback-${cam.id}`,
-                source: connectedSwitch.id,
-                target: cam.id,
-                active: isCamActive,
-                label: 'IP',
-                style: 'dashed'
-              })
-            } else if (connectedRouter) {
-              addConnection({
-                id: `conn-router-cam-fallback-${cam.id}`,
-                source: connectedRouter.id,
-                target: cam.id,
-                active: isCamActive,
-                label: 'IP',
-                style: 'dashed'
-              })
-            }
-          }
-        })
-      }
 
       const validNodeIds = new Set(list.map((node) => node.id))
       const manual = savedManualConnections
@@ -646,23 +518,32 @@ export default function NetworkTopology() {
       placeNode(node, { x: routers.length === 1 ? centerX : step * (index + 1), y: 145 })
     })
 
+    const automaticConnections = context?.connections ?? []
+    const connectionByTarget = new Map(automaticConnections.map((connection) => [connection.target, connection]))
+    const sortByParent = (items: TopologyNode[]) => [...items].sort((a, b) => {
+      const aConnection = connectionByTarget.get(a.id)
+      const bConnection = connectionByTarget.get(b.id)
+      const parentCompare = (aConnection?.source ?? '').localeCompare(bConnection?.source ?? '', 'pt-BR', { numeric: true })
+      if (parentCompare !== 0) return parentCompare
+      return (aConnection?.label ?? a.name).localeCompare(bConnection?.label ?? b.name, 'pt-BR', { numeric: true })
+    })
+
     // Camadas globais evitam que grupos com o mesmo pai se sobreponham.
     // As posições já salvas continuam sendo respeitadas; este arranjo é usado
     // para novos nós e ao acionar "Redefinir árvore".
-    void context
-    placeRow(switches, 245, 6)
+    placeRow(sortByParent(switches), 245, 6)
     placeRow(racks, 365, 5)
-    placeRow(dvrs, 485, 6)
+    placeRow(sortByParent(dvrs), 485, 6)
 
     const supportDevices = [...baluns, ...monitors]
     const supportStartY = dvrs.length > 0 ? 605 : 485
-    placeRow(supportDevices, supportStartY, 6)
+    placeRow(sortByParent(supportDevices), supportStartY, 6)
 
     const supportRows = Math.ceil(Math.max(supportDevices.length, 1) / 6)
     const cameraStartY = supportDevices.length > 0
       ? supportStartY + supportRows * 118
       : dvrs.length > 0 ? 605 : racks.length > 0 ? 485 : 365
-    placeRow(cameras, cameraStartY, 7)
+    placeRow(sortByParent(cameras), cameraStartY, 7)
 
     return layout
   }
