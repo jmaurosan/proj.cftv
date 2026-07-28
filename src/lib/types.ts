@@ -39,6 +39,11 @@ export interface Dvr {
   status: string
   username: string | null
   password: string | null
+  hik_connect_account: string | null
+  hik_connect_password: string | null
+  hik_connect_verification_code: string | null
+  hik_connect_sharing_info: string | null
+  hik_connect_qr_code_url: string | null
   notes: string | null
   client_id: string | null
   user_id: string
