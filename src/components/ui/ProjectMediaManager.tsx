@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { CalendarDays, Image as ImageIcon, Pencil, Play, Trash2, Upload, X } from 'lucide-react'
+import { CalendarDays, Image as ImageIcon, Pencil, Play, RefreshCw, Trash2, Upload, X } from 'lucide-react'
 import type { DocumentEquipmentType, EquipmentOption, ProjectMedia } from '../../lib/projectAssets'
-import { getProjectMediaUrl } from '../../services/projectAssetsService'
+import { getProjectMediaUrlResult } from '../../services/projectAssetsService'
 import Button from './Button'
 import Input from './Input'
 import Select from './Select'
@@ -39,6 +39,8 @@ export default function ProjectMediaManager({ media, equipmentOptions, onAdd, on
   const [equipmentFilter, setEquipmentFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({})
+  const [mediaUrlErrors, setMediaUrlErrors] = useState<Record<string, string>>({})
+  const [previewAttempt, setPreviewAttempt] = useState(0)
   const isEditing = !!editingMedia
 
   const filteredMedia = useMemo(() => {
@@ -57,22 +59,34 @@ export default function ProjectMediaManager({ media, equipmentOptions, onAdd, on
 
     async function loadMediaUrls() {
       const entries = await Promise.all(
-        media.map(async (item) => [
-          item.id,
-          await getProjectMediaUrl(item.filePath),
-        ] as const)
+        media.map(async (item) => ({
+          id: item.id,
+          result: await getProjectMediaUrlResult(item.filePath),
+        }))
       )
       if (cancelled) return
-      setMediaUrls(Object.fromEntries(entries.filter(([, url]) => !!url)) as Record<string, string>)
+      setMediaUrls(Object.fromEntries(
+        entries
+          .filter(({ result }) => !!result.url)
+          .map(({ id, result }) => [id, result.url]),
+      ) as Record<string, string>)
+      setMediaUrlErrors(Object.fromEntries(
+        entries
+          .filter(({ result }) => !!result.error)
+          .map(({ id, result }) => [id, result.error]),
+      ) as Record<string, string>)
     }
 
     if (media.length > 0) loadMediaUrls()
-    else setMediaUrls({})
+    else {
+      setMediaUrls({})
+      setMediaUrlErrors({})
+    }
 
     return () => {
       cancelled = true
     }
-  }, [media])
+  }, [media, previewAttempt])
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -175,14 +189,39 @@ export default function ProjectMediaManager({ media, equipmentOptions, onAdd, on
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filteredMedia.map((item) => {
             const url = mediaUrls[item.id]
+            const previewError = mediaUrlErrors[item.id]
+            const handlePreviewError = () => {
+              setMediaUrls((current) => {
+                const next = { ...current }
+                delete next[item.id]
+                return next
+              })
+              setMediaUrlErrors((current) => ({
+                ...current,
+                [item.id]: 'O arquivo foi encontrado, mas o navegador não conseguiu exibir a prévia.',
+              }))
+            }
             return (
               <article key={item.id} className="min-w-0 overflow-hidden rounded-lg border border-border-light bg-bg-secondary">
                 <div className="aspect-video bg-bg-primary">
-                  {!url ? (
+                  {previewError ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
+                      <p className="text-xs text-danger">Não foi possível exibir esta mídia.</p>
+                      <p className="line-clamp-2 text-[10px] text-text-muted">{previewError}</p>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewAttempt((current) => current + 1)}
+                        className="inline-flex items-center gap-1 rounded-md border border-border-light px-2 py-1 text-xs text-text-secondary hover:border-accent hover:text-accent"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Tentar novamente
+                      </button>
+                    </div>
+                  ) : !url ? (
                     <div className="flex h-full items-center justify-center text-xs text-text-muted">Preparando mídia...</div>
                   ) : item.mediaType === 'image'
-                    ? <img src={url} alt={item.description || item.title} loading="lazy" className="h-full w-full object-cover" />
-                    : <video src={url} controls preload="metadata" className="h-full w-full" aria-label={item.title} />}
+                    ? <img src={url} alt={item.description || item.title} loading="lazy" onError={handlePreviewError} className="h-full w-full object-cover" />
+                    : <video src={url} controls preload="metadata" onError={handlePreviewError} className="h-full w-full" aria-label={item.title} />}
                 </div>
                 <div className="space-y-2 p-3">
                   <div className="flex items-start justify-between gap-2">

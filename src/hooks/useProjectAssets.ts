@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useClient } from '../contexts/ClientContext'
+import { useAuth } from './useAuth'
 import {
   deleteEquipmentDocumentFile,
   deleteProjectMediaFile,
@@ -22,6 +23,7 @@ const EMPTY_ASSETS: ProjectAssets = { nobreaks: [], documents: [], media: [] }
 const projectAssetsCache = createTimedCache<ProjectAssets>(2 * 60 * 1000)
 
 export function useProjectAssets() {
+  const { user } = useAuth()
   const { selectedClientId } = useClient()
   const [assets, setAssets] = useState<ProjectAssets>(EMPTY_ASSETS)
   const [loading, setLoading] = useState(true)
@@ -97,13 +99,13 @@ export function useProjectAssets() {
     document: Omit<EquipmentDocument, 'id' | 'fileName' | 'filePath' | 'fileSize' | 'createdAt'>,
     file: File | null,
   ) => {
-    if (!selectedClientId) return { error: 'Selecione um cliente antes de adicionar documentos.' }
+    if (!selectedClientId || !user) return { error: 'Selecione um cliente e confirme sua autenticação antes de adicionar documentos.' }
     if (!document.title.trim()) return { error: 'Informe o título do documento.' }
     if (!file && !document.manufacturerUrl.trim()) return { error: 'Selecione um arquivo ou informe o link oficial.' }
 
     let filePath: string | null = null
     if (file) {
-      const upload = await uploadEquipmentDocument(file, selectedClientId, document.equipmentType, document.equipmentId || 'project')
+      const upload = await uploadEquipmentDocument(file, user.id, selectedClientId, document.equipmentType, document.equipmentId || 'project')
       if (upload.error || !upload.filePath) return { error: upload.error || 'Falha no upload do documento.' }
       filePath = upload.filePath
     }
@@ -125,7 +127,7 @@ export function useProjectAssets() {
     document: Omit<EquipmentDocument, 'id' | 'fileName' | 'filePath' | 'fileSize' | 'createdAt'>,
     file: File | null,
   ) => {
-    if (!selectedClientId) return { error: 'Selecione um cliente antes de editar documentos.' }
+    if (!selectedClientId || !user) return { error: 'Selecione um cliente e confirme sua autenticação antes de editar documentos.' }
     const currentDocument = assets.documents.find((item) => item.id === id)
     if (!currentDocument) return { error: 'Documento não encontrado.' }
     if (!document.title.trim()) return { error: 'Informe o título do documento.' }
@@ -135,7 +137,7 @@ export function useProjectAssets() {
 
     let uploadedFilePath: string | null = null
     if (file) {
-      const upload = await uploadEquipmentDocument(file, selectedClientId, document.equipmentType, document.equipmentId || 'project')
+      const upload = await uploadEquipmentDocument(file, user.id, selectedClientId, document.equipmentType, document.equipmentId || 'project')
       if (upload.error || !upload.filePath) return { error: upload.error || 'Falha no upload do documento.' }
       uploadedFilePath = upload.filePath
     }
@@ -168,11 +170,11 @@ export function useProjectAssets() {
     media: Omit<ProjectMedia, 'id' | 'mediaType' | 'fileName' | 'filePath' | 'fileSize' | 'mimeType' | 'createdAt'>,
     file: File,
   ) => {
-    if (!selectedClientId) return { error: 'Selecione um cliente antes de adicionar mídias.' }
+    if (!selectedClientId || !user) return { error: 'Selecione um cliente e confirme sua autenticação antes de adicionar mídias.' }
     if (!media.title.trim()) return { error: 'Informe o título da mídia.' }
     const mediaType = getProjectMediaType(file)
     if (!mediaType) return { error: 'Selecione uma imagem ou vídeo válido.' }
-    const upload = await uploadProjectMedia(file, selectedClientId, media.equipmentType, media.equipmentId || 'project')
+    const upload = await uploadProjectMedia(file, user.id, selectedClientId, media.equipmentType, media.equipmentId || 'project')
     if (upload.error || !upload.filePath) return { error: upload.error || 'Falha no upload da mídia.' }
     const nextMedia: ProjectMedia = {
       ...media,
@@ -194,7 +196,7 @@ export function useProjectAssets() {
     media: Omit<ProjectMedia, 'id' | 'mediaType' | 'fileName' | 'filePath' | 'fileSize' | 'mimeType' | 'createdAt'>,
     file: File | null,
   ) => {
-    if (!selectedClientId) return { error: 'Selecione um cliente antes de editar mídias.' }
+    if (!selectedClientId || !user) return { error: 'Selecione um cliente e confirme sua autenticação antes de editar mídias.' }
     const currentMedia = assets.media.find((item) => item.id === id)
     if (!currentMedia) return { error: 'Mídia não encontrada.' }
     if (!media.title.trim()) return { error: 'Informe o título da mídia.' }
@@ -204,7 +206,7 @@ export function useProjectAssets() {
     if (file) {
       const nextMediaType = getProjectMediaType(file)
       if (!nextMediaType) return { error: 'Selecione uma imagem ou vídeo válido.' }
-      const uploadResult = await uploadProjectMedia(file, selectedClientId, media.equipmentType, media.equipmentId || 'project')
+      const uploadResult = await uploadProjectMedia(file, user.id, selectedClientId, media.equipmentType, media.equipmentId || 'project')
       if (uploadResult.error || !uploadResult.filePath) return { error: uploadResult.error || 'Falha no upload da mídia.' }
       upload = { filePath: uploadResult.filePath, error: null }
       mediaType = nextMediaType

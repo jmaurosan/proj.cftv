@@ -1,9 +1,9 @@
 import { useState, useMemo, type FormEvent, useEffect, useRef } from 'react'
-import type { Dvr } from '../../lib/types'
+import type { Camera, CameraUpdate, Dvr } from '../../lib/types'
 import { STATUS_OPTIONS, CHANNEL_OPTIONS } from '../../lib/constants'
 import { findEquipmentModelByText } from '../../lib/equipmentModelCatalog'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
-import { useDvrChannels } from '../../hooks/useDvrChannels'
+import { useCameras } from '../../hooks/useCameras'
 import { useAuth } from '../../hooks/useAuth'
 import {
   deleteQRCodeImage,
@@ -14,7 +14,7 @@ import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
 import BackupManager from '../ui/BackupManager'
-import { AlertTriangle, CameraIcon, Cloud, Cpu, HardDrive, Package, QrCode, Share2, X } from 'lucide-react'
+import { CameraIcon, Cloud, Cpu, HardDrive, Package, QrCode, Share2, X } from 'lucide-react'
 
 const HD_CAPACITY_OPTIONS = [
   { value: '', label: 'Selecione a capacidade' },
@@ -29,90 +29,103 @@ const HD_CAPACITY_OPTIONS = [
   { value: '12', label: '12 TB' },
 ]
 
-type SaveChannel = (channel: {
-  channel_number: number
-  is_active?: boolean
-  notes?: string
-}) => Promise<{ error: string | null }>
+type ChannelCamera = Pick<Camera, 'id' | 'name' | 'status'>
+type UpdateCamera = (id: string, payload: CameraUpdate) => Promise<{ error: string | null }>
 
-function DvrChannelItem({
+function DvrChannelCameraItem({
   chNum,
-  channel,
-  saveChannel,
+  camera,
+  updateCamera,
 }: {
   chNum: number
-  channel: { is_active?: boolean; notes?: string } | undefined
-  saveChannel: SaveChannel
+  camera: ChannelCamera | undefined
+  updateCamera: UpdateCamera
 }) {
-  const isActive = channel?.is_active ?? true;
-  const dbNotes = channel?.notes ?? '';
-  const [localNotes, setLocalNotes] = useState(dbNotes);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const cameraName = camera?.name ?? ''
+  const isActive = camera?.status === 'ativo'
+  const [localName, setLocalName] = useState(cameraName)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    setLocalNotes(dbNotes);
-  }, [dbNotes]);
+    setLocalName(cameraName)
+  }, [cameraName])
 
   const handleBlur = async () => {
-    if (localNotes !== dbNotes) {
-      setSaving(true);
-      const result = await saveChannel({ channel_number: chNum, is_active: isActive, notes: localNotes });
-      setSaveError(result.error);
-      setSaving(false);
+    const nextName = localName.trim()
+    if (!camera || nextName === cameraName) return
+    if (!nextName) {
+      setLocalName(cameraName)
+      setSaveError('O nome da câmera não pode ficar vazio.')
+      return
     }
-  };
+
+    setSaving(true)
+    setSaveError(null)
+    const result = await updateCamera(camera.id, { name: nextName })
+    setSaveError(result.error)
+    setSaving(false)
+  }
 
   const handleToggle = async (checked: boolean) => {
-    setSaving(true);
-    const result = await saveChannel({ channel_number: chNum, is_active: checked, notes: localNotes });
-    setSaveError(result.error);
-    setSaving(false);
-  };
+    if (!camera) return
+    setSaving(true)
+    setSaveError(null)
+    const result = await updateCamera(camera.id, { status: checked ? 'ativo' : 'inativo' })
+    setSaveError(result.error)
+    setSaving(false)
+  }
+
+  const statusLabel = !camera
+    ? 'Livre'
+    : camera.status === 'ativo'
+      ? 'Ativa'
+      : camera.status === 'manutencao'
+        ? 'Manutenção'
+        : 'Inativa'
 
   return (
     <div className={`rounded-lg p-2 border transition-colors ${
-      isActive
+      !camera
+        ? 'bg-slate-900/40 border-dashed border-slate-700'
+        : isActive
         ? 'bg-slate-800/50 border-transparent'
         : 'bg-rose-500/10 border-rose-500/50 shadow-sm shadow-rose-500/10'
     }`}>
       <div className="flex items-center gap-2 mb-1">
-        <span className={`text-xs font-mono ${isActive ? 'text-slate-400' : 'text-rose-300 font-bold'}`}>
+        <span className={`text-xs font-mono ${!camera || isActive ? 'text-slate-400' : 'text-rose-300 font-bold'}`}>
           CH {chNum}
         </span>
-        <label className="flex items-center gap-1 cursor-pointer ml-auto">
+        <label className={`flex items-center gap-1 ml-auto ${camera ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
           <input
             type="checkbox"
             checked={isActive}
             onChange={(e) => handleToggle(e.target.checked)}
+            disabled={!camera || saving}
             className="w-3.5 h-3.5 rounded border-border accent-accent"
           />
-          <span className={`text-xs ${isActive ? 'text-text-secondary' : 'text-rose-300 font-semibold'}`}>
-            {isActive ? 'OK' : 'Problema'}
+          <span className={`text-xs ${camera && !isActive ? 'text-rose-300 font-semibold' : 'text-text-secondary'}`}>
+            {statusLabel}
           </span>
         </label>
       </div>
-      {!isActive && (
-        <div className="flex items-center gap-1 text-[10px] text-rose-300 mb-1">
-          <AlertTriangle className="w-3 h-3" />
-          Canal desabilitado
-        </div>
-      )}
       <input
         type="text"
-        value={localNotes}
-        onChange={(e) => setLocalNotes(e.target.value)}
+        value={localName}
+        onChange={(e) => setLocalName(e.target.value)}
         onBlur={handleBlur}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.currentTarget.blur();
           }
         }}
-        placeholder={isActive ? "Observação do canal..." : "Motivo: câmera ruim, canal queimado..."}
-        aria-label={`Observação do canal ${chNum}`}
-        disabled={saving}
+        placeholder={camera ? 'Nome da câmera' : 'Canal livre'}
+        aria-label={camera ? `Nome da câmera do canal ${chNum}` : `Canal ${chNum} livre`}
+        disabled={!camera || saving}
         className={`w-full px-2 py-1 text-xs rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 ${
-          isActive 
+          !camera
+            ? 'bg-slate-900/30 border border-slate-700 cursor-not-allowed'
+            : isActive
             ? 'bg-bg-tertiary border border-border focus:ring-primary/50' 
             : 'bg-danger/10 border border-danger/30 focus:ring-danger/50'
         }`}
@@ -120,7 +133,7 @@ function DvrChannelItem({
       {saving && <p className="mt-1 text-[10px] text-text-muted">Salvando...</p>}
       {saveError && <p className="mt-1 text-[10px] text-danger">{saveError}</p>}
     </div>
-  );
+  )
 }
 
 interface DvrFormProps {
@@ -159,8 +172,8 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
 
   const { user } = useAuth()
   const { models: dvrModels, saveModel } = useEquipmentModels('dvr')
+  const { data: cameras, update: updateCamera } = useCameras()
   const dvrId = initialData?.id ?? null
-  const { channels, saveChannel } = useDvrChannels(dvrId)
 
   useEffect(() => {
     let cancelled = false
@@ -518,19 +531,24 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
       {/* Seção de Canais do DVR */}
       {dvrId && (
         <div className="border border-slate-700 rounded-lg p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
-            <Cpu className="w-4 h-4" />
-            Canais do DVR ({totalChannels})
-          </h3>
+          <div>
+            <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
+              <Cpu className="w-4 h-4" />
+              Câmeras por canal ({totalChannels})
+            </h3>
+            <p className="mt-1 text-xs text-text-muted">
+              O nome e o status são os mesmos do cadastro da câmera. Alterações feitas aqui também aparecem na tela de câmeras.
+            </p>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-[300px] overflow-y-auto">
             {Array.from({ length: totalChannels }, (_, i) => i + 1).map((chNum) => {
-              const channel = channels.find((c) => c.channel_number === chNum)
+              const camera = cameras.find((item) => item.dvr_id === dvrId && item.channel_number === chNum)
               return (
-                <DvrChannelItem
+                <DvrChannelCameraItem
                   key={chNum}
                   chNum={chNum}
-                  channel={channel}
-                  saveChannel={saveChannel}
+                  camera={camera}
+                  updateCamera={updateCamera}
                 />
               )
             })}

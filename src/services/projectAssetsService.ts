@@ -24,6 +24,7 @@ export async function saveProjectAssets(clientId: string, assets: ProjectAssets)
 
 export async function uploadEquipmentDocument(
   file: File,
+  userId: string,
   clientId: string,
   equipmentType: string,
   equipmentId: string,
@@ -31,7 +32,7 @@ export async function uploadEquipmentDocument(
   const validationError = validateEquipmentDocumentFile(file)
   if (validationError) return { filePath: null, error: validationError }
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const filePath = `documents/${clientId}/${equipmentType}/${equipmentId}/${Date.now()}_${safeName}`
+  const filePath = `${userId}/documents/${clientId}/${equipmentType}/${equipmentId}/${Date.now()}_${safeName}`
   const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, {
     cacheControl: '3600',
     upsert: false,
@@ -41,6 +42,7 @@ export async function uploadEquipmentDocument(
 
 export async function uploadProjectMedia(
   file: File,
+  userId: string,
   clientId: string,
   equipmentType: string,
   equipmentId: string,
@@ -48,7 +50,7 @@ export async function uploadProjectMedia(
   const validationError = validateProjectMediaFile(file)
   if (validationError) return { filePath: null, error: validationError }
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const filePath = `media/${clientId}/${equipmentType}/${equipmentId}/${Date.now()}_${safeName}`
+  const filePath = `${userId}/media/${clientId}/${equipmentType}/${equipmentId}/${Date.now()}_${safeName}`
   const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, {
     cacheControl: '3600',
     upsert: false,
@@ -64,11 +66,20 @@ export async function deleteEquipmentDocumentFile(filePath: string) {
 export const deleteProjectMediaFile = deleteEquipmentDocumentFile
 
 export async function getEquipmentDocumentUrl(filePath: string) {
+  const result = await getEquipmentDocumentUrlResult(filePath)
+  return result.url
+}
+
+export async function getEquipmentDocumentUrlResult(filePath: string) {
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
     .createSignedUrl(filePath, DEVICE_BACKUP_SIGNED_URL_EXPIRES_SECONDS)
-  if (error) return null
-  return data?.signedUrl || null
+  if (error) return { url: null, error: translateError(error) }
+  return {
+    url: data?.signedUrl || null,
+    error: data?.signedUrl ? null : 'O armazenamento não retornou uma URL para esta mídia.',
+  }
 }
 
 export const getProjectMediaUrl = getEquipmentDocumentUrl
+export const getProjectMediaUrlResult = getEquipmentDocumentUrlResult

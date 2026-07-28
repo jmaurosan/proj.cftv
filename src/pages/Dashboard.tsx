@@ -24,12 +24,24 @@ import { parseProjectAssets, type Nobreak } from '../lib/projectAssets'
 
 interface DashData {
   dvrs: { id: string; name: string; status: string; ip_address: string; total_channels: number }[]
-  cameras: { id: string; name: string; status: string; connection_type: string; poe_powered: boolean; type: string; location: string; ip_address: string | null }[]
+  cameras: {
+    id: string
+    name: string
+    status: string
+    connection_type: string
+    poe_powered: boolean
+    type: string
+    location: string
+    ip_address: string | null
+    dvr_id: string | null
+    channel_number: number | null
+    dvrs?: { name: string } | { name: string }[] | null
+  }[]
   switches: { id: string; name: string; status: string; is_poe: boolean; poe_standard: string | null; poe_budget_watts: number | null; total_ports: number; ip_address?: string | null }[]
   baluns: { id: string; status: string; balun_type?: 'passive' | 'power' | null }[]
   routers?: { id: string; name: string; status: string; ip_address: string | null }[]
   nobreaks: Nobreak[]
-  dvrChannelIssues: { id: string; dvr_id: string; channel_number: number; notes: string | null; dvrName: string }[]
+  dvrChannelIssues: { id: string; dvr_id: string; channel_number: number; cameraName: string; status: string; dvrName: string }[]
   cableCount: number
 }
 
@@ -66,7 +78,7 @@ export default function Dashboard() {
       }
 
       const dvrsQuery = supabase.from('dvrs').select('id, name, status, ip_address, total_channels').eq('client_id', selectedClientId).order('name')
-      const camerasQuery = supabase.from('cameras').select('id, name, status, connection_type, poe_powered, type, location, ip_address').eq('client_id', selectedClientId).order('name')
+      const camerasQuery = supabase.from('cameras').select('id, name, status, connection_type, poe_powered, type, location, ip_address, dvr_id, channel_number, dvrs(name)').eq('client_id', selectedClientId).order('name')
       const switchesQuery = supabase.from('switches').select('id, name, status, is_poe, poe_standard, poe_budget_watts, total_ports, ip_address').eq('client_id', selectedClientId).order('name')
       const balunsQuery = supabase.from('power_baluns').select('id, status, balun_type').eq('client_id', selectedClientId)
       const cablesQuery = supabase.from('cable_connections').select('id').eq('client_id', selectedClientId)
@@ -83,36 +95,27 @@ export default function Dashboard() {
         clientQuery,
       ])
 
-      const dvrIds = (dvrs.data || []).map((d) => d.id)
-      const dvrChannelIssues = dvrIds.length > 0
-        ? await supabase
-            .from('dvr_channels')
-            .select('id, dvr_id, channel_number, notes, dvrs(name)')
-            .eq('is_active', false)
-            .in('dvr_id', dvrIds)
-            .order('channel_number')
-        : { data: [] }
+      const cameraRows = (cameras.data || []) as unknown as DashData['cameras']
+      const dvrChannelIssues = cameraRows
+        .filter((camera) => camera.status !== 'ativo' && camera.dvr_id && camera.channel_number != null)
+        .map((camera) => ({
+          id: camera.id,
+          dvr_id: camera.dvr_id!,
+          channel_number: camera.channel_number!,
+          cameraName: camera.name,
+          status: camera.status,
+          dvrName: Array.isArray(camera.dvrs) ? camera.dvrs[0]?.name || 'DVR' : camera.dvrs?.name || 'DVR',
+        }))
+        .sort((a, b) => a.dvrName.localeCompare(b.dvrName) || a.channel_number - b.channel_number)
 
       setData({
         dvrs: (dvrs.data || []) as DashData['dvrs'],
-        cameras: (cameras.data || []) as DashData['cameras'],
+        cameras: cameraRows,
         switches: (switches.data || []) as DashData['switches'],
         baluns: (baluns.data || []) as DashData['baluns'],
         routers: (routers.data || []) as DashData['routers'],
         nobreaks: parseProjectAssets(client.data?.notes).nobreaks,
-        dvrChannelIssues: ((dvrChannelIssues.data || []) as unknown as {
-          id: string
-          dvr_id: string
-          channel_number: number
-          notes: string | null
-          dvrs?: { name: string } | { name: string }[] | null
-        }[]).map((issue) => ({
-          id: issue.id,
-          dvr_id: issue.dvr_id,
-          channel_number: issue.channel_number,
-          notes: issue.notes,
-          dvrName: Array.isArray(issue.dvrs) ? issue.dvrs[0]?.name || 'DVR' : issue.dvrs?.name || 'DVR',
-        })),
+        dvrChannelIssues,
         cableCount: cables.data?.length ?? 0,
       })
       setLoading(false)
@@ -234,9 +237,9 @@ export default function Dashboard() {
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-rose-200">Canais de DVR com atenção</h3>
+                <h3 className="text-sm font-bold text-rose-200">Câmeras de DVR com atenção</h3>
                 <p className="text-xs text-rose-100/80 mt-1">
-                  {channelsWithIssues} canal(is) desabilitado(s) por problema de câmera, canal queimado ou manutenção.
+                  {channelsWithIssues} câmera(s) inativa(s) ou em manutenção nos canais dos DVRs.
                 </p>
               </div>
             </div>
@@ -247,7 +250,7 @@ export default function Dashboard() {
                   className="px-2 py-1 rounded-md bg-bg-primary/70 border border-rose-500/30 text-[10px] font-mono text-rose-100"
                 >
                   {issue.dvrName} CH{issue.channel_number}
-                  {issue.notes ? ` · ${issue.notes}` : ''}
+                  {` · ${issue.cameraName}`}
                 </span>
               ))}
               {channelsWithIssues > 4 && (

@@ -25,6 +25,9 @@ import {
   Cable,
   Upload,
   Monitor,
+  Layers3,
+  AlertTriangle,
+  ChevronDown,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useClient } from '../contexts/ClientContext'
@@ -38,11 +41,16 @@ import { useToast } from './ui/Toast'
 import Button from './ui/Button'
 import LoadingSpinner from './ui/LoadingSpinner'
 import { buildAutomaticTopologyConnections } from '../lib/automaticTopology'
+import {
+  buildOrthogonalTopologyPath,
+  computeAutomaticTopologyLayout,
+  type TopologyLane,
+} from '../lib/topologyLayout'
 
 interface TopologyNode {
   id: string
   name: string
-  type: 'internet' | 'router' | 'switch' | 'dvr' | 'camera' | 'rack' | 'balun' | 'monitor'
+  type: 'internet' | 'router' | 'switch' | 'dvr' | 'camera' | 'camera-group' | 'rack' | 'balun' | 'monitor'
   status: string
   ip_address: string | null
   location: string
@@ -58,6 +66,7 @@ interface TopologyConnection {
   label?: string
   style?: 'dashed' | 'solid'
   manual?: boolean
+  medium?: 'wan' | 'lan' | 'poe' | 'coaxial' | 'utp-video' | 'video'
 }
 
 interface SwitchPortTopologyRow {
@@ -88,23 +97,8 @@ interface TopologyRack {
 
 const TOPOLOGY_NODE_WIDTH = 168
 const TOPOLOGY_NODE_HEIGHT = 58
-const TOPOLOGY_CANVAS_MIN_WIDTH = 1500
-const TOPOLOGY_CANVAS_MIN_HEIGHT = 820
 const TOPOLOGY_CANVAS_MARGIN = 90
 const TOPOLOGY_GRID_SIZE = 24
-
-const getTopologyCanvasSize = (allNodes: TopologyNode[]) => {
-  const cameraCount = allNodes.filter((node) => node.type === 'camera').length
-  const dvrCount = allNodes.filter((node) => node.type === 'dvr').length
-  const infrastructureCount = allNodes.filter((node) => ['router', 'switch', 'rack', 'balun', 'monitor'].includes(node.type)).length
-  const cameraRows = Math.ceil(Math.max(cameraCount, 1) / 6)
-  const dvrRows = Math.ceil(Math.max(dvrCount, 1) / 5)
-
-  return {
-    width: Math.max(TOPOLOGY_CANVAS_MIN_WIDTH, 760 + Math.max(cameraCount, dvrCount, infrastructureCount) * 82),
-    height: Math.max(TOPOLOGY_CANVAS_MIN_HEIGHT, 560 + dvrRows * 120 + cameraRows * 112),
-  }
-}
 
 export default function NetworkTopology() {
   const { selectedClientId, selectedClientName } = useClient()
@@ -121,6 +115,8 @@ export default function NetworkTopology() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [zoom, setZoom] = useState(0.8)
   const [snapToGrid, setSnapToGrid] = useState(true)
+  const [viewMode, setViewMode] = useState<'presentation' | 'technical'>('presentation')
+  const [expandedCameraParents, setExpandedCameraParents] = useState<string[]>([])
 
   // Layout persistido no campo `notes` do cliente
   const [textNotes, setTextNotes] = useState('')
@@ -152,7 +148,62 @@ export default function NetworkTopology() {
   // Equipamento selecionado para detalhamento
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
-  const canvasSize = useMemo(() => getTopologyCanvasSize(nodes), [nodes])
+  const presentationGraph = useMemo(() => {
+    if (viewMode === 'technical') return { nodes, connections }
+
+    const cameraById = new Map(nodes.filter((node) => node.type === 'camera').map((node) => [node.id, node]))
+    const camerasByParent = new Map<string, TopologyNode[]>()
+    connections.forEach((connection) => {
+      const camera = cameraById.get(connection.target)
+      if (!camera) return
+      camerasByParent.set(connection.source, [...(camerasByParent.get(connection.source) ?? []), camera])
+    })
+
+    const groupedCameraIds = new Set<string>()
+    const groupNodes: TopologyNode[] = []
+    const groupConnections: TopologyConnection[] = []
+    camerasByParent.forEach((cameras, parentId) => {
+      if (cameras.length < 2 || expandedCameraParents.includes(parentId)) return
+      cameras.forEach((camera) => groupedCameraIds.add(camera.id))
+      const activeCount = cameras.filter((camera) => camera.status === 'ativo' || camera.status === 'online').length
+      const groupId = `camera-group-${parentId}`
+      groupNodes.push({
+        id: groupId,
+        name: `${cameras.length} câmeras`,
+        type: 'camera-group',
+        status: activeCount === cameras.length ? 'ativo' : activeCount > 0 ? 'warning' : 'inativo',
+        ip_address: `${activeCount} ativas · ${cameras.length - activeCount} inativas`,
+        location: `Ligadas a ${nodes.find((node) => node.id === parentId)?.name ?? 'equipamento'}`,
+        model: 'Toque para detalhar',
+      })
+      groupConnections.push({
+        id: `group-${parentId}`,
+        source: parentId,
+        target: groupId,
+        active: activeCount > 0,
+        label: `${cameras.length} pontos`,
+        style: 'solid',
+        medium: connections.find((connection) => connection.target === cameras[0]?.id)?.medium,
+      })
+    })
+
+    return {
+      nodes: [...nodes.filter((node) => !groupedCameraIds.has(node.id)), ...groupNodes],
+      connections: [
+        ...connections.filter((connection) => !groupedCameraIds.has(connection.target)),
+        ...groupConnections,
+      ],
+    }
+  }, [connections, expandedCameraParents, nodes, viewMode])
+
+  const automaticLayout = useMemo(
+    () => computeAutomaticTopologyLayout(presentationGraph.nodes, presentationGraph.connections),
+    [presentationGraph],
+  )
+  const canvasSize = { width: automaticLayout.width, height: automaticLayout.height }
+  const displayNodes = presentationGraph.nodes
+  const displayConnections = presentationGraph.connections
+  const activePositions = viewMode === 'technical' && isEditing ? nodePositions : automaticLayout.positions
 
   // Carregar dados de nota do cliente e construir topologia
   const loadTopology = async () => {
@@ -468,84 +519,11 @@ export default function NetworkTopology() {
     saved: Record<string, { x: number; y: number }>,
     context?: TopologyBuildContext
   ) => {
-    const layout: Record<string, { x: number; y: number }> = {}
-
-    // Separa por camadas
-    const internet = allNodes.filter((n) => n.type === 'internet')
-    const routers = allNodes.filter((n) => n.type === 'router')
-    const switches = allNodes.filter((n) => n.type === 'switch')
-    const racks = allNodes.filter((n) => n.type === 'rack')
-    const baluns = allNodes.filter((n) => n.type === 'balun')
-    const dvrs = allNodes.filter((n) => n.type === 'dvr')
-    const cameras = allNodes.filter((n) => n.type === 'camera')
-    const monitors = allNodes.filter((n) => n.type === 'monitor')
-
-    const { width: containerWidth, height: containerHeight } = getTopologyCanvasSize(allNodes)
-    const centerX = containerWidth / 2
-    const clampX = (x: number) => Math.max(TOPOLOGY_CANVAS_MARGIN, Math.min(containerWidth - TOPOLOGY_CANVAS_MARGIN, x))
-    const clampY = (y: number) => Math.max(TOPOLOGY_CANVAS_MARGIN, Math.min(containerHeight - TOPOLOGY_CANVAS_MARGIN, y))
-    const savedValues = Object.values(saved)
-    const savedLooksLegacy = savedValues.length > 0
-      && Math.max(...savedValues.map((pos) => pos.x)) <= 1100
-      && Math.max(...savedValues.map((pos) => pos.y)) <= 700
-      && (containerWidth > 1200 || containerHeight > 760)
-    const normalizedSaved = savedLooksLegacy
-      ? Object.fromEntries(Object.entries(saved).map(([id, pos]) => [
-          id,
-          {
-            x: clampX(pos.x * (containerWidth / 1050)),
-            y: clampY(pos.y * (containerHeight / 650)),
-          },
-        ]))
-      : saved
-    const placeNode = (node: TopologyNode, fallback: { x: number; y: number }) => {
-      layout[node.id] = normalizedSaved[node.id] ?? fallback
-    }
-    const placeRow = (items: TopologyNode[], y: number, maxPerRow: number) => {
-      items.forEach((node, index) => {
-        const row = Math.floor(index / maxPerRow)
-        const rowItems = items.slice(row * maxPerRow, row * maxPerRow + maxPerRow)
-        const column = index % maxPerRow
-        const step = containerWidth / (rowItems.length + 1)
-        placeNode(node, { x: step * (column + 1), y: y + row * 118 })
-      })
-    }
-
-    internet.forEach((node) => placeNode(node, { x: centerX, y: 45 }))
-
-    routers.forEach((node, index) => {
-      const step = containerWidth / (routers.length + 1)
-      placeNode(node, { x: routers.length === 1 ? centerX : step * (index + 1), y: 145 })
-    })
-
-    const automaticConnections = context?.connections ?? []
-    const connectionByTarget = new Map(automaticConnections.map((connection) => [connection.target, connection]))
-    const sortByParent = (items: TopologyNode[]) => [...items].sort((a, b) => {
-      const aConnection = connectionByTarget.get(a.id)
-      const bConnection = connectionByTarget.get(b.id)
-      const parentCompare = (aConnection?.source ?? '').localeCompare(bConnection?.source ?? '', 'pt-BR', { numeric: true })
-      if (parentCompare !== 0) return parentCompare
-      return (aConnection?.label ?? a.name).localeCompare(bConnection?.label ?? b.name, 'pt-BR', { numeric: true })
-    })
-
-    // Camadas globais evitam que grupos com o mesmo pai se sobreponham.
-    // As posições já salvas continuam sendo respeitadas; este arranjo é usado
-    // para novos nós e ao acionar "Redefinir árvore".
-    placeRow(sortByParent(switches), 245, 6)
-    placeRow(racks, 365, 5)
-    placeRow(sortByParent(dvrs), 485, 6)
-
-    const supportDevices = [...baluns, ...monitors]
-    const supportStartY = dvrs.length > 0 ? 605 : 485
-    placeRow(sortByParent(supportDevices), supportStartY, 6)
-
-    const supportRows = Math.ceil(Math.max(supportDevices.length, 1) / 6)
-    const cameraStartY = supportDevices.length > 0
-      ? supportStartY + supportRows * 118
-      : dvrs.length > 0 ? 605 : racks.length > 0 ? 485 : 365
-    placeRow(sortByParent(cameras), cameraStartY, 7)
-
-    return layout
+    const automatic = computeAutomaticTopologyLayout(allNodes, context?.connections ?? [])
+    return Object.fromEntries(allNodes.map((node) => [
+      node.id,
+      saved[node.id] ?? automatic.positions[node.id],
+    ]))
   }
 
   useEffect(() => {
@@ -934,6 +912,8 @@ export default function NetworkTopology() {
         return <Monitor className={className} />
       case 'dvr':
         return <Server className={className} />
+      case 'camera-group':
+        return <Layers3 className={className} />
       case 'camera':
       default:
         return <Video className={className} />
@@ -947,6 +927,7 @@ export default function NetworkTopology() {
       switch: 'Switch',
       dvr: 'DVR',
       camera: 'Câmera',
+      'camera-group': 'Grupo de câmeras',
       rack: 'Rack',
       balun: 'Power Balun',
       monitor: 'Monitor'
@@ -1063,6 +1044,9 @@ export default function NetworkTopology() {
   const selectedRackConnections = selectedRack
     ? connections.filter((connection) => connection.source === selectedRack.id || connection.target === selectedRack.id)
     : []
+  const unlinkedCount = automaticLayout.orphanIds.filter(
+    (id) => displayNodes.find((node) => node.id === id)?.type !== 'rack',
+  ).length
 
   return (
     <div className={shellClass}>
@@ -1078,6 +1062,33 @@ export default function NetworkTopology() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center rounded-lg border border-border-light bg-bg-primary p-1" aria-label="Modo de visualização">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('presentation')
+                setIsEditing(false)
+                setSelectedNode(null)
+              }}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                viewMode === 'presentation' ? 'bg-cyan-500/15 text-cyan-300' : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              Apresentação
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('technical')
+                setSelectedNode(null)
+              }}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                viewMode === 'technical' ? 'bg-cyan-500/15 text-cyan-300' : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              Técnico
+            </button>
+          </div>
           {!isDedicatedTopologyPage && (
             <Button
               variant="secondary"
@@ -1116,7 +1127,7 @@ export default function NetworkTopology() {
             Redefinir Árvore
           </Button>
 
-          <button
+          {viewMode === 'technical' && <button
             onClick={() => {
               if (isEditing) {
                 handleSaveTopology()
@@ -1133,9 +1144,33 @@ export default function NetworkTopology() {
           >
             <Edit2 className="w-3.5 h-3.5" />
             {isEditing ? 'Finalizar Organização' : 'Organizar Blocos'}
-          </button>
+          </button>}
         </div>
       </header>
+
+      <section className="grid gap-3 sm:grid-cols-3" aria-label="Resumo da topologia">
+        <div className="rounded-xl border border-border-light bg-bg-secondary px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">Equipamentos exibidos</p>
+          <p className="mt-1 font-mono text-xl font-bold text-text-primary">{displayNodes.length}</p>
+        </div>
+        <div className="rounded-xl border border-border-light bg-bg-secondary px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">Vínculos identificados</p>
+          <p className="mt-1 font-mono text-xl font-bold text-cyan-300">{displayConnections.length}</p>
+        </div>
+        <div className={`rounded-xl border px-4 py-3 ${
+          unlinkedCount > 0
+            ? 'border-amber-500/30 bg-amber-500/5'
+            : 'border-emerald-500/20 bg-emerald-500/5'
+        }`}>
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Sem vínculo cadastrado
+          </p>
+          <p className="mt-1 font-mono text-xl font-bold text-amber-300">
+            {unlinkedCount}
+          </p>
+        </div>
+      </section>
 
       <div className={`grid grid-cols-1 2xl:grid-cols-[300px_minmax(0,1fr)] gap-4 ${isFullscreen ? 'items-start' : ''}`}>
         {/* Painel de Zoom & Detalhamento */}
@@ -1753,6 +1788,13 @@ export default function NetworkTopology() {
 
         {/* Canvas do Diagrama de Topologia */}
         <div className={`2xl:order-2 order-1 bg-bg-secondary rounded-xl border border-border-light relative overflow-auto ${canvasViewportClass} min-w-0`}>
+          <div className="sticky left-3 top-3 z-30 ml-auto mr-3 mt-3 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-border-light bg-bg-primary/95 px-3 py-2 text-[9px] font-semibold text-text-muted shadow-lg backdrop-blur">
+            <span className="font-bold uppercase tracking-wider text-text-secondary">Legenda</span>
+            <span className="flex items-center gap-1.5"><i className="h-0.5 w-5 bg-violet-400" /> WAN</span>
+            <span className="flex items-center gap-1.5"><i className="h-0.5 w-5 bg-sky-400" /> Rede / PoE</span>
+            <span className="flex items-center gap-1.5"><i className="h-0.5 w-5 bg-amber-400" /> Vídeo</span>
+            <span className="flex items-center gap-1.5"><i className="h-0.5 w-5 border-t border-dashed border-slate-400" /> Inativo</span>
+          </div>
           {/* Fundo do Canvas Técnico */}
           <div
             className="absolute inset-0 opacity-[0.03] pointer-events-none"
@@ -1775,6 +1817,20 @@ export default function NetworkTopology() {
                 transition: 'transform 0.15s ease-out'
               }}
             >
+            {automaticLayout.lanes.map((lane: TopologyLane, index) => (
+              <div
+                key={lane.id}
+                className={`absolute left-5 right-5 rounded-2xl border ${
+                  index % 2 === 0 ? 'border-slate-700/45 bg-slate-950/20' : 'border-slate-700/25 bg-slate-900/10'
+                }`}
+                style={{ top: lane.y, height: lane.height }}
+              >
+                <span className="absolute left-4 top-3 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  {lane.label}
+                </span>
+              </div>
+            ))}
+
             {/* SVG das Linhas de Conexão */}
             <svg className="absolute inset-0 pointer-events-none z-0" width={canvasSize.width} height={canvasSize.height}>
               <defs>
@@ -1786,42 +1842,46 @@ export default function NetworkTopology() {
                   <stop offset="0%" stopColor="#374151" stopOpacity="0.6" />
                   <stop offset="100%" stopColor="#1f2937" stopOpacity="0.2" />
                 </linearGradient>
+                <marker id="topology-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                  <path d="M 0 0 L 7 3.5 L 0 7 z" fill="#38bdf8" opacity="0.75" />
+                </marker>
               </defs>
 
-              {connections.map((conn) => {
-                const sourcePos = nodePositions[conn.source]
-                const targetPos = nodePositions[conn.target]
+              {displayConnections.map((conn) => {
+                const sourcePos = activePositions[conn.source]
+                const targetPos = activePositions[conn.target]
 
                 if (!sourcePos || !targetPos) return null
 
-                // Ajusta os pontos para saírem do centro das caixas
                 const x1 = sourcePos.x
                 const y1 = sourcePos.y
                 const x2 = targetPos.x
                 const y2 = targetPos.y
-
-                // Curva Bézier cúbica vertical para ligar nós em camadas de cima para baixo
-                const controlY1 = y1 + (y2 - y1) * 0.4
-                const controlY2 = y2 - (y2 - y1) * 0.4
-                const pathData = `M ${x1} ${y1} C ${x1} ${controlY1}, ${x2} ${controlY2}, ${x2} ${y2}`
+                const pathData = buildOrthogonalTopologyPath(sourcePos, targetPos)
+                const mediumColor = conn.medium === 'coaxial' || conn.medium === 'utp-video' || conn.medium === 'video'
+                  ? '#f59e0b'
+                  : conn.medium === 'wan'
+                    ? '#a78bfa'
+                    : '#38bdf8'
 
                 return (
                   <g key={conn.id}>
                     <path
                       d={pathData}
-                      stroke={conn.active ? 'url(#active-grad)' : 'url(#inactive-grad)'}
+                      stroke={conn.active ? mediumColor : '#475569'}
                       strokeWidth={conn.active ? 2.5 : 1.5}
-                      strokeDasharray={conn.style === 'solid' ? undefined : '6 4'}
+                      strokeDasharray={conn.active ? undefined : '6 5'}
                       fill="none"
-                      className={conn.active && conn.style !== 'solid' ? 'animate-dash' : ''}
+                      opacity={conn.active ? 0.78 : 0.4}
+                      markerEnd="url(#topology-arrow)"
                     />
 
                     {/* Pequena label opcional com o número da porta */}
                     {conn.label && (
                       <foreignObject
-                        x={(x1 + x2) / 2 - 25}
-                        y={(y1 + y2) / 2 - 10}
-                        width="50"
+                        x={x2 - 34}
+                        y={y2 - 46}
+                        width="68"
                         height="20"
                         className="overflow-visible"
                       >
@@ -1836,8 +1896,8 @@ export default function NetworkTopology() {
             </svg>
 
             {/* Renderizar Nós (Equipamentos) */}
-            {nodes.map((node) => {
-              const pos = nodePositions[node.id]
+            {displayNodes.map((node) => {
+              const pos = activePositions[node.id]
               if (!pos) return null
 
               const isActive = selectedNode?.id === node.id
@@ -1852,11 +1912,18 @@ export default function NetworkTopology() {
               return (
                 <motion.div
                   key={node.id}
-                  drag={isEditing && node.type !== 'internet'}
+                  drag={viewMode === 'technical' && isEditing && node.type !== 'internet'}
                   dragMomentum={false}
                   dragElastic={0}
                   onDragEnd={(e, info) => handleNodeDragEnd(node.id, info)}
-                  onClick={(event) => handleNodeClick(node, event)}
+                  onClick={(event) => {
+                    if (node.type === 'camera-group') {
+                      const parentId = node.id.replace('camera-group-', '')
+                      setExpandedCameraParents((current) => [...current, parentId])
+                      return
+                    }
+                    handleNodeClick(node, event)
+                  }}
                   className={`absolute z-10 p-3 bg-bg-secondary border-2 rounded-xl flex items-center gap-3 shadow-2xl cursor-pointer select-none transition-colors ${
                     isActive || isMultiSelected ? 'ring-2 ring-accent scale-105 border-accent' : 'border-border-light hover:border-accent/40'
                   }`}
@@ -1886,6 +1953,9 @@ export default function NetworkTopology() {
                   {/* Pequena bolinha de status */}
                   {node.type !== 'internet' && (
                     <span className={`absolute top-2 right-2 w-1.5 h-1.5 rounded-full ${statusColor}`} />
+                  )}
+                  {node.type === 'camera-group' && (
+                    <ChevronDown className="absolute bottom-1.5 right-2 h-3 w-3 text-cyan-300" />
                   )}
                 </motion.div>
               )
