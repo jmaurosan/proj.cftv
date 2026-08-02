@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useClient } from '../contexts/ClientContext'
 import { generateReport } from '../lib/reportGenerator'
-import { buildFloorPlanReportSummary, parseFloorPlanFromNotes } from '../lib/floorPlanReport'
 import { parseProjectAssets } from '../lib/projectAssets'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
 import type { Dvr, Camera, Switch, PowerBalun, CableConnection, Router, Credential } from '../lib/types'
@@ -138,11 +137,7 @@ export default function ReportsPage() {
       const routers = (routersRes.data || []) as Router[]
       const credentials = (credentialsRes.data || []) as Credential[]
       const rawCables = (cablesRes.data || []) as CableConnection[]
-      const floorPlan = parseFloorPlanFromNotes(clientRes.data?.notes)
       const projectAssets = parseProjectAssets(clientRes.data?.notes)
-      const floorPlanSummary = floorPlan
-        ? buildFloorPlanReportSummary(floorPlan, cameras, switches, dvrs)
-        : null
 
       // Enriquecer cabos com os nomes correspondentes das câmeras
       const cameraMap = new Map(cameras.map(c => [c.id, c.name]))
@@ -163,8 +158,6 @@ export default function ReportsPage() {
         userEmail: user?.email || 'N/A',
         clientName: clientName.trim(),
         projectName: projectName.trim(),
-        floorPlan,
-        floorPlanSummary,
         nobreaks: projectAssets.nobreaks,
         equipmentDocuments: projectAssets.documents,
       })

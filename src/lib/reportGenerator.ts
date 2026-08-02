@@ -2,7 +2,6 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Dvr, Camera, Switch, PowerBalun, CableConnection, Router, Credential } from './types'
 import { CABLE_TYPE_LABELS } from './constants'
-import type { FloorPlanReportConfig, FloorPlanReportSummary } from './floorPlanReport'
 import { describeBatteryBank, type EquipmentDocument, type Nobreak } from './projectAssets'
 import { getEquipmentDocumentUrl } from '../services/projectAssetsService'
 import { getInstallationPhotoUrl, getQRCodeImageUrl } from '../services/storageService'
@@ -18,8 +17,6 @@ interface ReportData {
   userEmail: string
   clientName: string
   projectName: string
-  floorPlan?: FloorPlanReportConfig | null
-  floorPlanSummary?: FloorPlanReportSummary | null
   nobreaks?: Nobreak[]
   equipmentDocuments?: EquipmentDocument[]
 }
@@ -167,103 +164,6 @@ function drawSummaryBox(doc: jsPDF, x: number, y: number, w: number, h: number, 
   doc.setFontSize(7)
   doc.setTextColor(...COLORS.muted)
   doc.text(label, x + w / 2, y + 20, { align: 'center' })
-}
-
-function drawFloorPlanPage(doc: jsPDF, data: ReportData, headerSubtitle: string) {
-  const floorPlan = data.floorPlan
-  const summary = data.floorPlanSummary
-  if (!floorPlan || !summary) return
-
-  doc.addPage()
-  addPageHeader(doc, 'Planta Técnica & Cobertura', headerSubtitle)
-  let y = addSectionTitle(doc, 36, '5', 'Mapa Técnico Consolidado')
-
-  const boxW = 42.5
-  drawSummaryBox(doc, 14, y, boxW, 22, `${summary.coveragePercentage}%`, 'Cobertura estimada', COLORS.primary)
-  drawSummaryBox(doc, 60.5, y, boxW, 22, `${summary.estimatedCableMeters} m`, 'Cabos estimados', COLORS.warning)
-  drawSummaryBox(doc, 107, y, boxW, 22, `${summary.usedSwitchPorts}/${summary.totalSwitchPorts}`, 'Portas de switch', COLORS.success)
-  drawSummaryBox(doc, 153.5, y, boxW, 22, `${summary.usedRecorderChannels}/${summary.totalRecorderChannels}`, 'Canais DVR/NVR', [99, 102, 241])
-  y += 30
-
-  const mapX = 14
-  const mapY = y
-  const mapW = 182
-  const mapH = 135
-  doc.setFillColor(248, 250, 252)
-  doc.setDrawColor(...COLORS.border)
-  doc.roundedRect(mapX, mapY, mapW, mapH, 2, 2, 'FD')
-
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.15)
-  for (let column = 1; column < 10; column += 1) doc.line(mapX + column * mapW / 10, mapY, mapX + column * mapW / 10, mapY + mapH)
-  for (let row = 1; row < 8; row += 1) doc.line(mapX, mapY + row * mapH / 8, mapX + mapW, mapY + row * mapH / 8)
-
-  const symbolById = new Map(floorPlan.technicalSymbols.map((symbol) => [symbol.id, symbol]))
-  const pointFor = (id: string) => floorPlan.positions[id] || symbolById.get(id)
-  const toMap = (point: { x: number; y: number }) => ({
-    x: mapX + point.x / 100 * mapW,
-    y: mapY + point.y / 100 * mapH,
-  })
-
-  doc.setLineWidth(0.45)
-  for (const camera of data.cameras) {
-    const source = floorPlan.positions[camera.id]
-    const target = floorPlan.positions[camera.switch_id || camera.dvr_id || '']
-    if (!source || !target) continue
-    const a = toMap(source)
-    const b = toMap(target)
-    doc.setDrawColor(...COLORS.primary)
-    doc.setLineDashPattern([1.5, 1], 0)
-    doc.line(a.x, a.y, b.x, b.y)
-  }
-  for (const connection of floorPlan.manualConnections) {
-    const source = pointFor(connection.sourceId)
-    const target = pointFor(connection.targetId)
-    if (!source || !target) continue
-    const a = toMap(source)
-    const b = toMap(target)
-    doc.setDrawColor(14, 165, 233)
-    doc.setLineDashPattern(connection.lineStyle === 'dashed' ? [2, 1.2] : [], 0)
-    doc.line(a.x, a.y, b.x, b.y)
-  }
-  doc.setLineDashPattern([], 0)
-
-  const equipmentNames = new Map<string, string>([
-    ...data.cameras.map((item) => [item.id, item.name] as [string, string]),
-    ...data.dvrs.map((item) => [item.id, item.name] as [string, string]),
-    ...data.switches.map((item) => [item.id, item.name] as [string, string]),
-    ...data.routers.map((item) => [item.id, item.name] as [string, string]),
-    ...data.baluns.map((item) => [item.id, item.name] as [string, string]),
-  ])
-  for (const [id, position] of Object.entries(floorPlan.positions)) {
-    const point = toMap(position)
-    const isCamera = position.type === 'camera'
-    doc.setFillColor(...(isCamera ? COLORS.primary : COLORS.headerBg))
-    doc.setDrawColor(...COLORS.white)
-    doc.circle(point.x, point.y, isCamera ? 2.3 : 3, 'FD')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(5.5)
-    doc.setTextColor(...COLORS.text)
-    doc.text((equipmentNames.get(id) || position.type || 'Equipamento').slice(0, 24), point.x + 3.5, point.y + 1.5)
-  }
-  for (const symbol of floorPlan.technicalSymbols) {
-    const point = toMap(symbol)
-    doc.setFillColor(16, 185, 129)
-    doc.setDrawColor(...COLORS.white)
-    doc.circle(point.x, point.y, 2.5, 'FD')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(5.5)
-    doc.setTextColor(...COLORS.text)
-    doc.text(symbol.label.slice(0, 24), point.x + 3.5, point.y + 1.5)
-  }
-
-  y = mapY + mapH + 8
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(...COLORS.muted)
-  doc.text(`Dimensões de referência: ${floorPlan.planWidthMeters} m x ${floorPlan.planHeightMeters} m`, 14, y)
-  doc.text(`${summary.positionedEquipment} equipamento(s), ${summary.technicalSymbols} símbolo(s) e ${summary.manualConnections} conexão(ões) manual(is).`, 196, y, { align: 'right' })
-  doc.text('Cobertura e metragem são estimativas técnicas baseadas nas posições e parâmetros configurados na planta.', 14, y + 5)
 }
 
 async function drawPowerProtectionPage(doc: jsPDF, data: ReportData, headerSubtitle: string) {
@@ -602,11 +502,6 @@ export async function generateReport(data: ReportData) {
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
   }
 
-  // =========================================================
-  // PAGE 4 — Planta técnica salva no projeto
-  // =========================================================
-  drawFloorPlanPage(doc, data, headerSubtitle)
-
   // Proteção elétrica, baterias e documentação dos equipamentos
   await drawPowerProtectionPage(doc, data, headerSubtitle)
 
@@ -777,8 +672,6 @@ export async function generateReport(data: ReportData) {
     ['Total de Switches', `${data.switches.length} (${countByStatus(data.switches).ativos} ativos)`],
     ['Total de Roteadores', `${data.routers.length} (${countByStatus(data.routers).ativos} ativos)`],
     ['Fichas de Cabeamento', `${data.cables.length} cadastradas`],
-    ['Cobertura da Planta', data.floorPlanSummary ? `${data.floorPlanSummary.coveragePercentage}% estimada` : 'Planta não configurada'],
-    ['Metragem Estimada', data.floorPlanSummary ? `${data.floorPlanSummary.estimatedCableMeters} metros` : '-'],
     ['Nobreaks', `${data.nobreaks?.length || 0} cadastrado(s)`],
     ['Documentos Técnicos', `${data.equipmentDocuments?.length || 0} item(ns)`],
   ]

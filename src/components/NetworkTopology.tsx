@@ -120,7 +120,6 @@ export default function NetworkTopology() {
 
   // Layout persistido no campo `notes` do cliente
   const [textNotes, setTextNotes] = useState('')
-  const [floorPlanConfig, setFloorPlanConfig] = useState<any>(null)
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
   const [useManualConnections, setUseManualConnections] = useState(false)
   const [manualConnections, setManualConnections] = useState<TopologyConnection[]>([])
@@ -230,7 +229,6 @@ export default function NetworkTopology() {
           const parsed = JSON.parse(client.notes)
           if (parsed) {
             setTextNotes(parsed.textNotes || '')
-            setFloorPlanConfig(parsed.floorPlan || null)
             if (parsed.topologyLayout) {
               savedPositions = parsed.topologyLayout
             }
@@ -560,7 +558,6 @@ export default function NetworkTopology() {
       const notesPayload = JSON.stringify({
         ...existingNotes,
         textNotes,
-        floorPlan: floorPlanConfig,
         topologyLayout: updatedPositions,
         topologySnapToGrid: snapToGrid,
         topologyUseManualConnections: useManualConnections,

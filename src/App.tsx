@@ -21,7 +21,6 @@ const CredentialsPage = lazy(() => import('./pages/CredentialsPage'))
 const ClientsPage = lazy(() => import('./pages/ClientsPage'))
 const ChannelMappingPage = lazy(() => import('./pages/ChannelMappingPage'))
 const CrimpPage = lazy(() => import('./pages/CrimpPage'))
-const FloorPlanPage = lazy(() => import('./pages/FloorPlanPage'))
 const TopologyPage = lazy(() => import('./pages/TopologyPage'))
 const PowerProtectionPage = lazy(() => import('./pages/PowerProtectionPage'))
 const DocumentsMediaPage = lazy(() => import('./pages/DocumentsMediaPage'))
@@ -50,7 +49,6 @@ export default function App() {
                   <Route path="/monitores" element={<MonitorsPage />} />
                   <Route path="/credenciais" element={<CredentialsPage />} />
                   <Route path="/crimpagem" element={<CrimpPage />} />
-                  <Route path="/plantabaixa" element={<FloorPlanPage />} />
                   <Route path="/topologia" element={<TopologyPage />} />
                   <Route path="/relatorios" element={<ReportsPage />} />
                   <Route path="/energia-documentos" element={<PowerProtectionPage />} />
