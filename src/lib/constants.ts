@@ -158,6 +158,35 @@ export const ROUTER_TYPES = [
   { value: 'generic', label: 'Roteador Genérico' },
 ] as const
 
+export const DVR_OPERATION_MODES = [
+  { value: 'hybrid', label: 'Híbrido (BNC + IP)' },
+  { value: 'nvr', label: 'NVR (só IP)' },
+  { value: 'dvr_only', label: 'Só analógico (sem IP)' },
+] as const
+
+export const ROUTER_MODES = [
+  { value: 'router', label: 'Roteador tradicional' },
+  { value: 'ap', label: 'Access Point (AP)' },
+  { value: 'client', label: 'Cliente wireless' },
+  { value: 'bridge', label: 'Bridge (ponte L2)' },
+  { value: 'wisp', label: 'WISP / rádio externo' },
+  { value: 'other', label: 'Outro' },
+] as const
+
+export const SITE_TYPES = [
+  { value: 'elevador_social', label: 'Elevador social' },
+  { value: 'elevador_servico', label: 'Elevador de serviço' },
+  { value: 'elevador_panoramico', label: 'Elevador panorâmico' },
+  { value: 'bloco', label: 'Bloco / prédio' },
+  { value: 'pavimento', label: 'Pavimento / andar' },
+  { value: 'guarita', label: 'Guarita' },
+  { value: 'portaria', label: 'Portaria' },
+  { value: 'estacionamento', label: 'Estacionamento' },
+  { value: 'area_comum', label: 'Área comum' },
+  { value: 'ext_externo', label: 'Externo (poste, rua)' },
+  { value: 'outro', label: 'Outro' },
+] as const
+
 export const CONNECTION_TYPES_INTERNET = [
   { value: 'fiber', label: 'Fibra Óptica' },
   { value: 'adsl', label: 'ADSL' },

@@ -33,6 +33,10 @@ export interface Dvr {
   installation_date: string | null
   location: string
   total_channels: number
+  analog_channels: number
+  ip_channels: number
+  operation_mode: 'hybrid' | 'nvr' | 'dvr_only'
+  disabled_analog_channels: number[]
   hd_capacity_tb: number | null
   hd_brand: string | null
   hd_model: string | null
@@ -89,11 +93,12 @@ export interface Camera {
   qr_code_url: string | null
   installation_photo_url: string | null
   notes: string | null
+  site_id: string | null
   client_id: string | null
   user_id: string
   created_at: string
   updated_at: string
-  dvrs?: { name: string }
+  dvrs?: { name: string; analog_channels?: number | null; disabled_analog_channels?: number[] | null }
 }
 
 export interface CameraInstallationPhoto {
@@ -218,6 +223,106 @@ export interface CableConnection {
 
 export type CableConnectionInsert = Omit<CableConnection, 'id' | 'created_at' | 'updated_at'>
 export type CableConnectionUpdate = Partial<Omit<CableConnection, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+
+// ------------------------------------------------------------
+// Novo modelo de cabos (Fase 1)
+// ------------------------------------------------------------
+
+export interface UtpCablePair {
+  id: string
+  cable_id: string
+  pair_number: number
+  function: string
+  camera_id: string | null
+  wire1_color: string | null
+  wire2_color: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface UtpCable {
+  id: string
+  client_id: string
+  user_id: string
+  name: string | null
+  cable_type: string
+  wiring_standard: string | null
+  custom_color_order: string | null
+  cable_length_meters: number | null
+  has_splice: boolean
+  splice_location: string | null
+  splice_notes: string | null
+  notes: string | null
+  legacy_cable_id: string | null
+  created_at: string
+  updated_at: string
+  utp_cable_pairs?: UtpCablePair[]
+}
+
+export type UtpCableInsert = Omit<UtpCable, 'id' | 'created_at' | 'updated_at' | 'utp_cable_pairs'>
+export type UtpCableUpdate = Partial<Omit<UtpCable, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'utp_cable_pairs'>>
+
+export interface UtpCablePairInput {
+  pair_number: number
+  function: string
+  camera_id: string | null
+  wire1_color: string | null
+  wire2_color: string | null
+}
+
+export interface PowerCable {
+  id: string
+  client_id: string
+  user_id: string
+  name: string
+  wire_gauge_mm2: number | null
+  voltage: string | null
+  cable_length_meters: number | null
+  power_source_info: string | null
+  notes: string | null
+  legacy_cable_id: string | null
+  created_at: string
+  updated_at: string
+  camera_ids?: string[]
+}
+
+export type PowerCableInsert = Omit<PowerCable, 'id' | 'created_at' | 'updated_at' | 'camera_ids'>
+export type PowerCableUpdate = Partial<Omit<PowerCable, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'camera_ids'>>
+
+// ------------------------------------------------------------
+// Sites físicos (Fase 2) — elevadores, blocos, guarita, etc.
+// ------------------------------------------------------------
+
+export type SiteType =
+  | 'elevador_social'
+  | 'elevador_servico'
+  | 'elevador_panoramico'
+  | 'bloco'
+  | 'pavimento'
+  | 'guarita'
+  | 'portaria'
+  | 'estacionamento'
+  | 'area_comum'
+  | 'ext_externo'
+  | 'outro'
+
+export interface InstallationSite {
+  id: string
+  client_id: string
+  user_id: string
+  name: string
+  site_type: SiteType
+  parent_site_id: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type InstallationSiteInsert = Omit<InstallationSite, 'id' | 'created_at' | 'updated_at'>
+export type InstallationSiteUpdate = Partial<Omit<InstallationSite, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+
+// Router modes (Fase 2)
+export type RouterMode = 'router' | 'ap' | 'client' | 'bridge' | 'wisp' | 'other'
 
 export interface EquipmentLog {
   id: string
@@ -344,6 +449,10 @@ export interface Router {
   password: string | null
   status: string
   notes: string | null
+  mode: RouterMode
+  paired_router_id: string | null
+  site_id: string | null
+  powered_by_poe_injector: boolean
   client_id: string | null
   user_id: string
   created_at: string
@@ -360,9 +469,6 @@ export interface InternetConnection {
   subnet_mask: string | null
   gateway_ip: string | null
   dhcp_enabled: boolean
-  speed_down_mbps: number | null
-  speed_up_mbps: number | null
-  monthly_cost: number | null
   contract_number: string | null
   is_active: boolean
   notes: string | null

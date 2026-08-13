@@ -13,13 +13,14 @@ import Modal from '../components/ui/Modal'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import CameraForm from '../components/forms/CameraForm'
-import CableForm from '../components/forms/CableForm'
+import UtpCableForm from '../components/forms/UtpCableForm'
 import { useToast } from '../components/ui/Toast'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
 import { getInstallationPhotoUrl, getQRCodeImageUrl } from '../services/storageService'
 import { listCameraInstallationPhotos } from '../services/cameraInstallationPhotosService'
 import { buildCameraPhotoGallery, type CameraPhotoGalleryItem } from '../lib/cameraInstallationPhotos'
 import { byDirection, compareIpAddress, compareNumbers, naturalCompare } from '../lib/sorting'
+import { channelKindLabel, classifyDvrChannel } from '../lib/dvrChannels'
 
 const getPowerSourceLabel = (camera: Camera) => {
   if (camera.power_source_type === 'poe' || camera.poe_powered) return 'PoE'
@@ -297,7 +298,32 @@ export default function CamerasPage() {
           ? c.ip_address ?? '-'
           : c.dvrs?.name ?? '-',
     },
-    { key: 'channel_number', label: 'Canal', sortable: true, render: (c) => c.channel_number ?? '-' },
+    {
+      key: 'channel_number',
+      label: 'Canal',
+      sortable: true,
+      render: (c) => {
+        if (c.channel_number == null) return '-'
+        const kind = classifyDvrChannel(c.channel_number, c.dvrs?.analog_channels, c.connection_type, c.dvrs?.disabled_analog_channels)
+        const badge = channelKindLabel(kind)
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            {c.channel_number}
+            {badge && (
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                  kind === 'ip'
+                    ? 'bg-cyan-500/20 text-cyan-300'
+                    : 'bg-amber-500/20 text-amber-300'
+                }`}
+              >
+                {badge}
+              </span>
+            )}
+          </span>
+        )
+      },
+    },
     {
       key: 'ir_distance_meters',
       label: 'IR',
@@ -722,8 +748,8 @@ export default function CamerasPage() {
         size="lg"
       >
         {cableCamera && (
-          <CableForm
-            cameraId={cableCamera.id}
+          <UtpCableForm
+            anchorCameraId={cableCamera.id}
             onClose={() => setCableCamera(null)}
             onSaved={() => {
               fetchCableTypes()

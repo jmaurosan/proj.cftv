@@ -13,6 +13,8 @@ const DvrsPage = lazy(() => import('./pages/DvrsPage'))
 const CamerasPage = lazy(() => import('./pages/CamerasPage'))
 const LocalViewerPage = lazy(() => import('./pages/LocalViewerPage'))
 const BalunsPage = lazy(() => import('./pages/BalunsPage'))
+const CablesPage = lazy(() => import('./pages/CablesPage'))
+const SitesPage = lazy(() => import('./pages/SitesPage'))
 const SwitchesPage = lazy(() => import('./pages/SwitchesPage'))
 const RoutersPage = lazy(() => import('./pages/RoutersPage'))
 const RacksPage = lazy(() => import('./pages/RacksPage'))
@@ -43,6 +45,8 @@ export default function App() {
                   <Route path="/visualizacao-local" element={<LocalViewerPage />} />
                   <Route path="/mapeamento" element={<ChannelMappingPage />} />
                   <Route path="/baluns" element={<BalunsPage />} />
+                  <Route path="/cabos" element={<CablesPage />} />
+                  <Route path="/locais" element={<SitesPage />} />
                   <Route path="/switches" element={<SwitchesPage />} />
                   <Route path="/roteadores" element={<RoutersPage />} />
                   <Route path="/racks" element={<RacksPage />} />

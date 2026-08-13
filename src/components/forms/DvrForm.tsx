@@ -1,6 +1,6 @@
 import { useState, useMemo, type FormEvent, useEffect, useRef } from 'react'
 import type { Camera, CameraUpdate, Dvr } from '../../lib/types'
-import { STATUS_OPTIONS, CHANNEL_OPTIONS } from '../../lib/constants'
+import { STATUS_OPTIONS, CHANNEL_OPTIONS, DVR_OPERATION_MODES } from '../../lib/constants'
 import { findEquipmentModelByText } from '../../lib/equipmentModelCatalog'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import { useCameras } from '../../hooks/useCameras'
@@ -14,6 +14,9 @@ import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
 import BackupManager from '../ui/BackupManager'
+import LabelScanner from '../ui/LabelScanner'
+import { applyScannedLabel } from '../../lib/labelScanMerge'
+import type { EquipmentLabelData } from '../../services/geminiService'
 import { CameraIcon, Cloud, Cpu, HardDrive, Package, QrCode, Share2, X } from 'lucide-react'
 
 const HD_CAPACITY_OPTIONS = [
@@ -151,6 +154,10 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
   const [installationDate, setInstallationDate] = useState(initialData?.installation_date ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [totalChannels, setTotalChannels] = useState(initialData?.total_channels ?? 8)
+  const [analogChannels, setAnalogChannels] = useState(initialData?.analog_channels ?? initialData?.total_channels ?? 8)
+  const [ipChannels, setIpChannels] = useState(initialData?.ip_channels ?? 0)
+  const [operationMode, setOperationMode] = useState<'hybrid' | 'nvr' | 'dvr_only'>(initialData?.operation_mode ?? 'hybrid')
+  const [disabledAnalogChannels, setDisabledAnalogChannels] = useState<number[]>(initialData?.disabled_analog_channels ?? [])
   const [hdCapacityTb, setHdCapacityTb] = useState(initialData?.hd_capacity_tb?.toString() ?? '')
   const [hdBrand, setHdBrand] = useState(initialData?.hd_brand ?? '')
   const [hdModel, setHdModel] = useState(initialData?.hd_model ?? '')
@@ -206,7 +213,12 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
     setOtherBrandMode(false)
     if (m.brand) setBrand(m.brand)
     if (m.model) setModel(m.model)
-    if (m.channel_count) setTotalChannels(m.channel_count)
+    if (m.channel_count) {
+      // Catálogo guarda só o total; assume tudo analógico e usuário ajusta IP depois
+      setAnalogChannels(m.channel_count)
+      setIpChannels(0)
+      setTotalChannels(m.channel_count)
+    }
     // Não preenche name - é o identificador do DVR específico
   }
 
@@ -229,7 +241,11 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
       serial_number: serialNumber || null,
       installation_date: installationDate || null,
       location,
-      total_channels: totalChannels,
+      total_channels: analogChannels + ipChannels,
+      analog_channels: analogChannels,
+      ip_channels: ipChannels,
+      operation_mode: operationMode,
+      disabled_analog_channels: disabledAnalogChannels.filter((n) => n >= 1 && n <= analogChannels).sort((a, b) => a - b),
       hd_capacity_tb: hdCapacityTb ? Number(hdCapacityTb) : null,
       hd_brand: hdBrand || null,
       hd_model: hdModel || null,
@@ -290,6 +306,18 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
           {error}
         </div>
       )}
+      <div className="flex justify-end">
+        <LabelScanner
+          equipmentType="dvr"
+          onResult={(scanned: EquipmentLabelData) => {
+            applyScannedLabel(scanned, [
+              { key: 'brand', label: 'Marca', current: brand, setter: setBrand },
+              { key: 'model', label: 'Modelo', current: model, setter: setModel },
+              { key: 'serial_number', label: 'Nº de série', current: serialNumber, setter: setSerialNumber },
+            ])
+          }}
+        />
+      </div>
       {/* Modelo do Catálogo */}
       {dvrModels.length > 0 && (
         <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3">
@@ -389,13 +417,115 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
           />
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="border border-accent/30 rounded-lg p-4 space-y-3 bg-accent/5">
+        <h3 className="text-sm font-semibold text-primary">Canais do DVR</h3>
+
         <Select
-          label="Total de Canais"
-          value={totalChannels}
-          onChange={(e) => setTotalChannels(Number(e.target.value))}
-          options={CHANNEL_OPTIONS.map((c) => ({ value: c, label: `${c} canais` }))}
+          label="Modo de operação"
+          value={operationMode}
+          onChange={(e) => {
+            const next = e.target.value as 'hybrid' | 'nvr' | 'dvr_only'
+            setOperationMode(next)
+            if (next === 'nvr') { setAnalogChannels(0) }
+            if (next === 'dvr_only') { setIpChannels(0) }
+          }}
+          options={DVR_OPERATION_MODES}
         />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Canais BNC (analógicos)"
+            type="number"
+            min={0}
+            max={64}
+            value={analogChannels}
+            onChange={(e) => {
+              const v = Math.max(0, Number(e.target.value) || 0)
+              setAnalogChannels(v)
+              setTotalChannels(v + ipChannels)
+              // Poda canais desabilitados que caíram fora da nova faixa
+              setDisabledAnalogChannels((current) => current.filter((n) => n <= v))
+            }}
+            disabled={operationMode === 'nvr'}
+          />
+          <Input
+            label="Canais IP extras"
+            type="number"
+            min={0}
+            max={64}
+            value={ipChannels}
+            onChange={(e) => {
+              const v = Math.max(0, Number(e.target.value) || 0)
+              setIpChannels(v)
+              setTotalChannels(analogChannels + v)
+            }}
+            disabled={operationMode === 'dvr_only'}
+          />
+        </div>
+
+        <p className="text-xs text-text-muted">
+          Total de canais: <strong>{analogChannels + ipChannels}</strong>
+          {' · '}Analógicos ocupam <strong>Canal 1..{analogChannels || '—'}</strong>
+          {ipChannels > 0 && <>, IPs extras ocupam <strong>Canal {analogChannels + 1}..{analogChannels + ipChannels}</strong></>}
+        </p>
+
+        {analogChannels > 0 && (
+          <div className="border-t border-accent/20 pt-3 mt-2 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-semibold text-text-primary">
+                Converter canais BNC em IP (Enhanced IP Mode)
+              </label>
+              {disabledAnalogChannels.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDisabledAnalogChannels([])}
+                  className="text-[11px] text-accent hover:underline"
+                >
+                  Restaurar todos
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-text-muted">
+              Clique para converter um canal BNC específico em IP. Útil para DVRs Hikvision e Intelbras híbridos.
+            </p>
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+              {Array.from({ length: analogChannels }, (_, i) => i + 1).map((ch) => {
+                const isDisabled = disabledAnalogChannels.includes(ch)
+                return (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() => {
+                      setDisabledAnalogChannels((current) =>
+                        current.includes(ch)
+                          ? current.filter((n) => n !== ch)
+                          : [...current, ch].sort((a, b) => a - b),
+                      )
+                    }}
+                    className={`h-11 rounded-md text-xs font-mono border transition-colors ${
+                      isDisabled
+                        ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                        : 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
+                    }`}
+                    title={isDisabled ? `Canal ${ch} está como IP — clique para voltar a BNC` : `Canal ${ch} está como BNC — clique para converter em IP`}
+                  >
+                    <div className="font-bold">{ch}</div>
+                    <div className="text-[9px] opacity-80">{isDisabled ? 'IP' : 'BNC'}</div>
+                  </button>
+                )
+              })}
+            </div>
+            {disabledAnalogChannels.length > 0 && (
+              <p className="text-[11px] text-cyan-300">
+                <strong>{disabledAnalogChannels.length}</strong> canal(is) convertido(s) em IP: {disabledAnalogChannels.join(', ')}
+                {' · '}Total efetivo: {analogChannels - disabledAnalogChannels.length} BNC + {ipChannels + disabledAnalogChannels.length} IP
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Status"
           value={status}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react'
-import type { Router, InternetConnection } from '../../lib/types'
-import { STATUS_OPTIONS, ROUTER_TYPES, CONNECTION_TYPES_INTERNET, IP_TYPE_OPTIONS } from '../../lib/constants'
+import type { Router, InternetConnection, RouterMode } from '../../lib/types'
+import { STATUS_OPTIONS, ROUTER_TYPES, ROUTER_MODES, CONNECTION_TYPES_INTERNET, IP_TYPE_OPTIONS } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
@@ -9,6 +9,11 @@ import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
 import BackupManager from '../ui/BackupManager'
+import LabelScanner from '../ui/LabelScanner'
+import SiteSelector from '../ui/SiteSelector'
+import { applyScannedLabel } from '../../lib/labelScanMerge'
+import type { EquipmentLabelData } from '../../services/geminiService'
+import { translateError } from '../../lib/errorTranslator'
 import { Globe, Package, Plus, Trash2 } from 'lucide-react'
 
 interface RouterFormProps {
@@ -39,6 +44,13 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
   const [wifiSsid, setWifiSsid] = useState('')
   const [wifiPassword, setWifiPassword] = useState('')
   const [notes, setNotes] = useState('')
+
+  // Fase 2: modo, par wireless, site, alimentação PoE
+  const [mode, setMode] = useState<RouterMode>((initialData?.mode as RouterMode) ?? 'router')
+  const [pairedRouterId, setPairedRouterId] = useState(initialData?.paired_router_id ?? '')
+  const [siteId, setSiteId] = useState(initialData?.site_id ?? '')
+  const [poweredByPoeInjector, setPoweredByPoeInjector] = useState(initialData?.powered_by_poe_injector ?? false)
+  const [otherRouters, setOtherRouters] = useState<Array<{ id: string; name: string; mode: RouterMode }>>([])
   
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,6 +91,18 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
     }
   }, [clientId, initialData?.client_id, user])
 
+  // Carrega demais roteadores do mesmo cliente (para seletor de par wireless)
+  useEffect(() => {
+    const activeClientId = clientId || initialData?.client_id
+    if (!activeClientId) { setOtherRouters([]); return }
+    supabase
+      .from('routers')
+      .select('id, name, mode')
+      .eq('client_id', activeClientId)
+      .order('name')
+      .then(({ data }) => setOtherRouters((data as Array<{ id: string; name: string; mode: RouterMode }>) ?? []))
+  }, [clientId, initialData?.client_id])
+
   // Sync basic data when initialData changes
   useEffect(() => {
     setName(initialData?.name ?? '')
@@ -92,6 +116,10 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
     setUsername(initialData?.username ?? '')
     setPassword(initialData?.password ?? '')
     setStatus(initialData?.status ?? 'ativo')
+    setMode((initialData?.mode as RouterMode) ?? 'router')
+    setPairedRouterId(initialData?.paired_router_id ?? '')
+    setSiteId(initialData?.site_id ?? '')
+    setPoweredByPoeInjector(initialData?.powered_by_poe_injector ?? false)
 
     const rawNotes = initialData?.notes ?? ''
     if (rawNotes.trim().startsWith('{') && rawNotes.trim().endsWith('}')) {
@@ -125,9 +153,6 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
     subnet_mask: '255.255.255.0',
     gateway_ip: '',
     dhcp_enabled: true,
-    speed_down_mbps: '',
-    speed_up_mbps: '',
-    monthly_cost: '',
     contract_number: '',
     notes: '',
   })
@@ -174,6 +199,10 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
       password: password || null,
       status,
       notes: finalNotes,
+      mode,
+      paired_router_id: pairedRouterId || null,
+      site_id: siteId || null,
+      powered_by_poe_injector: poweredByPoeInjector,
       client_id: clientId || initialData?.client_id || selectedClient || null,
     })
 
@@ -181,6 +210,32 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
       setError(result.error)
       setLoading(false)
       return
+    }
+
+    // Sincronização bidirecional do par wireless.
+    // Se este roteador foi vinculado a outro, garante que o outro também aponte de volta.
+    // Se o vínculo mudou/foi removido, limpa o antigo par se ele ainda apontava para este.
+    if (initialData?.id) {
+      const previousPair = initialData?.paired_router_id ?? null
+      const nextPair = pairedRouterId || null
+
+      if (previousPair && previousPair !== nextPair) {
+        // Desvincula o par antigo se ele ainda aponta para este roteador
+        const { error: unlinkErr } = await supabase
+          .from('routers')
+          .update({ paired_router_id: null })
+          .eq('id', previousPair)
+          .eq('paired_router_id', initialData.id)
+        if (unlinkErr) console.warn('Falha ao desvincular par antigo:', translateError(unlinkErr))
+      }
+
+      if (nextPair) {
+        const { error: linkErr } = await supabase
+          .from('routers')
+          .update({ paired_router_id: initialData.id })
+          .eq('id', nextPair)
+        if (linkErr) console.warn('Falha ao vincular par novo:', translateError(linkErr))
+      }
     }
 
     if (brand && model) {
@@ -228,9 +283,6 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
         subnet_mask: newConn.subnet_mask || null,
         gateway_ip: newConn.gateway_ip || null,
         dhcp_enabled: newConn.dhcp_enabled,
-        speed_down_mbps: newConn.speed_down_mbps ? Number(newConn.speed_down_mbps) : null,
-        speed_up_mbps: newConn.speed_up_mbps ? Number(newConn.speed_up_mbps) : null,
-        monthly_cost: newConn.monthly_cost ? Number(newConn.monthly_cost) : null,
         contract_number: newConn.contract_number || null,
         notes: newConn.notes || null,
         client_id: clientId || null,
@@ -253,9 +305,6 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
         subnet_mask: '255.255.255.0',
         gateway_ip: '',
         dhcp_enabled: true,
-        speed_down_mbps: '',
-        speed_up_mbps: '',
-        monthly_cost: '',
         contract_number: '',
         notes: '',
       })
@@ -283,6 +332,19 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
           {error}
         </div>
       )}
+
+      <div className="flex justify-end">
+        <LabelScanner
+          equipmentType="router"
+          onResult={(scanned: EquipmentLabelData) => {
+            applyScannedLabel(scanned, [
+              { key: 'brand', label: 'Marca', current: brand, setter: setBrand },
+              { key: 'model', label: 'Modelo', current: model, setter: setModel },
+              { key: 'serial_number', label: 'Nº de série', current: serialNumber, setter: setSerialNumber },
+            ])
+          }}
+        />
+      </div>
 
       {routerModels.length > 0 && (
         <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3">
@@ -410,6 +472,54 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
         />
       </div>
 
+      {/* Fase 2: modo do roteador + par wireless + site + PoE */}
+      <div className="border border-accent/30 rounded-lg p-4 space-y-4 bg-accent/5">
+        <h3 className="text-sm font-semibold text-primary">Função na rede</h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Select
+            label="Modo do roteador"
+            value={mode}
+            onChange={(e) => {
+              const nextMode = e.target.value as RouterMode
+              setMode(nextMode)
+              // Se sair de ap/client/bridge, limpa o par
+              if (!['ap', 'client', 'bridge'].includes(nextMode)) setPairedRouterId('')
+            }}
+            options={ROUTER_MODES}
+          />
+
+          {['ap', 'client', 'bridge'].includes(mode) && (
+            <Select
+              label="Roteador par (link wireless)"
+              value={pairedRouterId}
+              onChange={(e) => setPairedRouterId(e.target.value)}
+              options={[
+                { value: '', label: '— Sem par vinculado —' },
+                ...otherRouters
+                  .filter((r) => r.id !== initialData?.id)
+                  .map((r) => ({ value: r.id, label: `${r.name}${r.mode && r.mode !== 'router' ? ` (${r.mode})` : ''}` })),
+              ]}
+            />
+          )}
+        </div>
+
+        <SiteSelector value={siteId} onChange={setSiteId} />
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={poweredByPoeInjector}
+            onChange={(e) => setPoweredByPoeInjector(e.target.checked)}
+            className="w-4 h-4 rounded border-border-light bg-bg-primary text-accent focus:ring-accent"
+          />
+          <span className="text-sm text-text-primary">Alimentado por injetor PoE</span>
+        </label>
+        <p className="text-xs text-text-muted -mt-2 pl-6">
+          Comum em roteadores de elevador e links wireless externos.
+        </p>
+      </div>
+
       {/* Rede Wi-Fi (Opcional) */}
       <div className="border border-slate-700/60 rounded-lg p-4 space-y-4 bg-slate-800/10">
         <h3 className="text-sm font-semibold text-primary">Rede Wi-Fi (Opcional)</h3>
@@ -473,9 +583,6 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
                     <div className="text-xs text-text-muted mt-1 space-y-0.5">
                       <div>Tipo: {CONNECTION_TYPES_INTERNET.find((t) => t.value === conn.connection_type)?.label ?? conn.connection_type}</div>
                       <div>IP: {conn.ip_type === 'dynamic' ? 'DHCP' : conn.ip_type === 'static' ? 'IP Fixo' : 'IP Público'} - {conn.ip_address || 'N/A'}</div>
-                      {conn.speed_down_mbps && (
-                        <div>Velocidade: {conn.speed_down_mbps}/{conn.speed_up_mbps} Mbps</div>
-                      )}
                     </div>
                   </div>
                   <button
@@ -549,34 +656,6 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
                 />
                 <span className="text-sm text-text-secondary">DHCP Habilitado</span>
               </label>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Input
-                label="Velocidade Download (Mbps)"
-                type="number"
-                value={newConn.speed_down_mbps}
-                onChange={(e) => setNewConn({ ...newConn, speed_down_mbps: e.target.value })}
-                placeholder="100"
-                min={0}
-              />
-              <Input
-                label="Velocidade Upload (Mbps)"
-                type="number"
-                value={newConn.speed_up_mbps}
-                onChange={(e) => setNewConn({ ...newConn, speed_up_mbps: e.target.value })}
-                placeholder="50"
-                min={0}
-              />
-              <Input
-                label="Custo Mensal (R$)"
-                type="number"
-                value={newConn.monthly_cost}
-                onChange={(e) => setNewConn({ ...newConn, monthly_cost: e.target.value })}
-                placeholder="99.90"
-                min={0}
-                step="0.01"
-              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -63,7 +63,7 @@ export function useCameras() {
       return
     }
     setLoading(true)
-    let query = supabase.from('cameras').select('*, dvrs(name)').order('created_at', { ascending: false })
+    let query = supabase.from('cameras').select('*, dvrs(name, analog_channels, disabled_analog_channels)').order('created_at', { ascending: false })
     query = query.eq('client_id', selectedClientId)
     const { data, error } = await query
     if (error) setError(translateError(error))
