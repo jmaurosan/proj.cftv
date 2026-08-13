@@ -19,6 +19,7 @@ import {
   MonitorPlay,
   Monitor,
   ServerCog,
+  MapPin,
 } from 'lucide-react'
 
 const navItems = [
@@ -31,6 +32,8 @@ const navItems = [
   { to: '/visualizacao-local', label: 'Visualização Local', icon: MonitorPlay },
   { to: '/crimpagem', label: 'Crimpagem', icon: BookOpen },
   { to: '/baluns', label: 'Baluns', icon: Cable },
+  { to: '/cabos', label: 'Cabos', icon: Cable },
+  { to: '/locais', label: 'Locais', icon: MapPin },
   { to: '/switches', label: 'Switches', icon: Network },
   { to: '/racks', label: 'Racks e Quadros', icon: ServerCog },
   { to: '/monitores', label: 'Monitores', icon: Monitor },

@@ -6,7 +6,10 @@ import { useClient } from '../contexts/ClientContext'
 import { generateReport } from '../lib/reportGenerator'
 import { parseProjectAssets } from '../lib/projectAssets'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
-import type { Dvr, Camera, Switch, PowerBalun, CableConnection, Router, Credential } from '../lib/types'
+import type {
+  Dvr, Camera, Switch, PowerBalun, CableConnection, Router, Credential,
+  UtpCable, PowerCable, InstallationSite,
+} from '../lib/types'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
 import StatCard from '../components/ui/StatCard'
@@ -21,6 +24,11 @@ interface QuickStats {
   switchesPoe: number
   baluns: number
   cables: number
+  utpCables: number
+  utpCablesShared: number
+  powerCables: number
+  sites: number
+  wirelessLinks: number
   routers: number
   nobreaks: number
   documents: number
@@ -51,8 +59,13 @@ export default function ReportsPage() {
     async function loadStats() {
       setLoading(true)
       try {
+        const emptyStats: QuickStats = {
+          dvrs: 0, cameras: 0, camerasIP: 0, switches: 0, switchesPoe: 0, baluns: 0,
+          cables: 0, utpCables: 0, utpCablesShared: 0, powerCables: 0, sites: 0,
+          wirelessLinks: 0, routers: 0, nobreaks: 0, documents: 0,
+        }
         if (!selectedClientId) {
-          setStats({ dvrs: 0, cameras: 0, camerasIP: 0, switches: 0, switchesPoe: 0, baluns: 0, cables: 0, routers: 0, nobreaks: 0, documents: 0 })
+          setStats(emptyStats)
           return
         }
 
@@ -61,19 +74,42 @@ export default function ReportsPage() {
         const switchesQuery = supabase.from('switches').select('id, is_poe').eq('client_id', selectedClientId)
         const balunsQuery = supabase.from('power_baluns').select('id').eq('client_id', selectedClientId)
         const cablesQuery = supabase.from('cable_connections').select('id').eq('client_id', selectedClientId)
-        const routersQuery = supabase.from('routers').select('id').eq('client_id', selectedClientId)
+        const utpCablesQuery = supabase.from('utp_cables').select('id, utp_cable_pairs(function, camera_id)').eq('client_id', selectedClientId)
+        const powerCablesQuery = supabase.from('power_cables').select('id').eq('client_id', selectedClientId)
+        const sitesQuery = supabase.from('installation_sites').select('id').eq('client_id', selectedClientId)
+        const routersQuery = supabase.from('routers').select('id, paired_router_id').eq('client_id', selectedClientId)
         const clientQuery = supabase.from('clients').select('notes').eq('id', selectedClientId).single()
 
-        const [dvrs, cameras, switches, baluns, cables, routers, client] = await Promise.all([
+        const [dvrs, cameras, switches, baluns, cables, utpCablesRes, powerCablesRes, sitesRes, routers, client] = await Promise.all([
           dvrsQuery,
           camerasQuery,
           switchesQuery,
           balunsQuery,
           cablesQuery,
+          utpCablesQuery,
+          powerCablesQuery,
+          sitesQuery,
           routersQuery,
           clientQuery,
         ])
         const projectAssets = parseProjectAssets(client.data?.notes)
+
+        const utpRows = (utpCablesRes.data ?? []) as Array<{ id: string; utp_cable_pairs?: Array<{ function: string; camera_id: string | null }> }>
+        const utpCablesShared = utpRows.filter((c) =>
+          (c.utp_cable_pairs ?? []).filter((p) => p.function === 'video' && p.camera_id).length > 1,
+        ).length
+
+        // Contagem de pares wireless (dedupe)
+        const routerRows = (routers.data ?? []) as Array<{ id: string; paired_router_id: string | null }>
+        const seen = new Set<string>()
+        let wirelessLinks = 0
+        for (const r of routerRows) {
+          if (!r.paired_router_id) continue
+          const key = [r.id, r.paired_router_id].sort().join('::')
+          if (seen.has(key)) continue
+          seen.add(key)
+          wirelessLinks += 1
+        }
 
         setStats({
           dvrs: dvrs.data?.length ?? 0,
@@ -83,6 +119,11 @@ export default function ReportsPage() {
           switchesPoe: switches.data?.filter(s => s.is_poe).length ?? 0,
           baluns: baluns.data?.length ?? 0,
           cables: cables.data?.length ?? 0,
+          utpCables: utpRows.length,
+          utpCablesShared,
+          powerCables: powerCablesRes.data?.length ?? 0,
+          sites: sitesRes.data?.length ?? 0,
+          wirelessLinks,
           routers: routers.data?.length ?? 0,
           nobreaks: projectAssets.nobreaks.length,
           documents: projectAssets.documents.length,
@@ -115,16 +156,22 @@ export default function ReportsPage() {
       const switchesQuery = supabase.from('switches').select('*').eq('client_id', selectedClientId).order('name')
       const balunsQuery = supabase.from('power_baluns').select('*').eq('client_id', selectedClientId).order('name')
       const cablesQuery = supabase.from('cable_connections').select('*').eq('client_id', selectedClientId)
+      const utpCablesQuery = supabase.from('utp_cables').select('*, utp_cable_pairs(*)').eq('client_id', selectedClientId)
+      const powerCablesQuery = supabase.from('power_cables').select('*, power_cable_cameras(camera_id)').eq('client_id', selectedClientId)
+      const sitesQuery = supabase.from('installation_sites').select('*').eq('client_id', selectedClientId)
       const routersQuery = supabase.from('routers').select('*').eq('client_id', selectedClientId).order('name')
       const credentialsQuery = supabase.from('credentials').select('*').eq('client_id', selectedClientId).order('label')
       const clientQuery = supabase.from('clients').select('notes').eq('id', selectedClientId).single()
 
-      const [dvrsRes, camerasRes, switchesRes, balunsRes, cablesRes, routersRes, credentialsRes, clientRes] = await Promise.all([
+      const [dvrsRes, camerasRes, switchesRes, balunsRes, cablesRes, utpCablesRes, powerCablesRes, sitesRes, routersRes, credentialsRes, clientRes] = await Promise.all([
         dvrsQuery,
         camerasQuery,
         switchesQuery,
         balunsQuery,
         cablesQuery,
+        utpCablesQuery,
+        powerCablesQuery,
+        sitesQuery,
         routersQuery,
         credentialsQuery,
         clientQuery,
@@ -137,9 +184,16 @@ export default function ReportsPage() {
       const routers = (routersRes.data || []) as Router[]
       const credentials = (credentialsRes.data || []) as Credential[]
       const rawCables = (cablesRes.data || []) as CableConnection[]
+      const utpCables = (utpCablesRes.data || []) as UtpCable[]
+      const powerCablesRaw = (powerCablesRes.data || []) as Array<PowerCable & { power_cable_cameras?: Array<{ camera_id: string }> }>
+      const powerCables: PowerCable[] = powerCablesRaw.map((c) => ({
+        ...c,
+        camera_ids: (c.power_cable_cameras ?? []).map((row) => row.camera_id),
+      }))
+      const sites = (sitesRes.data || []) as InstallationSite[]
       const projectAssets = parseProjectAssets(clientRes.data?.notes)
 
-      // Enriquecer cabos com os nomes correspondentes das câmeras
+      // Enriquecer cabos legacy com os nomes correspondentes das câmeras
       const cameraMap = new Map(cameras.map(c => [c.id, c.name]))
       const cables = rawCables.map(cable => ({
         ...cable,
@@ -155,6 +209,9 @@ export default function ReportsPage() {
         routers,
         credentials,
         cables,
+        utpCables,
+        powerCables,
+        sites,
         userEmail: user?.email || 'N/A',
         clientName: clientName.trim(),
         projectName: projectName.trim(),
@@ -215,14 +272,15 @@ export default function ReportsPage() {
         {stats && (
           <div>
             <p className="text-xs text-text-muted mb-3 font-medium uppercase tracking-wide">O relatório incluirá:</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
               <StatCard label="Câmeras" value={stats.cameras} subtitle={`${stats.camerasIP} IP`} icon={FileText} color="text-cyan-400" />
               <StatCard label="DVRs" value={stats.dvrs} icon={FileText} color="text-indigo-400" />
               <StatCard label="Switches" value={stats.switches} subtitle={`${stats.switchesPoe} PoE`} icon={FileText} color="text-emerald-400" />
-              <StatCard label="Roteadores" value={stats.routers} icon={FileText} color="text-amber-400" />
-              <StatCard label="Fichas Cabo" value={stats.cables} icon={FileText} color="text-purple-400" />
+              <StatCard label="Roteadores" value={stats.routers} subtitle={stats.wirelessLinks ? `${stats.wirelessLinks} link(s) wireless` : undefined} icon={FileText} color="text-amber-400" />
+              <StatCard label="Cabos UTP" value={stats.utpCables} subtitle={stats.utpCablesShared ? `${stats.utpCablesShared} compart.` : undefined} icon={FileText} color="text-purple-400" />
+              <StatCard label="Alim. paralela" value={stats.powerCables} icon={FileText} color="text-pink-400" />
+              <StatCard label="Locais (sites)" value={stats.sites} icon={FileText} color="text-violet-400" />
               <StatCard label="Nobreaks" value={stats.nobreaks} icon={FileText} color="text-emerald-400" />
-              <StatCard label="Documentos" value={stats.documents} icon={FileText} color="text-amber-400" />
             </div>
           </div>
         )}

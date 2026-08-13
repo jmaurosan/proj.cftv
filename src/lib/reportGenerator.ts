@@ -1,7 +1,11 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import type { Dvr, Camera, Switch, PowerBalun, CableConnection, Router, Credential } from './types'
-import { CABLE_TYPE_LABELS } from './constants'
+import type {
+  Dvr, Camera, Switch, PowerBalun, CableConnection, Router, Credential,
+  UtpCable, PowerCable, InstallationSite,
+} from './types'
+import { CABLE_TYPE_LABELS, SITE_TYPES } from './constants'
+import { channelKindLabel, classifyDvrChannel } from './dvrChannels'
 import { describeBatteryBank, type EquipmentDocument, type Nobreak } from './projectAssets'
 import { getEquipmentDocumentUrl } from '../services/projectAssetsService'
 import { getInstallationPhotoUrl, getQRCodeImageUrl } from '../services/storageService'
@@ -14,12 +18,19 @@ interface ReportData {
   routers: Router[]
   credentials: Credential[]
   cables: (CableConnection & { camera_name: string })[]
+  // Fase 1+2 — novo modelo estruturado
+  utpCables?: UtpCable[]
+  powerCables?: PowerCable[]
+  sites?: InstallationSite[]
   userEmail: string
   clientName: string
   projectName: string
   nobreaks?: Nobreak[]
   equipmentDocuments?: EquipmentDocument[]
 }
+
+const siteTypeLabel = (type: string) =>
+  SITE_TYPES.find((t) => t.value === type)?.label ?? type
 
 const COLORS = {
   primary: [6, 182, 212] as [number, number, number],     // cyan-400
@@ -515,8 +526,29 @@ export async function generateReport(data: ReportData) {
 
     y = addSectionTitle(doc, y, '7', 'Fichas Técnicas das Câmeras')
 
-    // Mapeamento de cabeamento indexado por câmera
+    // Mapeamento de cabeamento indexado por câmera (legacy)
     const cableMap = new Map(data.cables.map(c => [c.camera_id, c]))
+
+    // Fase 1+2 — mapa câmera → cabo UTP (novo modelo) para info de compartilhamento
+    const utpCableByCameraId = new Map<string, UtpCable>()
+    for (const cable of data.utpCables ?? []) {
+      for (const pair of cable.utp_cable_pairs ?? []) {
+        if (pair.camera_id) utpCableByCameraId.set(pair.camera_id, cable)
+      }
+    }
+    // Mapa câmera → cabo paralelo de alimentação
+    const powerCablesByCameraId = new Map<string, PowerCable[]>()
+    for (const cable of data.powerCables ?? []) {
+      for (const cameraId of cable.camera_ids ?? []) {
+        const arr = powerCablesByCameraId.get(cameraId) ?? []
+        arr.push(cable)
+        powerCablesByCameraId.set(cameraId, arr)
+      }
+    }
+    // Mapa site_id → site
+    const siteById = new Map((data.sites ?? []).map((s) => [s.id, s]))
+    // Mapa câmera → nomes das outras câmeras que compartilham o mesmo utp_cable
+    const cameraNameById = new Map(data.cameras.map((c) => [c.id, c.name]))
 
     for (let i = 0; i < data.cameras.length; i++) {
       const cam = data.cameras[i]
@@ -572,18 +604,43 @@ export async function generateReport(data: ReportData) {
       cy += 4
       doc.text(`IP / Destino: ${cam.connection_type === 'ip' ? (cam.ip_address || 'DHCP') : (cam.dvrs?.name || 'Não associado')}`, 18, cy)
       cy += 4
-      doc.text(`Canal/Porta: ${cam.channel_number != null ? 'Canal ' + cam.channel_number : (cam.switch_port ? 'Porta Switch ' + cam.switch_port : '-')}`, 18, cy)
+      const chKind = classifyDvrChannel(cam.channel_number, cam.dvrs?.analog_channels, cam.connection_type, cam.dvrs?.disabled_analog_channels)
+      const chLabel = cam.channel_number != null
+        ? `Canal ${cam.channel_number}${channelKindLabel(chKind) ? ' (' + channelKindLabel(chKind) + ')' : ''}`
+        : (cam.switch_port ? 'Porta Switch ' + cam.switch_port : '-')
+      doc.text(`Canal/Porta: ${chLabel}`, 18, cy)
       cy += 4
       doc.text(`Localização: ${cam.location || '-'}`, 18, cy)
       cy += 4
       doc.text(`Marca/Resolução: ${cam.brand || '-'} ${cam.resolution || ''}`, 18, cy)
 
-      // Detalhes de Cabeamento
+      // Detalhes de Cabeamento (prioriza novo modelo utp_cables + info de compartilhamento)
       cy += 7
       doc.setFont('helvetica', 'bold')
       doc.text('Especificações de Cabo:', 18, cy)
       doc.setFont('helvetica', 'normal')
-      if (cable) {
+
+      const utpCable = utpCableByCameraId.get(cam.id)
+      if (utpCable) {
+        cy += 4.5
+        const cableLabel = CABLE_TYPE_LABELS[utpCable.cable_type] || utpCable.cable_type
+        doc.text(`Tipo de Cabo: ${cableLabel}${utpCable.name ? ` · ${utpCable.name}` : ''}`, 18, cy)
+        cy += 4
+        doc.text(`Padrão Crimp: ${utpCable.wiring_standard || '-'}`, 18, cy)
+        cy += 4
+        doc.text(`Comprimento: ${utpCable.cable_length_meters ? utpCable.cable_length_meters + ' metros' : '-'}`, 18, cy)
+
+        // Câmeras irmãs no mesmo cabo (compartilhamento)
+        const sisterNames = (utpCable.utp_cable_pairs ?? [])
+          .filter((p) => p.function === 'video' && p.camera_id && p.camera_id !== cam.id)
+          .map((p) => cameraNameById.get(p.camera_id!))
+          .filter(Boolean) as string[]
+        if (sisterNames.length > 0) {
+          cy += 4
+          const sisters = sisterNames.join(', ')
+          doc.text(`Compartilhado com: ${sisters.length > 55 ? sisters.slice(0, 52) + '…' : sisters}`, 18, cy)
+        }
+      } else if (cable) {
         cy += 4.5
         const cableLabel = CABLE_TYPE_LABELS[cable.cable_type] || cable.cable_type
         doc.text(`Tipo de Cabo: ${cableLabel}`, 18, cy)
@@ -599,6 +656,31 @@ export async function generateReport(data: ReportData) {
         doc.setTextColor(...COLORS.muted)
         doc.text('Ficha de cabeamento não preenchida.', 18, cy)
         doc.setTextColor(...COLORS.text)
+      }
+
+      // Alimentação paralela (Fase 1)
+      const linkedPower = powerCablesByCameraId.get(cam.id) ?? []
+      if (linkedPower.length > 0) {
+        cy += 5
+        doc.setFont('helvetica', 'bold')
+        doc.text('Alimentação paralela:', 18, cy)
+        doc.setFont('helvetica', 'normal')
+        for (const p of linkedPower.slice(0, 2)) {
+          cy += 4
+          const gauge = p.wire_gauge_mm2 ? `${p.wire_gauge_mm2.toString().replace('.', ',')} mm²` : ''
+          const parts = [p.name, p.voltage, gauge].filter(Boolean).join(' · ')
+          doc.text(`• ${parts.slice(0, 60)}`, 18, cy)
+        }
+      }
+
+      // Site vinculado (Fase 2)
+      const site = cam.site_id ? siteById.get(cam.site_id) : null
+      if (site) {
+        cy += 5
+        doc.setFont('helvetica', 'bold')
+        doc.text(`Local: ${site.name}`, 18, cy)
+        doc.setFont('helvetica', 'normal')
+        doc.text(`(${siteTypeLabel(site.site_type)})`, 18 + doc.getTextWidth(`Local: ${site.name} `), cy)
       }
 
       // 3. Coluna Direita: Imagens (Foto e QR Code)
@@ -662,6 +744,31 @@ export async function generateReport(data: ReportData) {
 
   y = addSectionTitle(doc, y, '8', 'Log de Entrega Técnica & Aceite')
 
+  // Contagens do novo modelo (Fase 1+2)
+  const utpCables = data.utpCables ?? []
+  const powerCables = data.powerCables ?? []
+  const sites = data.sites ?? []
+
+  // Cabo UTP compartilhado conta 1 vez, com nota de câmeras atendidas
+  const utpCableCount = utpCables.length
+  const sharedUtpCables = utpCables.filter((c) =>
+    (c.utp_cable_pairs ?? []).filter((p) => p.function === 'video' && p.camera_id).length > 1
+  ).length
+  const totalUtpMeters = utpCables.reduce((sum, c) => sum + (Number(c.cable_length_meters) || 0), 0)
+  const totalPowerMeters = powerCables.reduce((sum, c) => sum + (Number(c.cable_length_meters) || 0), 0)
+
+  // Links wireless: pares (dedupe A↔B)
+  const seenPairs = new Set<string>()
+  let wirelessLinkCount = 0
+  for (const r of data.routers) {
+    if (!r.paired_router_id) continue
+    const key = [r.id, r.paired_router_id].sort().join('::')
+    if (seenPairs.has(key)) continue
+    seenPairs.add(key)
+    wirelessLinkCount += 1
+  }
+  const poeInjectorCount = data.routers.filter((r) => r.powered_by_poe_injector).length
+
   const logItems = [
     ['Data/Hora de Geração', formatDate(now)],
     ['Responsável Técnico', data.userEmail],
@@ -671,7 +778,12 @@ export async function generateReport(data: ReportData) {
     ['Total de DVRs', `${data.dvrs.length} (${countByStatus(data.dvrs).ativos} ativos)`],
     ['Total de Switches', `${data.switches.length} (${countByStatus(data.switches).ativos} ativos)`],
     ['Total de Roteadores', `${data.routers.length} (${countByStatus(data.routers).ativos} ativos)`],
-    ['Fichas de Cabeamento', `${data.cables.length} cadastradas`],
+    ['Cabos UTP', `${utpCableCount} cabo(s) · ${sharedUtpCables} compartilhado(s) · ${totalUtpMeters.toFixed(1)} m totais`],
+    ['Cabos paralelos de alimentação', `${powerCables.length} cabo(s) · ${totalPowerMeters.toFixed(1)} m totais`],
+    ['Locais físicos (sites)', `${sites.length} cadastrado(s)`],
+    ['Links wireless (AP↔Cliente)', `${wirelessLinkCount} par(es)`],
+    ['Injetores PoE em uso', `${poeInjectorCount} roteador(es) alimentado(s)`],
+    ['Fichas de cabeamento (legacy)', `${data.cables.length} cadastrada(s)`],
     ['Nobreaks', `${data.nobreaks?.length || 0} cadastrado(s)`],
     ['Documentos Técnicos', `${data.equipmentDocuments?.length || 0} item(ns)`],
   ]

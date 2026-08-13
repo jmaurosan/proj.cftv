@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, type FormEvent, useRef } from 'react'
 import type { Camera, Dvr, PowerBalun, Switch } from '../../lib/types'
+import { getAvailableChannels } from '../../lib/dvrChannels'
 import { STATUS_OPTIONS, CAMERA_TYPES, CAMERA_TECHNOLOGY_OPTIONS, RESOLUTION_OPTIONS } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import {
@@ -28,11 +29,22 @@ import {
 } from '../../lib/equipmentModelCatalog'
 import { useAuth } from '../../hooks/useAuth'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
+import { useUtpCables } from '../../hooks/useUtpCables'
+import { usePowerCables } from '../../hooks/usePowerCables'
 import { useClient } from '../../contexts/ClientContext'
+import { CABLE_PRESETS, detectCablePreset } from '../../lib/cableConfiguration'
+import type { PairFunction } from '../../lib/balunConfiguration'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
-import { CameraIcon, X, QrCode, MapPin, Zap, HardDrive, Cable, Video } from 'lucide-react'
+import Modal from '../ui/Modal'
+import LabelScanner from '../ui/LabelScanner'
+import SiteSelector from '../ui/SiteSelector'
+import UtpCableForm from './UtpCableForm'
+import PowerCableForm from './PowerCableForm'
+import { applyScannedLabel } from '../../lib/labelScanMerge'
+import type { EquipmentLabelData } from '../../services/geminiService'
+import { CameraIcon, X, QrCode, MapPin, Zap, HardDrive, Cable, Video, Pencil, Plus } from 'lucide-react'
 
 interface CameraFormProps {
   initialData?: Camera | null
@@ -165,6 +177,7 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
   const [switchId, setSwitchId] = useState(initialData?.switch_id ?? '')
   const [switchPort, setSwitchPort] = useState(initialData?.switch_port ?? '')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
+  const [siteId, setSiteId] = useState(initialData?.site_id ?? '')
   const [qrCodeUrl, setQrCodeUrl] = useState(initialData?.qr_code_url ?? '')
   const [installationPhotoUrl, setInstallationPhotoUrl] = useState(initialData?.installation_photo_url ?? '')
   const [qrPreviewUrl, setQrPreviewUrl] = useState<string | null>(null)
@@ -333,7 +346,7 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
     }
 
     Promise.all([
-      supabase.from('dvrs').select('id, name, total_channels').eq('client_id', clientId).order('name'),
+      supabase.from('dvrs').select('id, name, total_channels, analog_channels, ip_channels, operation_mode, disabled_analog_channels').eq('client_id', clientId).order('name'),
       supabase.from('power_baluns').select('*').eq('client_id', clientId).order('name'),
       supabase.from('switches').select('id, name, is_poe, total_ports').eq('client_id', clientId).order('name'),
       supabase.from('cameras').select('*').eq('client_id', clientId).order('name'),
@@ -524,6 +537,7 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
       qr_code_url: isIP ? qrCodeUrl || null : null,
       installation_photo_url: installationPhotoUrl || null,
       notes: notes || null,
+      site_id: siteId || null,
     })
     if (result.error) {
       setError(result.error)
@@ -587,16 +601,36 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
   const selectedDvr = dvrs.find((dvr) => dvr.id === dvrId)
   const selectedSwitch = switches.find((sw) => sw.id === switchId)
 
+  // Fase B + Ch2 — pools separados + canais BNC convertidos em IP (Enhanced IP Mode)
   const channelOptions = (() => {
-    const max = selectedDvr?.total_channels ?? 16
-    return Array.from({ length: max }, (_, index) => {
-      const value = index + 1
+    if (!selectedDvr) {
+      return Array.from({ length: 16 }, (_, i) => ({ value: i + 1, label: `Canal ${i + 1}`, disabled: false }))
+    }
+    const analog = selectedDvr.analog_channels ?? selectedDvr.total_channels ?? 0
+    const ip = selectedDvr.ip_channels ?? 0
+    const disabled = selectedDvr.disabled_analog_channels ?? []
+
+    const cameraKind: 'analogica' | 'ip' | 'wifi' = connectionType === 'wifi'
+      ? 'wifi'
+      : isIP ? 'ip' : 'analogica'
+    const available = getAvailableChannels(cameraKind, analog, ip, disabled)
+
+    return available.map((value) => {
       const occupiedBy = otherCameras.find((camera) => camera.dvr_id === dvrId && camera.channel_number === value)
+      const isConverted = disabled.includes(value)
+      const kindLabel = value > analog
+        ? 'IP'
+        : isConverted
+          ? 'IP (convertido)'
+          : 'BNC'
+      const suffix = ` · ${kindLabel}`
       return {
         value,
         label: occupiedBy
-          ? activeCameraId ? `Canal ${value} - trocar com ${occupiedBy.name}` : `Canal ${value} - ocupado por ${occupiedBy.name}`
-          : `Canal ${value}`,
+          ? activeCameraId
+            ? `Canal ${value}${suffix} — trocar com ${occupiedBy.name}`
+            : `Canal ${value}${suffix} — ocupado por ${occupiedBy.name}`
+          : `Canal ${value}${suffix}`,
         disabled: Boolean(occupiedBy) && !activeCameraId,
       }
     })
@@ -847,6 +881,19 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
           )}
         </div>
       )}
+      <div className="flex justify-end">
+        <LabelScanner
+          equipmentType="camera"
+          onResult={(scanned: EquipmentLabelData) => {
+            applyScannedLabel(scanned, [
+              { key: 'brand', label: 'Marca', current: brand, setter: setBrand },
+              { key: 'model', label: 'Modelo', current: model, setter: setModel },
+              { key: 'serial_number', label: 'Nº de série', current: serialNumber, setter: setSerialNumber },
+              { key: 'mac_address', label: 'MAC', current: macAddress, setter: setMacAddress },
+            ])
+          }}
+        />
+      </div>
       {cameraModels.length > 0 && (
         <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3">
           <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5 mb-2">
@@ -917,6 +964,8 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
           required
         />
       </div>
+
+      <SiteSelector value={siteId} onChange={setSiteId} />
 
       {/* Analógica: DVR + Canal */}
       {!isIP && (
@@ -1122,6 +1171,11 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
             placeholder="Selecione"
           />
         </div>
+      )}
+
+      {/* Cabeamento (resumo somente leitura) */}
+      {initialData?.id && (
+        <CablingSummary cameraId={initialData.id} />
       )}
 
       {/* Alimentação */}
@@ -1416,5 +1470,203 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
       </div>
     )}
     </>
+  )
+}
+
+interface CablingSummaryProps {
+  cameraId: string
+}
+
+function CablingSummary({ cameraId }: CablingSummaryProps) {
+  const { data: utpCables, loading: loadingUtp } = useUtpCables()
+  const { data: powerCables, loading: loadingPower } = usePowerCables()
+
+  const [editingUtpCableId, setEditingUtpCableId] = useState<string | null>(null)
+  const [creatingUtp, setCreatingUtp] = useState(false)
+  const [editingPowerCableId, setEditingPowerCableId] = useState<string | null>(null)
+  const [creatingPower, setCreatingPower] = useState(false)
+
+  const linkedUtp = utpCables.filter((cable) =>
+    cable.utp_cable_pairs?.some((pair) => pair.camera_id === cameraId),
+  )
+  const linkedPower = powerCables.filter((cable) => cable.camera_ids?.includes(cameraId))
+
+  const loading = loadingUtp || loadingPower
+
+  return (
+    <div className="border border-border-light rounded-lg p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+        <Cable className="w-4 h-4 text-accent" />
+        Cabeamento
+      </h3>
+
+      {loading ? (
+        <p className="text-xs text-text-muted">Carregando cabos…</p>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-text-secondary">Cabos UTP</p>
+              {linkedUtp.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCreatingUtp(true)}
+                  className="text-xs text-accent hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Vincular a cabo UTP
+                </button>
+              )}
+            </div>
+            {linkedUtp.length === 0 ? (
+              <p className="text-xs text-text-muted">
+                Sem cabo UTP vinculado. Clique acima para criar ou associar.
+              </p>
+            ) : (
+              linkedUtp.map((cable) => {
+                const functions = [1, 2, 3, 4]
+                  .map((n) => cable.utp_cable_pairs?.find((p) => p.pair_number === n)?.function ?? 'nao_utilizado')
+                  .map((fn) => fn as PairFunction)
+                const preset = detectCablePreset(functions)
+                const videoPairs = cable.utp_cable_pairs?.filter((p) => p.function === 'video') ?? []
+                const sisterIds = videoPairs
+                  .map((p) => p.camera_id)
+                  .filter((id): id is string => Boolean(id) && id !== cameraId)
+                const myPair = videoPairs.find((p) => p.camera_id === cameraId)?.pair_number
+                return (
+                  <div
+                    key={cable.id}
+                    className="rounded-md border border-border-light bg-bg-primary/50 px-3 py-2 text-xs space-y-1"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-text-primary truncate">
+                        {cable.name ?? 'Cabo sem nome'}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-accent">{CABLE_PRESETS[preset].label}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingUtpCableId(cable.id)}
+                          className="text-text-muted hover:text-accent p-1 rounded-md hover:bg-bg-tertiary"
+                          title="Editar cabo"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-text-muted">
+                      {myPair ? `Esta câmera ocupa o par ${myPair}.` : 'Câmera vinculada sem par de vídeo.'}
+                      {sisterIds.length > 0 && (
+                        <> Compartilhado com <strong>{sisterIds.length}</strong> outra(s) câmera(s).</>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-text-secondary">Alimentação paralela</p>
+              {linkedPower.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCreatingPower(true)}
+                  className="text-xs text-accent hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Vincular a cabo de alimentação
+                </button>
+              )}
+            </div>
+            {linkedPower.length === 0 ? (
+              <p className="text-xs text-text-muted">
+                Sem cabo paralelo de alimentação. Clique acima para criar ou associar.
+              </p>
+            ) : (
+              linkedPower.map((cable) => (
+                <div
+                  key={cable.id}
+                  className="rounded-md border border-border-light bg-bg-primary/50 px-3 py-2 text-xs space-y-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-text-primary truncate">{cable.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-accent">
+                        {cable.voltage ?? '—'}
+                        {cable.wire_gauge_mm2 ? ` · ${cable.wire_gauge_mm2.toString().replace('.', ',')} mm²` : ''}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPowerCableId(cable.id)}
+                        className="text-text-muted hover:text-accent p-1 rounded-md hover:bg-bg-tertiary"
+                        title="Editar cabo de alimentação"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-text-muted">
+                    Alimenta {cable.camera_ids?.length ?? 0} câmera(s)
+                    {cable.power_source_info ? ` · ${cable.power_source_info}` : ''}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Modais aninhados */}
+      <Modal
+        open={!!editingUtpCableId}
+        onClose={() => setEditingUtpCableId(null)}
+        title="Editar cabo UTP"
+        size="lg"
+      >
+        {editingUtpCableId && (
+          <UtpCableForm
+            cableId={editingUtpCableId}
+            onClose={() => setEditingUtpCableId(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={creatingUtp}
+        onClose={() => setCreatingUtp(false)}
+        title="Vincular a cabo UTP"
+        size="lg"
+      >
+        <UtpCableForm
+          anchorCameraId={cameraId}
+          onClose={() => setCreatingUtp(false)}
+        />
+      </Modal>
+
+      <Modal
+        open={!!editingPowerCableId}
+        onClose={() => setEditingPowerCableId(null)}
+        title="Editar cabo de alimentação"
+        size="lg"
+      >
+        {editingPowerCableId && (
+          <PowerCableForm
+            powerCableId={editingPowerCableId}
+            onClose={() => setEditingPowerCableId(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={creatingPower}
+        onClose={() => setCreatingPower(false)}
+        title="Vincular a cabo de alimentação"
+        size="lg"
+      >
+        <PowerCableForm
+          onClose={() => setCreatingPower(false)}
+        />
+      </Modal>
+    </div>
   )
 }

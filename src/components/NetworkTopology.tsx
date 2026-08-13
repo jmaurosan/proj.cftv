@@ -56,6 +56,17 @@ interface TopologyNode {
   location: string
   brand?: string | null
   model?: string | null
+  // Fase 2 — para agrupamento visual e links wireless
+  site_id?: string | null
+  router_mode?: string | null
+  paired_router_id?: string | null
+  powered_by_poe_injector?: boolean
+}
+
+interface TopologySite {
+  id: string
+  name: string
+  site_type: string
 }
 
 interface TopologyConnection {
@@ -143,6 +154,8 @@ export default function NetworkTopology() {
   const [nodes, setNodes] = useState<TopologyNode[]>([])
   const [connections, setConnections] = useState<TopologyConnection[]>([])
   const [autoConnections, setAutoConnections] = useState<TopologyConnection[]>([])
+  // Fase 2 — sites físicos para agrupamento visual
+  const [sites, setSites] = useState<TopologySite[]>([])
   
   // Equipamento selecionado para detalhamento
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
@@ -163,9 +176,15 @@ export default function NetworkTopology() {
     const groupConnections: TopologyConnection[] = []
     camerasByParent.forEach((cameras, parentId) => {
       if (cameras.length < 2 || expandedCameraParents.includes(parentId)) return
+      // Fase 2: se as câmeras pertencem a sites diferentes, não agrupar —
+      // deixar cada uma aparecer individualmente para o cluster de site funcionar
+      const distinctSiteIds = new Set(cameras.map((c) => c.site_id).filter(Boolean))
+      if (distinctSiteIds.size > 1) return
       cameras.forEach((camera) => groupedCameraIds.add(camera.id))
       const activeCount = cameras.filter((camera) => camera.status === 'ativo' || camera.status === 'online').length
       const groupId = `camera-group-${parentId}`
+      // Se todas as câmeras do grupo compartilham o mesmo site, o grupo herda esse site
+      const sharedSiteId = distinctSiteIds.size === 1 ? [...distinctSiteIds][0] : null
       groupNodes.push({
         id: groupId,
         name: `${cameras.length} câmeras`,
@@ -174,6 +193,7 @@ export default function NetworkTopology() {
         ip_address: `${activeCount} ativas · ${cameras.length - activeCount} inativas`,
         location: `Ligadas a ${nodes.find((node) => node.id === parentId)?.name ?? 'equipamento'}`,
         model: 'Toque para detalhar',
+        site_id: sharedSiteId,
       })
       groupConnections.push({
         id: `group-${parentId}`,
@@ -203,6 +223,56 @@ export default function NetworkTopology() {
   const displayNodes = presentationGraph.nodes
   const displayConnections = presentationGraph.connections
   const activePositions = viewMode === 'technical' && isEditing ? nodePositions : automaticLayout.positions
+
+  // Fase 2 — links wireless entre roteadores pareados (dedupe: só desenha uma vez por par)
+  const wirelessLinks = useMemo(() => {
+    const routers = displayNodes.filter((node) => node.type === 'router' && node.paired_router_id)
+    const seen = new Set<string>()
+    const links: Array<{ id: string; sourceId: string; targetId: string }> = []
+    for (const router of routers) {
+      const targetId = router.paired_router_id
+      if (!targetId) continue
+      const key = [router.id, targetId].sort().join('::')
+      if (seen.has(key)) continue
+      seen.add(key)
+      // Só desenha se o par também está entre os nós renderizados
+      if (!displayNodes.some((n) => n.id === targetId)) continue
+      links.push({ id: `wireless-${key}`, sourceId: router.id, targetId })
+    }
+    return links
+  }, [displayNodes])
+
+  // Fase 2 — clusters de site (bounding box atrás dos nós do mesmo site_id)
+  const siteClusters = useMemo(() => {
+    if (sites.length === 0) return []
+    const PADDING = 26
+    const HEADER = 20
+    return sites
+      .map((site) => {
+        const memberNodes = displayNodes.filter((n) => n.site_id === site.id)
+        if (memberNodes.length === 0) return null
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const node of memberNodes) {
+          const pos = activePositions[node.id]
+          if (!pos) continue
+          const halfW = TOPOLOGY_NODE_WIDTH / 2
+          const halfH = TOPOLOGY_NODE_HEIGHT / 2
+          minX = Math.min(minX, pos.x - halfW)
+          minY = Math.min(minY, pos.y - halfH)
+          maxX = Math.max(maxX, pos.x + halfW)
+          maxY = Math.max(maxY, pos.y + halfH)
+        }
+        if (!isFinite(minX)) return null
+        return {
+          site,
+          x: minX - PADDING,
+          y: minY - PADDING - HEADER,
+          width: maxX - minX + PADDING * 2,
+          height: maxY - minY + PADDING * 2 + HEADER,
+        }
+      })
+      .filter((cluster): cluster is NonNullable<typeof cluster> => cluster !== null)
+  }, [sites, displayNodes, activePositions])
 
   // Carregar dados de nota do cliente e construir topologia
   const loadTopology = async () => {
@@ -259,17 +329,20 @@ export default function NetworkTopology() {
       }
 
       // 2. Carregar todos os equipamentos
-      const [camerasRes, dvrsRes, switchesRes, routersRes, balunsRes, switchPortsRes, balunPortsRes, racksRes, monitorsRes] = await Promise.all([
-        supabase.from('cameras').select('id, name, status, ip_address, location, brand, model, connection_type, switch_id, switch_port, dvr_id, channel_number, balun_id, balun_port').eq('client_id', selectedClientId),
+      const [camerasRes, dvrsRes, switchesRes, routersRes, balunsRes, switchPortsRes, balunPortsRes, racksRes, monitorsRes, sitesRes] = await Promise.all([
+        supabase.from('cameras').select('id, name, status, ip_address, location, brand, model, connection_type, switch_id, switch_port, dvr_id, channel_number, balun_id, balun_port, site_id').eq('client_id', selectedClientId),
         supabase.from('dvrs').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
         supabase.from('switches').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
-        supabase.from('routers').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
+        supabase.from('routers').select('id, name, status, ip_address, location, brand, model, mode, paired_router_id, site_id, powered_by_poe_injector').eq('client_id', selectedClientId),
         supabase.from('power_baluns').select('*').eq('client_id', selectedClientId),
         supabase.from('switch_ports').select('switch_id, port_number, device_type, device_id, device_name, is_active'),
         supabase.from('balun_ports').select('balun_id, port_number, camera_id, is_active'),
         supabase.from('racks').select('*').eq('client_id', selectedClientId).order('name'),
-        supabase.from('monitors').select('id, name, status, location, brand, model, rack_id').eq('client_id', selectedClientId).order('name')
+        supabase.from('monitors').select('id, name, status, location, brand, model, rack_id').eq('client_id', selectedClientId).order('name'),
+        supabase.from('installation_sites').select('id, name, site_type').eq('client_id', selectedClientId),
       ])
+
+      setSites((sitesRes.data as TopologySite[]) ?? [])
 
       if (!racksRes.error && racksRes.data?.length) {
         savedTopologyRacks = racksRes.data.map((rack) => ({
@@ -325,7 +398,11 @@ export default function NetworkTopology() {
             ip_address: r.ip_address,
             location: r.location || 'Central',
             brand: r.brand,
-            model: r.model
+            model: r.model,
+            site_id: r.site_id ?? null,
+            router_mode: r.mode ?? 'router',
+            paired_router_id: r.paired_router_id ?? null,
+            powered_by_poe_injector: Boolean(r.powered_by_poe_injector),
           }
           list.push(node)
           tempNodesMap[r.id] = node
@@ -393,7 +470,8 @@ export default function NetworkTopology() {
             ip_address: c.ip_address,
             location: c.location || 'Área Externa',
             brand: c.brand,
-            model: c.model
+            model: c.model,
+            site_id: c.site_id ?? null,
           }
           list.push(node)
           tempNodesMap[c.id] = node
@@ -1828,6 +1906,35 @@ export default function NetworkTopology() {
               </div>
             ))}
 
+            {/* Fase 2 — clusters de site (fundo) */}
+            {siteClusters.length > 0 && (
+              <svg className="absolute inset-0 pointer-events-none z-0" width={canvasSize.width} height={canvasSize.height}>
+                {siteClusters.map((cluster) => (
+                  <g key={`site-${cluster.site.id}`}>
+                    <rect
+                      x={cluster.x}
+                      y={cluster.y}
+                      width={cluster.width}
+                      height={cluster.height}
+                      rx={14}
+                      fill="rgba(139, 92, 246, 0.06)"
+                      stroke="rgba(167, 139, 250, 0.35)"
+                      strokeWidth={1}
+                      strokeDasharray="6 4"
+                    />
+                    <text
+                      x={cluster.x + 12}
+                      y={cluster.y + 14}
+                      className="fill-purple-300"
+                      style={{ font: '600 11px system-ui', letterSpacing: '0.06em' }}
+                    >
+                      {cluster.site.name.toUpperCase()}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            )}
+
             {/* SVG das Linhas de Conexão */}
             <svg className="absolute inset-0 pointer-events-none z-0" width={canvasSize.width} height={canvasSize.height}>
               <defs>
@@ -1843,6 +1950,32 @@ export default function NetworkTopology() {
                   <path d="M 0 0 L 7 3.5 L 0 7 z" fill="#38bdf8" opacity="0.75" />
                 </marker>
               </defs>
+
+              {/* Fase 2 — links wireless (AP ↔ Cliente) */}
+              {wirelessLinks.map((link) => {
+                const sourcePos = activePositions[link.sourceId]
+                const targetPos = activePositions[link.targetId]
+                if (!sourcePos || !targetPos) return null
+                const midX = (sourcePos.x + targetPos.x) / 2
+                const midY = (sourcePos.y + targetPos.y) / 2
+                return (
+                  <g key={link.id}>
+                    <line
+                      x1={sourcePos.x} y1={sourcePos.y}
+                      x2={targetPos.x} y2={targetPos.y}
+                      stroke="#a78bfa"
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                      opacity={0.75}
+                    />
+                    <foreignObject x={midX - 32} y={midY - 10} width="64" height="20">
+                      <div className="bg-purple-500/20 border border-purple-400/40 text-[8px] font-bold text-purple-200 px-1 py-0.5 rounded text-center">
+                        📡 wireless
+                      </div>
+                    </foreignObject>
+                  </g>
+                )
+              })}
 
               {displayConnections.map((conn) => {
                 const sourcePos = activePositions[conn.source]

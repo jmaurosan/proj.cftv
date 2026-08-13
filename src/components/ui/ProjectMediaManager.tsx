@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { CalendarDays, Image as ImageIcon, Pencil, Play, RefreshCw, Trash2, Upload, X } from 'lucide-react'
+import { CalendarDays, Download, Image as ImageIcon, Pencil, Play, RefreshCw, Trash2, Upload, X, ZoomIn } from 'lucide-react'
 import type { DocumentEquipmentType, EquipmentOption, ProjectMedia } from '../../lib/projectAssets'
 import { getProjectMediaUrlResult } from '../../services/projectAssetsService'
 import Button from './Button'
@@ -41,7 +41,16 @@ export default function ProjectMediaManager({ media, equipmentOptions, onAdd, on
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({})
   const [mediaUrlErrors, setMediaUrlErrors] = useState<Record<string, string>>({})
   const [previewAttempt, setPreviewAttempt] = useState(0)
+  const [fullscreenItem, setFullscreenItem] = useState<ProjectMedia | null>(null)
   const isEditing = !!editingMedia
+
+  // Fechar fullscreen com ESC
+  useEffect(() => {
+    if (!fullscreenItem) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreenItem(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fullscreenItem])
 
   const filteredMedia = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('pt-BR')
@@ -219,9 +228,31 @@ export default function ProjectMediaManager({ media, equipmentOptions, onAdd, on
                     </div>
                   ) : !url ? (
                     <div className="flex h-full items-center justify-center text-xs text-text-muted">Preparando mídia...</div>
-                  ) : item.mediaType === 'image'
-                    ? <img src={url} alt={item.description || item.title} loading="lazy" onError={handlePreviewError} className="h-full w-full object-cover" />
-                    : <video src={url} controls preload="metadata" onError={handlePreviewError} className="h-full w-full" aria-label={item.title} />}
+                  ) : item.mediaType === 'image' ? (
+                    <button
+                      type="button"
+                      onClick={() => setFullscreenItem(item)}
+                      className="group relative block h-full w-full"
+                      title="Clique para ampliar"
+                    >
+                      <img src={url} alt={item.description || item.title} loading="lazy" onError={handlePreviewError} className="h-full w-full object-cover" />
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+                        <ZoomIn className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="relative h-full w-full">
+                      <video src={url} controls preload="metadata" onError={handlePreviewError} className="h-full w-full" aria-label={item.title} />
+                      <button
+                        type="button"
+                        onClick={() => setFullscreenItem(item)}
+                        className="absolute top-2 right-2 p-1.5 rounded-md bg-black/60 text-white hover:bg-black/80"
+                        title="Abrir em tela cheia"
+                      >
+                        <ZoomIn className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2 p-3">
                   <div className="flex items-start justify-between gap-2">
@@ -237,6 +268,64 @@ export default function ProjectMediaManager({ media, equipmentOptions, onAdd, on
               </article>
             )
           })}
+        </div>
+      )}
+
+      {fullscreenItem && mediaUrls[fullscreenItem.id] && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/95 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setFullscreenItem(null)}
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            <a
+              href={mediaUrls[fullscreenItem.id]}
+              download={fullscreenItem.fileName}
+              onClick={(e) => e.stopPropagation()}
+              className="flex h-10 items-center gap-2 rounded-md bg-white/10 px-3 text-sm text-white hover:bg-white/20"
+              title="Baixar arquivo original"
+            >
+              <Download className="h-4 w-4" />
+              Baixar
+            </a>
+            <button
+              type="button"
+              onClick={() => setFullscreenItem(null)}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+              title="Fechar (ESC)"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="absolute top-4 left-4 max-w-[70%] text-white">
+            <h3 className="text-sm font-semibold truncate">{fullscreenItem.title}</h3>
+            <p className="text-xs text-white/70 truncate">
+              {fullscreenItem.equipmentName} · {formatSize(fullscreenItem.fileSize)}
+              {fullscreenItem.recordedAt && ` · ${new Date(`${fullscreenItem.recordedAt}T00:00:00`).toLocaleDateString('pt-BR')}`}
+            </p>
+            {fullscreenItem.description && (
+              <p className="text-xs text-white/70 mt-1 line-clamp-2">{fullscreenItem.description}</p>
+            )}
+          </div>
+
+          {fullscreenItem.mediaType === 'image' ? (
+            <img
+              src={mediaUrls[fullscreenItem.id]}
+              alt={fullscreenItem.description || fullscreenItem.title}
+              className="max-h-[90vh] max-w-[95vw] object-contain rounded-md shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <video
+              src={mediaUrls[fullscreenItem.id]}
+              controls
+              autoPlay
+              className="max-h-[90vh] max-w-[95vw] rounded-md shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
         </div>
       )}
     </section>

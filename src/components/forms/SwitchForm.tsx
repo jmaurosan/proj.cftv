@@ -11,6 +11,9 @@ import Select from '../ui/Select'
 import Button from '../ui/Button'
 import BackupManager from '../ui/BackupManager'
 import SwitchPortItem from './SwitchPortItem'
+import LabelScanner from '../ui/LabelScanner'
+import { applyScannedLabel } from '../../lib/labelScanMerge'
+import type { EquipmentLabelData } from '../../services/geminiService'
 import { Plug, Package } from 'lucide-react'
 
 interface SwitchFormProps {
@@ -145,6 +148,19 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
           {error}
         </div>
       )}
+
+      <div className="flex justify-end">
+        <LabelScanner
+          equipmentType="switch"
+          onResult={(scanned: EquipmentLabelData) => {
+            applyScannedLabel(scanned, [
+              { key: 'brand', label: 'Marca', current: brand, setter: setBrand },
+              { key: 'model', label: 'Modelo', current: model, setter: setModel },
+              { key: 'serial_number', label: 'Nº de série', current: serialNumber, setter: setSerialNumber },
+            ])
+          }}
+        />
+      </div>
 
       {/* Modelo do Catálogo */}
       {switchModels.length > 0 && (

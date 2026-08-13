@@ -8,6 +8,9 @@ import { useCameras } from '../../hooks/useCameras'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import LabelScanner from '../ui/LabelScanner'
+import { applyScannedLabel } from '../../lib/labelScanMerge'
+import type { EquipmentLabelData } from '../../services/geminiService'
 import { Plug, Camera, Package, Layers } from 'lucide-react'
 
 interface BalunFormProps {
@@ -103,6 +106,17 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
           {error}
         </div>
       )}
+
+      <div className="flex justify-end">
+        <LabelScanner
+          equipmentType="balun"
+          onResult={(scanned: EquipmentLabelData) => {
+            applyScannedLabel(scanned, [
+              { key: 'serial_number', label: 'Nº de série', current: serialNumber, setter: setSerialNumber },
+            ])
+          }}
+        />
+      </div>
 
       {/* Modelo do Catálogo */}
       {balunModels.length > 0 && (
