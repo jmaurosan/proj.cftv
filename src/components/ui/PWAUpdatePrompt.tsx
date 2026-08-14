@@ -12,7 +12,6 @@ export default function PWAUpdatePrompt() {
           r.update()
         }, 30 * 60 * 1000)
       }
-      console.log('SW registrado:', swUrl)
     },
     onRegisterError(error) {
       console.error('Erro ao registrar SW:', error)

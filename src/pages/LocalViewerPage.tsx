@@ -38,6 +38,10 @@ const DEFAULT_AGENT_TOKEN = 'cftv-local-agent'
 
 const readStoredValue = (key: string, fallback: string) => {
   if (typeof window === 'undefined') return fallback
+  try {
+    // Store sensitive tokens in sessionStorage to reduce persistence across browser sessions
+    if (key.includes('agent-token')) return window.sessionStorage.getItem(key) || fallback
+  } catch { }
   return window.localStorage.getItem(key) || fallback
 }
 
@@ -110,7 +114,9 @@ export default function LocalViewerPage() {
 
   const handleAgentTokenChange = (value: string) => {
     setAgentToken(value)
-    window.localStorage.setItem(buildLocalViewerStorageKey('agent-token', selectedClientId), value)
+    try {
+      window.sessionStorage.setItem(buildLocalViewerStorageKey('agent-token', selectedClientId), value)
+    } catch { }
   }
 
   const copyText = async (value: string, message: string) => {
