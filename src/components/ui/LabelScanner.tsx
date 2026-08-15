@@ -139,12 +139,11 @@ export default function LabelScanner({
       const dataUrl = await compressImage(file)
       setPreviewUrl(dataUrl)
 
-      const [qrValue, geminiResult] = await Promise.all([
-        tryBarcodeDetector(dataUrl),
-        isGeminiConfigured()
-          ? extractEquipmentLabel(dataUrl, equipmentType)
-          : Promise.resolve({ data: null, error: 'Gemini não configurado (VITE_GEMINI_API_KEY ausente).' }),
-      ])
+      const qrValue = await tryBarcodeDetector(dataUrl)
+      const geminiAvailable = await isGeminiConfigured()
+      const geminiResult = geminiAvailable
+        ? await extractEquipmentLabel(dataUrl, equipmentType)
+        : { data: null, error: 'Gemini proxy não configurado. Inicie o serviço de IA em segundo plano.' }
 
       const merged: EquipmentLabelData = { ...(geminiResult.data ?? emptyData) }
 

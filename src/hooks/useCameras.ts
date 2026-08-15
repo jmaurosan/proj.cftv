@@ -5,6 +5,7 @@ import { useAuth } from './useAuth'
 import { useClient } from '../contexts/ClientContext'
 import { translateError } from '../lib/errorTranslator'
 import { validateCameraConflicts, type CameraConnectionRecord } from '../lib/connectionValidation'
+import { decryptSecret, encryptSecret } from '../lib/credentialEncryption'
 
 const IMAGE_FIELDS = new Set(['installation_photo_url', 'qr_code_url'])
 
@@ -66,8 +67,15 @@ export function useCameras() {
     let query = supabase.from('cameras').select('*, dvrs(name, analog_channels, disabled_analog_channels)').order('created_at', { ascending: false })
     query = query.eq('client_id', selectedClientId)
     const { data, error } = await query
-    if (error) setError(translateError(error))
-    else setData(data as Camera[])
+    if (error) {
+      setError(translateError(error))
+    } else {
+      const decrypted = await Promise.all((data as Camera[]).map(async (camera) => ({
+        ...camera,
+        streaming_password: await decryptSecret(camera.streaming_password),
+      })))
+      setData(decrypted)
+    }
     setLoading(false)
   }, [selectedClientId])
 
@@ -123,8 +131,12 @@ export function useCameras() {
   const create = async (payload: Omit<CameraInsert, 'user_id'>) => {
     if (!user) return { error: 'Não autenticado' }
     if (!selectedClientId && !payload.client_id) return { error: 'Selecione um cliente antes de cadastrar câmera' }
-    const finalPayload = {
+    const encryptedPayload = {
       ...payload,
+      streaming_password: payload.streaming_password ? await encryptSecret(payload.streaming_password) : payload.streaming_password,
+    }
+    const finalPayload = {
+      ...encryptedPayload,
       user_id: user.id,
       client_id: payload.client_id ?? selectedClientId ?? null,
     }
@@ -167,7 +179,12 @@ export function useCameras() {
       if (swapError) return { error: translateError(swapError) }
     }
 
-    const error = await updateWithSchemaFallback(id, payload)
+    const encryptedPayload = {
+      ...payload,
+      streaming_password: payload.streaming_password ? await encryptSecret(payload.streaming_password) : payload.streaming_password,
+    }
+
+    const error = await updateWithSchemaFallback(id, encryptedPayload)
     if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }

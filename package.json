@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --test --experimental-strip-types \"tests/**/*.test.ts\" \"tests/**/*.test.mjs\"",
     "mediamtx:agent": "node tools/mediamtx-agent/server.mjs",
+    "ai:proxy": "node tools/gemini-proxy/server.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

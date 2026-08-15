@@ -3,30 +3,31 @@ import { Database, Search, Plus, ChevronRight, Info, ShieldCheck, RefreshCw, Upl
 import { motion, AnimatePresence } from 'motion/react';
 import { useFetchTable, useDeleteRow } from '../hooks/useSupabase';
 import { useStatusMonitor } from '../hooks/useStatusMonitor';
-import { DVR, Screen } from '../types';
+import type { Dvr as DvrType } from '../lib/types';
+import { Screen } from '../types';
 
 interface DVRListProps {
   onNavigate: (screen: Screen) => void;
-  onEdit?: (dvr: any) => void;
+  onEdit?: (dvr: DvrType) => void;
 }
 
 export default function DVRList({ onNavigate, onEdit }: DVRListProps) {
-  const { data: dvrs, loading, error, refresh } = useFetchTable<any>('dvrs');
+  const { data: dvrs, loading, error, refresh } = useFetchTable<DvrType>('dvrs');
   const { remove, loading: deleting } = useDeleteRow('dvrs');
   const { checkStatus, monitoring } = useStatusMonitor();
-  const [selectedDvr, setSelectedDvr] = React.useState<any | null>(null);
+  const [selectedDvr, setSelectedDvr] = React.useState<DvrType | null>(null);
 
-  const handleTest = async (e: React.MouseEvent, dvr: any) => {
+  const handleTest = async (e: React.MouseEvent, dvr: DvrType) => {
     e.stopPropagation();
     await checkStatus('dvrs', dvr.id, dvr.name);
-    refresh();
+    await refresh();
   };
 
-  const handleDelete = async (e: React.MouseEvent, dvr: any) => {
+  const handleDelete = async (e: React.MouseEvent, dvr: DvrType) => {
     e.stopPropagation();
     if (window.confirm(`Tem certeza que deseja excluir o DVR ${dvr.name}?`)) {
       await remove(dvr.id, dvr.name);
-      refresh();
+      await refresh();
     }
   };
 

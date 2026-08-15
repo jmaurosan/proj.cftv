@@ -19,11 +19,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session)
+        setUser(session?.user ?? null)
+      })
+      .catch(() => {
+        setSession(null)
+        setUser(null)
+      })
+      .finally(() => setLoading(false))
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
@@ -33,13 +38,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  const normalizeEmail = (email: string) => email.trim().toLowerCase()
+
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const normalizedEmail = normalizeEmail(email)
+    if (!normalizedEmail || !password.trim()) {
+      return { error: 'Informe email e senha válidos.' }
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
     return { error: error ? error.message : null }
   }
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password })
+    const normalizedEmail = normalizeEmail(email)
+    if (!normalizedEmail || !password.trim()) {
+      return { error: 'Informe email e senha válidos.' }
+    }
+    const { error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+      },
+    })
     return { error: error ? error.message : null }
   }
 

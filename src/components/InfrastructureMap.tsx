@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { Network, Printer, RefreshCw, Video, Database, AlertCircle, Terminal, MapPin, Cloud, X, Save } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useFetchTable, useInsertRow } from '../hooks/useSupabase';
+import type { Camera, PowerBalun, CableConnection } from '../lib/types';
 
 export default function InfrastructureMap() {
-  const [selectedPort, setSelectedPort] = useState<{ type: 'switch' | 'balun', number: number, id?: string } | null>(null);
-  
-  const { data: cameras } = useFetchTable<any>('cameras');
-  const { data: baluns } = useFetchTable<any>('power_baluns');
-  const { data: connections, refresh: refreshConnections } = useFetchTable<any>('connections');
+  const [selectedPort, setSelectedPort] = useState<{ type: 'switch' | 'balun'; number: number; id?: string } | null>(null);
+
+  const { data: cameras } = useFetchTable<Camera>('cameras');
+  const { data: baluns } = useFetchTable<PowerBalun>('power_baluns');
+  const { data: connections, refresh: refreshConnections } = useFetchTable<CableConnection>('connections');
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
       {/* Header */}

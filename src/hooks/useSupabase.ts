@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../services/supabase';
+import { useCallback, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 
-export function useFetchTable<T>(table: string) {
+type GenericRecord = object;
+
+export function useFetchTable<T extends GenericRecord>(table: string) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const { data: result, error: supabaseError } = await supabase
@@ -15,30 +17,30 @@ export function useFetchTable<T>(table: string) {
         .order('created_at', { ascending: false });
 
       if (supabaseError) throw supabaseError;
-      setData(result || []);
-    } catch (err: any) {
-      setError(err.message);
+      setData((result as T[]) || []);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar os dados.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [table]);
 
   useEffect(() => {
-    fetchData();
-  }, [table]);
+    void fetchData();
+  }, [fetchData]);
 
   return { data, loading, error, refresh: fetchData };
 }
 
-export function useInsertRow(table: string) {
+export function useInsertRow<T extends GenericRecord>(table: string) {
   const [loading, setLoading] = useState(false);
 
-  const insert = async (rowData: any) => {
+  const insert = async (rowData: T) => {
     setLoading(true);
     try {
       const { data, error } = await supabase.from(table).insert([rowData]).select();
       if (error) throw error;
-      return data;
+      return data as T[] | null;
     } finally {
       setLoading(false);
     }
@@ -47,15 +49,15 @@ export function useInsertRow(table: string) {
   return { insert, loading };
 }
 
-export function useUpdateRow(table: string) {
+export function useUpdateRow<T extends GenericRecord>(table: string) {
   const [loading, setLoading] = useState(false);
 
-  const update = async (id: string, rowData: any) => {
+  const update = async (id: string, rowData: Partial<T> & object) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from(table).update(rowData).eq('id', id).select();
+      const { data, error } = await supabase.from(table).update(rowData as Record<string, unknown>).eq('id', id).select();
       if (error) throw error;
-      return data;
+      return data as T[] | null;
     } finally {
       setLoading(false);
     }
@@ -73,12 +75,13 @@ export function useDeleteRow(table: string) {
       const { error } = await supabase.from(table).delete().eq('id', id);
       if (error) throw error;
 
-      // Gravar log de exclusão
-      await supabase.from('activity_logs').insert([{
-        type: 'warning',
-        message: `Equipamento ${name || id} removido do inventário de ${table.toUpperCase()}.`,
-        location: 'SISTEMA'
-      }]);
+      await supabase.from('activity_logs').insert([
+        {
+          type: 'warning',
+          message: `Equipamento ${name || id} removido do inventário de ${table.toUpperCase()}.`,
+          location: 'SISTEMA',
+        },
+      ]);
 
       return true;
     } finally {

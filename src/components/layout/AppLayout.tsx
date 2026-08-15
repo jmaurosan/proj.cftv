@@ -1,14 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, Navigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useClientMemberships } from '../../hooks/useClientMemberships'
+import { useClient } from '../../contexts/ClientContext'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import LoadingSpinner from '../ui/LoadingSpinner'
 
 export default function AppLayout() {
   const { user, loading } = useAuth()
+  const { selectedClientId, clearSelectedClient } = useClient()
+  const { loading: membershipsLoading, hasAccess } = useClientMemberships()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  useEffect(() => {
+    if (!membershipsLoading && selectedClientId && !hasAccess(selectedClientId)) {
+      clearSelectedClient()
+    }
+  }, [clearSelectedClient, hasAccess, membershipsLoading, selectedClientId])
 
   if (loading) {
     return (

@@ -53,24 +53,24 @@ const parsePairMap = (pairMapStr: string) => {
 
 interface CameraInventoryProps {
   onNavigate: (screen: Screen) => void;
-  onEdit?: (camera: any) => void;
+  onEdit?: (camera: Camera) => void;
 }
 
 export default function CameraInventory({ onNavigate, onEdit }: CameraInventoryProps) {
-  const { data: cameras, loading, error, refresh } = useFetchTable<any>('cameras');
+  const { data: cameras, loading, error, refresh } = useFetchTable<Camera>('cameras');
   const { remove, loading: deleting } = useDeleteRow('cameras');
   const { checkStatus, monitoring } = useStatusMonitor();
-  const [techDetails, setTechDetails] = React.useState<any | null>(null);
+  const [techDetails, setTechDetails] = React.useState<Camera | null>(null);
 
-  const handleTest = async (camera: any) => {
+  const handleTest = async (camera: Camera) => {
     await checkStatus('cameras', camera.id, camera.name);
-    refresh();
+    await refresh();
   };
 
-  const handleDelete = async (camera: any) => {
+  const handleDelete = async (camera: Camera) => {
     if (window.confirm(`Deseja excluir a câmera ${camera.name}?`)) {
       await remove(camera.id, camera.name);
-      refresh();
+      await refresh();
     }
   };
 

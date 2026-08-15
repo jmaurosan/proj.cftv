@@ -14,6 +14,7 @@ import SiteSelector from '../ui/SiteSelector'
 import { applyScannedLabel } from '../../lib/labelScanMerge'
 import type { EquipmentLabelData } from '../../services/geminiService'
 import { translateError } from '../../lib/errorTranslator'
+import { decryptSecret, encryptSecret } from '../../lib/credentialEncryption'
 import { Globe, Package, Plus, Trash2 } from 'lucide-react'
 
 interface RouterFormProps {
@@ -105,39 +106,43 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
 
   // Sync basic data when initialData changes
   useEffect(() => {
-    setName(initialData?.name ?? '')
-    setBrand(initialData?.brand ?? '')
-    setModel(initialData?.model ?? '')
-    setSerialNumber(initialData?.serial_number ?? '')
-    setInstallationDate(initialData?.installation_date ?? '')
-    setDeviceType(initialData?.device_type ?? 'generic')
-    setLocation(initialData?.location ?? '')
-    setIpAddress(initialData?.ip_address ?? '')
-    setUsername(initialData?.username ?? '')
-    setPassword(initialData?.password ?? '')
-    setStatus(initialData?.status ?? 'ativo')
-    setMode((initialData?.mode as RouterMode) ?? 'router')
-    setPairedRouterId(initialData?.paired_router_id ?? '')
-    setSiteId(initialData?.site_id ?? '')
-    setPoweredByPoeInjector(initialData?.powered_by_poe_injector ?? false)
+    const hydrate = async () => {
+      setName(initialData?.name ?? '')
+      setBrand(initialData?.brand ?? '')
+      setModel(initialData?.model ?? '')
+      setSerialNumber(initialData?.serial_number ?? '')
+      setInstallationDate(initialData?.installation_date ?? '')
+      setDeviceType(initialData?.device_type ?? 'generic')
+      setLocation(initialData?.location ?? '')
+      setIpAddress(initialData?.ip_address ?? '')
+      setUsername(initialData?.username ?? '')
+      setPassword(initialData?.password ? ((await decryptSecret(initialData.password)) ?? '') : '')
+      setStatus(initialData?.status ?? 'ativo')
+      setMode((initialData?.mode as RouterMode) ?? 'router')
+      setPairedRouterId(initialData?.paired_router_id ?? '')
+      setSiteId(initialData?.site_id ?? '')
+      setPoweredByPoeInjector(initialData?.powered_by_poe_injector ?? false)
 
-    const rawNotes = initialData?.notes ?? ''
-    if (rawNotes.trim().startsWith('{') && rawNotes.trim().endsWith('}')) {
-      try {
-        const parsed = JSON.parse(rawNotes)
-        setWifiSsid(parsed.wifi_ssid ?? '')
-        setWifiPassword(parsed.wifi_password ?? '')
-        setNotes(parsed.notes ?? '')
-      } catch (e) {
+      const rawNotes = initialData?.notes ?? ''
+      if (rawNotes.trim().startsWith('{') && rawNotes.trim().endsWith('}')) {
+        try {
+          const parsed = JSON.parse(rawNotes)
+          setWifiSsid(parsed.wifi_ssid ?? '')
+          setWifiPassword(parsed.wifi_password ? ((await decryptSecret(parsed.wifi_password)) ?? '') : '')
+          setNotes(parsed.notes ?? '')
+        } catch (e) {
+          setWifiSsid('')
+          setWifiPassword('')
+          setNotes(rawNotes)
+        }
+      } else {
         setWifiSsid('')
         setWifiPassword('')
         setNotes(rawNotes)
       }
-    } else {
-      setWifiSsid('')
-      setWifiPassword('')
-      setNotes(rawNotes)
     }
+
+    hydrate()
   }, [initialData])
 
   // Internet connections
@@ -178,10 +183,12 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
 
     // Serializar SSID e Senha do Wi-Fi no campo notes se algum deles for preenchido
     let finalNotes = notes || null
+    const encryptedWifiPassword = wifiPassword ? await encryptSecret(wifiPassword) : null
+    const encryptedPassword = password ? await encryptSecret(password) : null
     if (wifiSsid || wifiPassword) {
       finalNotes = JSON.stringify({
         wifi_ssid: wifiSsid || null,
-        wifi_password: wifiPassword || null,
+        wifi_password: encryptedWifiPassword || null,
         notes: notes || null
       })
     }
@@ -196,7 +203,7 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
       location: location || null,
       ip_address: ipAddress || null,
       username: username || null,
-      password: password || null,
+      password: encryptedPassword || null,
       status,
       notes: finalNotes,
       mode,

@@ -11,6 +11,7 @@ import { Wifi, Search, Plus } from 'lucide-react'
 import { STATUS_COLORS } from '../lib/constants'
 import { useToast } from '../components/ui/Toast'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
+import { decryptSecret } from '../lib/credentialEncryption'
 
 const getMissingColumn = (error: unknown) => {
   const message = String((error as { message?: string })?.message || error || '')
@@ -56,24 +57,50 @@ export default function RoutersPage() {
   const [editingRouter, setEditingRouter] = useState<Router | null>(null)
 
   useEffect(() => {
-    if (!user) return
-    setLoading(true)
-    if (!selectedClientId) {
-      setRouters([])
-      supabase.from('clients').select('id, name').eq('user_id', user.id).order('name').then(({ data }) => {
-        setClients((data as Client[]) || [])
-        setLoading(false)
-      })
-      return
-    }
-    Promise.all([
-      supabase.from('routers').select('*').eq('user_id', user.id).eq('client_id', selectedClientId).order('name'),
-      supabase.from('clients').select('id, name').eq('user_id', user.id).order('name'),
-    ]).then(([routersRes, clientsRes]) => {
-      setRouters((routersRes.data as Router[]) || [])
+    const loadRouters = async () => {
+      if (!user) return
+      setLoading(true)
+      if (!selectedClientId) {
+        setRouters([])
+        supabase.from('clients').select('id, name').eq('user_id', user.id).order('name').then(({ data }) => {
+          setClients((data as Client[]) || [])
+          setLoading(false)
+        })
+        return
+      }
+
+      const [routersRes, clientsRes] = await Promise.all([
+        supabase.from('routers').select('*').eq('user_id', user.id).eq('client_id', selectedClientId).order('name'),
+        supabase.from('clients').select('id, name').eq('user_id', user.id).order('name'),
+      ])
+
+      const decryptedRouters = await Promise.all((routersRes.data as Router[] || []).map(async (router) => {
+        let notes = router.notes ?? null
+        if (typeof notes === 'string' && notes.trim().startsWith('{') && notes.trim().endsWith('}')) {
+          try {
+            const parsed = JSON.parse(notes)
+            if (parsed.wifi_password) {
+              parsed.wifi_password = await decryptSecret(parsed.wifi_password)
+            }
+            notes = JSON.stringify(parsed)
+          } catch {
+            // keep original notes if unable to parse
+          }
+        }
+
+        return {
+          ...router,
+          password: router.password ? await decryptSecret(router.password) : router.password,
+          notes,
+        }
+      }))
+
+      setRouters(decryptedRouters)
       setClients((clientsRes.data as Client[]) || [])
       setLoading(false)
-    })
+    }
+
+    loadRouters()
   }, [user, selectedClientId])
 
   const handleSort = (key: string) => {

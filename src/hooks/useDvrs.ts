@@ -5,6 +5,7 @@ import { useAuth } from './useAuth'
 import { useClient } from '../contexts/ClientContext'
 import { translateError } from '../lib/errorTranslator'
 import { validateDvrConflicts } from '../lib/connectionValidation'
+import { decryptSecret, encryptSecret } from '../lib/credentialEncryption'
 
 const getMissingColumn = (error: unknown) => {
   const message = String((error as { message?: string })?.message || error || '')
@@ -54,8 +55,16 @@ export function useDvrs() {
     let query = supabase.from('dvrs').select('*').order('created_at', { ascending: false })
     query = query.eq('client_id', selectedClientId)
     const { data, error } = await query
-    if (error) setError(translateError(error))
-    else setData(data as Dvr[])
+    if (error) {
+      setError(translateError(error))
+    } else {
+      const decrypted = await Promise.all((data as Dvr[]).map(async (dvr) => ({
+        ...dvr,
+        password: await decryptSecret(dvr.password),
+        hik_connect_password: await decryptSecret(dvr.hik_connect_password),
+      })))
+      setData(decrypted)
+    }
     setLoading(false)
   }, [selectedClientId])
 
@@ -75,8 +84,14 @@ export function useDvrs() {
   const create = async (payload: Omit<DvrInsert, 'user_id'>) => {
     if (!user) return { error: 'Não autenticado' }
     if (!selectedClientId && !payload.client_id) return { error: 'Selecione um cliente antes de cadastrar DVR' }
+    const [encryptedPassword, encryptedHikPassword] = await Promise.all([
+      encryptSecret(payload.password),
+      encryptSecret(payload.hik_connect_password),
+    ])
     const finalPayload = {
       ...payload,
+      password: encryptedPassword ?? null,
+      hik_connect_password: encryptedHikPassword ?? null,
       user_id: user.id,
       client_id: payload.client_id ?? selectedClientId ?? null,
     }
@@ -92,7 +107,14 @@ export function useDvrs() {
     const current = data.find((dvr) => dvr.id === id)
     const conflict = await validateBeforeSave({ ...current, ...payload }, id)
     if (conflict) return { error: conflict }
-    const error = await updateWithSchemaFallback(id, payload)
+
+    const sanitizedPayload = {
+      ...payload,
+      password: payload.password ? await encryptSecret(payload.password) : payload.password,
+      hik_connect_password: payload.hik_connect_password ? await encryptSecret(payload.hik_connect_password) : payload.hik_connect_password,
+    }
+
+    const error = await updateWithSchemaFallback(id, sanitizedPayload)
     if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }

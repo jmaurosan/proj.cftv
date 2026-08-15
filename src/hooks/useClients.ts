@@ -13,18 +13,90 @@ export function useClients() {
   const fetchClients = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('is_active', true)
-      .order('name')
-    if (error) {
-      setError(translateError(error))
+
+    if (!user) {
+      setClients([])
+      setLoading(false)
+      return
+    }
+
+    const isAdmin = Boolean((user.app_metadata as { role?: string } | undefined)?.role === 'admin')
+
+    let result
+
+    if (isAdmin) {
+      result = await supabase
+        .from('clients')
+        .select('*')
+        .eq('is_active', true)
+        .order('name')
     } else {
-      setClients(data || [])
+      const { data: membershipsData, error: membershipsError } = await supabase
+        .from('client_members')
+        .select('client_id')
+        .eq('user_id', user.id)
+
+      if (membershipsError) {
+        setError(translateError(membershipsError))
+        setClients([])
+        setLoading(false)
+        return
+      }
+
+      const accessibleIds = (membershipsData ?? []).map((entry) => entry.client_id).filter(Boolean)
+
+      const ownedResult = await supabase
+        .from('clients')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('name')
+
+      if (ownedResult.error) {
+        setError(translateError(ownedResult.error))
+        setClients([])
+        setLoading(false)
+        return
+      }
+
+      const ownedClients = ownedResult.data ?? []
+
+      if (!accessibleIds.length) {
+        setClients(ownedClients)
+        setLoading(false)
+        return
+      }
+
+      const membershipResult = await supabase
+        .from('clients')
+        .select('*')
+        .in('id', accessibleIds)
+        .eq('is_active', true)
+        .order('name')
+
+      if (membershipResult.error) {
+        setError(translateError(membershipResult.error))
+        setClients([])
+        setLoading(false)
+        return
+      }
+
+      const merged = [...(ownedClients ?? []), ...(membershipResult.data ?? [])]
+      const unique = merged.filter(
+        (client, index, array) => array.findIndex((candidate) => candidate.id === client.id) === index,
+      )
+      setClients(unique)
+      setLoading(false)
+      return
+    }
+
+    if (result.error) {
+      setError(translateError(result.error))
+    } else {
+      setClients(result.data || [])
     }
     setLoading(false)
-  }, [])
+  }, [user])
 
   useEffect(() => {
     fetchClients()

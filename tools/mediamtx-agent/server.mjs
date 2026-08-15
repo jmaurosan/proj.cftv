@@ -1,10 +1,40 @@
 import http from 'node:http'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { writeMediaMtxConfigWithBackup } from './agentCore.mjs'
+
+// Carrega segredos opcionais de secrets.yaml (server-side)
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+function loadSecrets() {
+  const candidates = [path.join(__dirname, '..', '..', 'secrets.yaml'), path.join(__dirname, '..', '..', 'secrets.json'), path.join(process.cwd(), 'secrets.yaml')]
+  for (const p of candidates) {
+    try {
+      if (!fs.existsSync(p)) continue
+      const raw = fs.readFileSync(p, 'utf8').trim()
+      if (!raw) continue
+      try { return JSON.parse(raw) } catch {}
+      const out = {}
+      for (const line of raw.split(/\r?\n/)) {
+        const m = line.match(/^([A-Za-z0-9_\-]+):\s*(?:"([^"]*)"|'([^']*)'|(.*))?$/)
+        if (!m) continue
+        const key = m[1]
+        const val = m[2] ?? m[3] ?? (m[4] !== undefined ? m[4].trim() : '')
+        out[key] = val === '' ? null : val
+      }
+      return out
+    } catch (e) {
+      // ignore and continue
+    }
+  }
+  return {}
+}
+
+const SECRETS = loadSecrets()
 
 const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_PORT = 8727
 const DEFAULT_CONFIG_PATH = 'C:\\MediaMTX\\mediamtx.yml'
-const DEFAULT_TOKEN = 'cftv-local-agent'
 const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -12,11 +42,17 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'https://proj-cftv.vercel.app',
 ]
 
-const host = process.env.CFTV_MEDIAMTX_AGENT_HOST || DEFAULT_HOST
-const port = Number(process.env.CFTV_MEDIAMTX_AGENT_PORT || DEFAULT_PORT)
-const configPath = process.env.CFTV_MEDIAMTX_CONFIG_PATH || DEFAULT_CONFIG_PATH
-const token = process.env.CFTV_MEDIAMTX_AGENT_TOKEN || DEFAULT_TOKEN
-const allowedOrigins = (process.env.CFTV_MEDIAMTX_ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(','))
+const host = process.env.CFTV_MEDIAMTX_AGENT_HOST || SECRETS.CFTV_MEDIAMTX_AGENT_HOST || DEFAULT_HOST
+const port = Number(process.env.CFTV_MEDIAMTX_AGENT_PORT || SECRETS.CFTV_MEDIAMTX_AGENT_PORT || DEFAULT_PORT)
+const configPath = process.env.CFTV_MEDIAMTX_CONFIG_PATH || SECRETS.CFTV_MEDIAMTX_CONFIG_PATH || DEFAULT_CONFIG_PATH
+const token = process.env.CFTV_MEDIAMTX_AGENT_TOKEN || SECRETS.CFTV_MEDIAMTX_AGENT_TOKEN
+
+if (!token || !String(token).trim()) {
+  console.error('CFTV_MEDIAMTX_AGENT_TOKEN é obrigatório. Recusei iniciar o agente MediaMTX sem um token secreto.')
+  process.exit(1)
+}
+
+const allowedOrigins = (process.env.CFTV_MEDIAMTX_ALLOWED_ORIGINS || SECRETS.CFTV_MEDIAMTX_ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(','))
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)

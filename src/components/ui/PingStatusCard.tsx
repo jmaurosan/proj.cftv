@@ -74,11 +74,12 @@ export default function PingStatusCard({ devices, onResultsChange }: PingStatusC
           latency: Date.now() - start,
           reason: `HTTP ${response.status || 'ok'}`,
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         clearTimeout(id)
-        if (err.name === 'AbortError') continue
+        const errName = typeof err === 'object' && err !== null && 'name' in err ? String((err as any).name) : ''
+        if (errName === 'AbortError') continue
 
-        const message = String(err?.message || '').toLowerCase()
+        const message = (typeof err === 'object' && err !== null && 'message' in err) ? String((err as any).message).toLowerCase() : String(err).toLowerCase()
         if (message.includes('failed to fetch') || message.includes('networkerror')) {
           return {
             online: false,

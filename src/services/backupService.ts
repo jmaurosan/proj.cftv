@@ -55,8 +55,9 @@ export async function uploadDeviceBackup(
     }
 
     return { data: dbData as DeviceBackup, error: null }
-  } catch (err: any) {
-    return { data: null, error: err.message || 'Erro inesperado no upload' }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Erro inesperado no upload'
+    return { data: null, error: message }
   }
 }
 

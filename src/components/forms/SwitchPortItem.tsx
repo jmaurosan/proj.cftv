@@ -9,9 +9,17 @@ const DEVICE_TYPE_LABELS: Record<string, string> = {
   router: 'Roteador',
 }
 
+interface PortRecord {
+  is_active?: boolean
+  device_type?: string | null
+  device_id?: string | null
+  device_name?: string | null
+  notes?: string | null
+}
+
 interface SwitchPortItemProps {
   portNum: number
-  port: any
+  port: PortRecord | null
   deviceOptions: Record<string, { id: string; name: string }[]>
   savePort: (port: {
     port_number: number

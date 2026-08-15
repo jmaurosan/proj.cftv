@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react'
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import {
@@ -275,7 +275,7 @@ export default function NetworkTopology() {
   }, [sites, displayNodes, activePositions])
 
   // Carregar dados de nota do cliente e construir topologia
-  const loadTopology = async () => {
+  const loadTopology = useCallback(async () => {
     if (!selectedClientId) return
     setLoading(true)
     try {
@@ -581,13 +581,14 @@ export default function NetworkTopology() {
       // 4. Calcular layout default ou usar o salvo
       const computedLayout = computeLayout(list, savedPositions, { connections: savedUseManualConnections ? manual : conns })
       setNodePositions(computedLayout)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      toast('Erro ao processar topologia: ' + err.message, 'error')
+      const message = err instanceof Error ? err.message : String(err)
+      toast('Erro ao processar topologia: ' + message, 'error')
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedClientId, user, toast])
 
   // Distribui os nós em camadas automáticas
   const computeLayout = (
@@ -604,7 +605,7 @@ export default function NetworkTopology() {
 
   useEffect(() => {
     loadTopology()
-  }, [selectedClientId])
+  }, [loadTopology])
 
   // Salvar layout de topologia no Supabase
   const handleSaveTopology = async (updatedPositions = nodePositions) => {

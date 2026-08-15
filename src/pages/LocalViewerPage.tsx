@@ -34,14 +34,16 @@ const LIVE_VIEW_GRID_CLASSES: Record<LiveViewLayout, string> = {
 }
 
 const DEFAULT_AGENT_URL = 'http://127.0.0.1:8727'
-const DEFAULT_AGENT_TOKEN = 'cftv-local-agent'
+const DEFAULT_AGENT_TOKEN = ''
 
 const readStoredValue = (key: string, fallback: string) => {
   if (typeof window === 'undefined') return fallback
   try {
     // Store sensitive tokens in sessionStorage to reduce persistence across browser sessions
     if (key.includes('agent-token')) return window.sessionStorage.getItem(key) || fallback
-  } catch { }
+  } catch (error) {
+    void error
+  }
   return window.localStorage.getItem(key) || fallback
 }
 
@@ -116,7 +118,9 @@ export default function LocalViewerPage() {
     setAgentToken(value)
     try {
       window.sessionStorage.setItem(buildLocalViewerStorageKey('agent-token', selectedClientId), value)
-    } catch { }
+    } catch (error) {
+      void error
+    }
   }
 
   const copyText = async (value: string, message: string) => {
@@ -152,6 +156,10 @@ export default function LocalViewerPage() {
     const normalizedAgentUrl = agentUrl.trim().replace(/\/+$/, '')
     if (!normalizedAgentUrl) {
       toast('Informe a URL do agente local MediaMTX.', 'error')
+      return
+    }
+    if (!agentToken.trim()) {
+      toast('Informe o token do agente local MediaMTX.', 'error')
       return
     }
 

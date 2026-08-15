@@ -427,7 +427,7 @@ export async function generateReport(data: ReportData) {
       startY: y,
       head: [['Nome', 'IP', 'Marca', 'Modelo', 'Portas', 'PoE', 'Status']],
       body: data.switches.map(s => [
-        s.name, (s as any).ip_address || '-', s.brand || '-', s.model || '-', String(s.total_ports),
+        s.name, (s as any).ip || (s as any).ip_address || '-', s.brand || '-', s.model || '-', String(s.total_ports),
         s.is_poe ? `Sim (${s.poe_budget_watts || '0'}W)` : 'Não', s.status.toUpperCase()
       ]),
       margin: { left: 14, right: 14 },

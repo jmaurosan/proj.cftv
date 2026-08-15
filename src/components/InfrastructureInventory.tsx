@@ -5,9 +5,10 @@ import { PowerBalun, NetworkSwitch, Screen } from '../types';
 
 interface Props {
   onNavigate: (screen: Screen) => void;
-  onEditBalun?: (balun: any) => void;
-  onEditSwitch?: (sw: any) => void;
+  onEditBalun?: (balun: PowerBalun) => void;
+  onEditSwitch?: (sw: NetworkSwitch) => void;
 }
+
 
 export default function InfrastructureInventory({ onNavigate, onEditBalun, onEditSwitch }: Props) {
   const { data: baluns, loading: loadingBaluns, refresh: refreshBaluns } = useFetchTable<PowerBalun>('power_baluns');

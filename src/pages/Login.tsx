@@ -28,10 +28,15 @@ export default function Login() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || !password.trim()) {
+      setError('Informe email e senha válidos.')
+      return
+    }
     setLoading(true)
 
     const action = isSignUp ? signUp : signIn
-    const { error } = await action(email, password)
+    const { error } = await action(trimmedEmail, password)
 
     if (error) {
       setError(
