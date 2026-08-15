@@ -7,7 +7,10 @@ import { format, subDays } from 'date-fns';
 
 const COLORS = ['#00E676', '#FFAB00', '#FF5252']; // Success, Warning, Error
 
-export default function SystemAnalytics({ logs, cameras }: any) {
+type LogEntry = { created_at: string; type?: string };
+type Camera = { status?: string };
+
+export default function SystemAnalytics({ logs, cameras }: { logs: LogEntry[]; cameras: Camera[] }) {
   // 1. Prepare Incident Data (Last 7 days)
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const date = subDays(new Date(), i);
@@ -135,7 +138,7 @@ export default function SystemAnalytics({ logs, cameras }: any) {
   );
 }
 
-function InsightRow({ label, value, color }: any) {
+function InsightRow({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-outline-variant/5">
       <span className="text-[11px] text-on-surface-variant font-medium uppercase tracking-tight">{label}</span>

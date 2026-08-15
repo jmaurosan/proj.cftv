@@ -653,23 +653,27 @@ export default function NetworkTopology() {
         }))
       }
 
-      const validateTopologyPayload = (obj: any) => {
-        if (!obj || typeof obj !== 'object') throw new Error('Payload de topologia inválido')
-        if (obj.topologyLayout && typeof obj.topologyLayout === 'object') {
-          for (const [k, v] of Object.entries(obj.topologyLayout)) {
-            if (!v || typeof v !== 'object' || typeof (v as any).x !== 'number' || typeof (v as any).y !== 'number') {
+      const validateTopologyPayload = (obj: unknown) => {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('Payload de topologia inválido')
+        const o = obj as Record<string, unknown>
+        if (o.topologyLayout && typeof o.topologyLayout === 'object' && !Array.isArray(o.topologyLayout)) {
+          for (const [k, v] of Object.entries(o.topologyLayout as Record<string, unknown>)) {
+            if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`topologyLayout inválido para nó ${k}`)
+            const vv = v as Record<string, unknown>
+            if (typeof vv.x !== 'number' || typeof vv.y !== 'number') {
               throw new Error(`topologyLayout inválido para nó ${k}`)
             }
           }
         }
-        if (obj.topologyConnections && !Array.isArray(obj.topologyConnections)) throw new Error('topologyConnections deve ser um array')
-        if (Array.isArray(obj.topologyConnections)) {
-          for (const c of obj.topologyConnections) {
-            if (!c || typeof c !== 'object') throw new Error('Conexão de topologia inválida')
-            if (typeof c.source !== 'string' || typeof c.target !== 'string') throw new Error('Conexão requer source e target strings')
+        if (o.topologyConnections && !Array.isArray(o.topologyConnections)) throw new Error('topologyConnections deve ser um array')
+        if (Array.isArray(o.topologyConnections)) {
+          for (const c of o.topologyConnections) {
+            if (!c || typeof c !== 'object' || Array.isArray(c)) throw new Error('Conexão de topologia inválida')
+            const cc = c as Record<string, unknown>
+            if (typeof cc.source !== 'string' || typeof cc.target !== 'string') throw new Error('Conexão requer source e target strings')
           }
         }
-        if (obj.topologyRacks && !Array.isArray(obj.topologyRacks)) throw new Error('topologyRacks deve ser um array')
+        if (o.topologyRacks && !Array.isArray(o.topologyRacks)) throw new Error('topologyRacks deve ser um array')
       }
 
       try {
@@ -954,7 +958,8 @@ export default function NetworkTopology() {
   }
 
   // Lógica ao soltar o nó após arrastar no Canvas da Topologia
-  const handleNodeDragEnd = (id: string, info: any) => {
+  type DragInfo = { offset: { x: number; y: number } }
+  const handleNodeDragEnd = (id: string, info: DragInfo) => {
     const prevPos = nodePositions[id]
     if (!prevPos) return
 

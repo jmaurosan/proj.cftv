@@ -128,8 +128,9 @@ export default function ReportsPage() {
           nobreaks: projectAssets.nobreaks.length,
           documents: projectAssets.documents.length,
         })
-      } catch (err: any) {
-        console.error('Erro ao carregar estatísticas:', err)
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('Erro ao carregar estatísticas:', message)
       } finally {
         setLoading(false)
       }
@@ -220,9 +221,10 @@ export default function ReportsPage() {
       })
 
       toast('Relatório PDF gerado com sucesso!')
-    } catch (err: any) {
-      console.error('Erro ao gerar relatório:', err)
-      toast('Erro ao gerar relatório: ' + err.message, 'error')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Erro ao gerar relatório:', message)
+      toast('Erro ao gerar relatório: ' + message, 'error')
     } finally {
       setGenerating(false)
     }
