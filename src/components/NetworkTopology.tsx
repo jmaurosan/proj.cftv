@@ -634,7 +634,8 @@ export default function NetworkTopology() {
         }
       }
 
-      const notesPayload = JSON.stringify({
+      // Validação mínima do payload de topologia antes de persistir
+      const payloadObject = {
         ...existingNotes,
         textNotes,
         topologyLayout: updatedPositions,
@@ -650,7 +651,34 @@ export default function NetworkTopology() {
           style: conn.style ?? 'dashed',
           manual: true
         }))
-      })
+      }
+
+      const validateTopologyPayload = (obj: any) => {
+        if (!obj || typeof obj !== 'object') throw new Error('Payload de topologia inválido')
+        if (obj.topologyLayout && typeof obj.topologyLayout === 'object') {
+          for (const [k, v] of Object.entries(obj.topologyLayout)) {
+            if (!v || typeof v !== 'object' || typeof (v as any).x !== 'number' || typeof (v as any).y !== 'number') {
+              throw new Error(`topologyLayout inválido para nó ${k}`)
+            }
+          }
+        }
+        if (obj.topologyConnections && !Array.isArray(obj.topologyConnections)) throw new Error('topologyConnections deve ser um array')
+        if (Array.isArray(obj.topologyConnections)) {
+          for (const c of obj.topologyConnections) {
+            if (!c || typeof c !== 'object') throw new Error('Conexão de topologia inválida')
+            if (typeof c.source !== 'string' || typeof c.target !== 'string') throw new Error('Conexão requer source e target strings')
+          }
+        }
+        if (obj.topologyRacks && !Array.isArray(obj.topologyRacks)) throw new Error('topologyRacks deve ser um array')
+      }
+
+      try {
+        validateTopologyPayload(payloadObject)
+      } catch (validationErr) {
+        throw validationErr
+      }
+
+      const notesPayload = JSON.stringify(payloadObject)
 
       const { error } = await supabase
         .from('clients')
@@ -681,9 +709,10 @@ export default function NetworkTopology() {
 
       toast('Topologia de rede salva com sucesso!')
       setIsEditing(false)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      toast('Erro ao salvar topologia: ' + err.message, 'error')
+      const message = err instanceof Error ? err.message : String(err)
+      toast('Erro ao salvar topologia: ' + message, 'error')
     } finally {
       setSaving(false)
     }
