@@ -83,7 +83,7 @@ export default function Dashboard() {
 
       const dvrsQuery = supabase.from('dvrs').select('id, name, status, ip_address, total_channels, power_watts, operating_voltage, current_consumption_a').eq('client_id', selectedClientId).order('name')
       const camerasQuery = supabase.from('cameras').select('id, name, status, connection_type, poe_powered, type, location, ip_address, dvr_id, channel_number, power_watts, operating_voltage, current_consumption_a, dvrs(name)').eq('client_id', selectedClientId).order('name')
-      const switchesQuery = supabase.from('switches').select('id, name, status, is_poe, poe_standard, poe_budget_watts, total_ports, ip_address, power_watts, operating_voltage, current_consumption_a').eq('client_id', selectedClientId).order('name')
+      const switchesQuery = supabase.from('switches').select('id, name, status, is_poe, poe_standard, poe_budget_watts, total_ports, power_watts, operating_voltage, current_consumption_a').eq('client_id', selectedClientId).order('name')
       const balunsQuery = supabase.from('power_baluns').select('id, status, balun_type, power_watts, operating_voltage, current_consumption_a').eq('client_id', selectedClientId)
       const cablesQuery = supabase.from('cable_connections').select('id').eq('client_id', selectedClientId)
       const routersQuery = supabase.from('routers').select('id, name, status, ip_address, power_watts, operating_voltage, current_consumption_a').eq('client_id', selectedClientId).order('name')
