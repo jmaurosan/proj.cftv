@@ -3,6 +3,9 @@ import { Navigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { Eye, EyeOff, Shield } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { DEMO_LOGIN_ALIAS, resolveLoginIdentifier } from '../lib/demoAuth'
+
+const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true'
 
 export default function Login() {
   const { signIn, signUp, user, loading: authLoading } = useAuth()
@@ -31,7 +34,8 @@ export default function Login() {
     setLoading(true)
 
     const action = isSignUp ? signUp : signIn
-    const { error } = await action(email, password)
+    const loginIdentifier = isSignUp ? email.trim() : resolveLoginIdentifier(email, isDemoMode)
+    const { error } = await action(loginIdentifier, password)
 
     if (error) {
       setError(
@@ -67,17 +71,25 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                Email
+                {isDemoMode && !isSignUp ? 'Usuário' : 'Email'}
               </label>
               <input
-                type="email"
+                type={isDemoMode && !isSignUp ? 'text' : 'email'}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
+                placeholder={isDemoMode && !isSignUp ? DEMO_LOGIN_ALIAS : 'seu@email.com'}
+                autoComplete={isDemoMode && !isSignUp ? 'username' : 'email'}
                 required
                 className="w-full px-4 py-2.5 bg-bg-primary border border-border-light rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
               />
             </div>
+
+            {isDemoMode && !isSignUp && (
+              <div className="rounded-lg border border-accent/25 bg-accent/5 px-4 py-3 text-sm text-text-secondary">
+                <p className="font-medium text-text-primary">Acesso de demonstração</p>
+                <p className="mt-1">Usuário: <strong>{DEMO_LOGIN_ALIAS}</strong> · Senha: <strong>Testes@2026</strong></p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1.5">
@@ -126,7 +138,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          {!isDemoMode && <div className="mt-6 text-center">
             <button
               onClick={() => {
                 setIsSignUp(!isSignUp)
@@ -136,7 +148,7 @@ export default function Login() {
             >
               {isSignUp ? 'Já tem uma conta? Entrar' : 'Não tem conta? Criar uma'}
             </button>
-          </div>
+          </div>}
         </div>
       </motion.div>
     </div>
