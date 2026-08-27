@@ -332,7 +332,7 @@ export default function NetworkTopology() {
       const [camerasRes, dvrsRes, switchesRes, routersRes, balunsRes, switchPortsRes, balunPortsRes, racksRes, monitorsRes, sitesRes] = await Promise.all([
         supabase.from('cameras').select('id, name, status, ip_address, location, brand, model, connection_type, switch_id, switch_port, dvr_id, channel_number, balun_id, balun_port, site_id').eq('client_id', selectedClientId),
         supabase.from('dvrs').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
-        supabase.from('switches').select('id, name, status, ip_address, location, brand, model').eq('client_id', selectedClientId),
+        supabase.from('switches').select('id, name, status, location, brand, model').eq('client_id', selectedClientId),
         supabase.from('routers').select('id, name, status, ip_address, location, brand, model, mode, paired_router_id, site_id, powered_by_poe_injector').eq('client_id', selectedClientId),
         supabase.from('power_baluns').select('*').eq('client_id', selectedClientId),
         supabase.from('switch_ports').select('switch_id, port_number, device_type, device_id, device_name, is_active'),
@@ -417,7 +417,7 @@ export default function NetworkTopology() {
             name: s.name,
             type: 'switch',
             status: s.status,
-            ip_address: s.ip_address,
+            ip_address: null,
             location: s.location || 'Rack Principal',
             brand: s.brand,
             model: s.model

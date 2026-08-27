@@ -36,14 +36,13 @@ export default function IpPlanningPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     if (!selectedClientId) { setSegments([]); setDevices([]); setLoading(false); return }
-    const [segmentResult, dvrResult, cameraResult, switchResult, routerResult] = await Promise.all([
+    const [segmentResult, dvrResult, cameraResult, routerResult] = await Promise.all([
       supabase.from('network_segments').select('*').eq('client_id', selectedClientId).order('name'),
       supabase.from('dvrs').select('id,name,ip_address,status').eq('client_id', selectedClientId),
       supabase.from('cameras').select('id,name,ip_address,status').eq('client_id', selectedClientId),
-      supabase.from('switches').select('id,name,ip_address,status').eq('client_id', selectedClientId),
       supabase.from('routers').select('id,name,ip_address,status').eq('client_id', selectedClientId),
     ])
-    const firstError = [segmentResult, dvrResult, cameraResult, switchResult, routerResult].find(result => result.error)?.error
+    const firstError = [segmentResult, dvrResult, cameraResult, routerResult].find(result => result.error)?.error
     if (firstError) toast(`Erro ao carregar o plano de IPs: ${firstError.message}`, 'error')
     setSegments((segmentResult.data || []) as NetworkSegment[])
     const mapRows = (rows: unknown[] | null, type: string): IpDevice[] => ((rows || []) as InventoryRow[])
@@ -51,7 +50,7 @@ export default function IpPlanningPage() {
       .map(row => ({ id: `${type}-${row.id}`, name: row.name, type, ip: row.ip_address!, status: row.status || undefined }))
     setDevices([
       ...mapRows(dvrResult.data, 'DVR/NVR'), ...mapRows(cameraResult.data, 'Câmera'),
-      ...mapRows(switchResult.data, 'Switch'), ...mapRows(routerResult.data, 'Roteador'),
+      ...mapRows(routerResult.data, 'Roteador'),
     ])
     setLoading(false)
   }, [selectedClientId, toast])

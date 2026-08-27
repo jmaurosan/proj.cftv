@@ -36,16 +36,14 @@ export default function NetworkDiagnosticsPage() {
       return
     }
     const loadDevices = async () => {
-      const [dvrs, cameras, switches, routers] = await Promise.all([
+      const [dvrs, cameras, routers] = await Promise.all([
         supabase.from('dvrs').select('id,name,ip_address').eq('client_id', selectedClientId).not('ip_address', 'is', null),
         supabase.from('cameras').select('id,name,ip_address,connection_type').eq('client_id', selectedClientId).not('ip_address', 'is', null),
-        supabase.from('switches').select('id,name,ip_address').eq('client_id', selectedClientId).not('ip_address', 'is', null),
         supabase.from('routers').select('id,name,ip_address').eq('client_id', selectedClientId).not('ip_address', 'is', null),
       ])
       setDevices([
         ...(dvrs.data || []).map(item => ({ id: item.id, name: item.name, ip: item.ip_address!, type: 'DVR' as const })),
         ...(cameras.data || []).filter(item => item.connection_type === 'ip' || item.connection_type === 'wifi').map(item => ({ id: item.id, name: item.name, ip: item.ip_address!, type: 'Câmera' as const })),
-        ...(switches.data || []).map(item => ({ id: item.id, name: item.name, ip: item.ip_address!, type: 'Switch' as const })),
         ...(routers.data || []).map(item => ({ id: item.id, name: item.name, ip: item.ip_address!, type: 'Roteador' as const })),
       ])
     }
