@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- provider e hook formam uma única API de cliente */
 import { createContext, useContext, useState, type ReactNode } from 'react'
 
 interface ClientContextType {

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- o hook de autenticação consome este contexto */
 import { createContext, useEffect, useState, type ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'

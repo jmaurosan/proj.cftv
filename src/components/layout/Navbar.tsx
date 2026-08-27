@@ -7,7 +7,7 @@ interface NavbarProps {
   onNavigate: (screen: Screen) => void;
 }
 
-export const bottomNavItems = [
+const bottomNavItems = [
   { id: 'dashboard', label: 'Saúde', icon: LayoutDashboard },
   { id: 'dvrs', label: 'DVRs', icon: Database },
   { id: 'cameras', label: 'Câmeras', icon: Video },

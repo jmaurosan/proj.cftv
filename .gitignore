@@ -16,6 +16,15 @@ tsconfig.tsbuildinfo
 output/
 tmp/
 
+# Metadados locais de agentes e CLIs
+.agents/
+skills-lock.json
+supabase/.temp/
+
+# Rascunhos locais de planejamento (preservados fora do release)
+docs/superpowers/plans/
+pwa-modelos-equipamentos.md
+
 .env
 .env.local
 go2rtc.exe

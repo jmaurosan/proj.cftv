@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 
 export function useFetchTable<T>(table: string) {
@@ -6,7 +6,7 @@ export function useFetchTable<T>(table: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const { data: result, error: supabaseError } = await supabase
@@ -21,11 +21,11 @@ export function useFetchTable<T>(table: string) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [table]);
 
   useEffect(() => {
     fetchData();
-  }, [table]);
+  }, [fetchData]);
 
   return { data, loading, error, refresh: fetchData };
 }

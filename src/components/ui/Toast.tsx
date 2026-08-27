@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- provider e hook compartilham o mesmo contexto */
 import { useState, createContext, useContext, type ReactNode } from 'react'
 
 interface ToastContextType {

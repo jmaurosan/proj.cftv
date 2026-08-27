@@ -603,7 +603,10 @@ export default function NetworkTopology() {
   }
 
   useEffect(() => {
-    loadTopology()
+    void loadTopology()
+    // A troca de cliente é o evento que recarrega toda a topologia. As demais
+    // dependências são usadas apenas durante essa carga e não devem reiniciá-la.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId])
 
   // Salvar layout de topologia no Supabase
