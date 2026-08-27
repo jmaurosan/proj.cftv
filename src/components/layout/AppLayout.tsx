@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type MouseEvent } from 'react'
 import { Outlet, Navigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import Sidebar from './Sidebar'
@@ -7,9 +7,15 @@ import LoadingSpinner from '../ui/LoadingSpinner'
 import { supabase } from '../../lib/supabase'
 import { DEFAULT_COMPANY_BRANDING, getCompanyLogoUrl, type CompanyBranding } from '../../lib/companyBranding'
 import SchemaCompatibilityBanner from '../ui/SchemaCompatibilityBanner'
+import { Eye } from 'lucide-react'
+import { useClient } from '../../contexts/ClientContext'
+import { useToast } from '../ui/Toast'
+import { isMutationAction } from '../../lib/demoReadOnly'
 
 export default function AppLayout() {
   const { user, loading } = useAuth()
+  const { selectedClientRole } = useClient()
+  const { toast } = useToast()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [branding, setBranding] = useState<CompanyBranding>(DEFAULT_COMPANY_BRANDING)
@@ -29,6 +35,31 @@ export default function AppLayout() {
   const handleMenuClick = () => {
     if (window.matchMedia('(min-width: 1024px)').matches) setSidebarCollapsed(value => !value)
     else setMobileOpen(value => !value)
+  }
+
+  const isReadOnly = selectedClientRole === 'viewer'
+
+  const blockReadOnlySubmit = (event: FormEvent) => {
+    if (!isReadOnly) return
+    event.preventDefault()
+    event.stopPropagation()
+    toast('Acesso de demonstração: alterações estão bloqueadas.', 'error')
+  }
+
+  const blockReadOnlyAction = (event: MouseEvent) => {
+    if (!isReadOnly) return
+    const target = event.target as HTMLElement
+    const action = target.closest('button, [role="button"]') as HTMLElement | null
+    if (!action) return
+    const label = [action.getAttribute('aria-label'), action.getAttribute('title'), action.textContent]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+    const buttonType = action instanceof HTMLButtonElement ? action.type : ''
+    if (!isMutationAction(label, buttonType)) return
+    event.preventDefault()
+    event.stopPropagation()
+    toast('Acesso de demonstração: ação disponível somente para operadores.', 'error')
   }
 
   if (loading) {
@@ -62,7 +93,17 @@ export default function AppLayout() {
       >
         <Topbar onMenuClick={handleMenuClick} />
         <SchemaCompatibilityBanner />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 w-full">
+        {isReadOnly && (
+          <div className="mx-3 mt-3 sm:mx-4 lg:mx-6 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-text-primary" role="status">
+            <Eye className="h-4 w-4 shrink-0 text-accent" />
+            <span><strong>Ambiente demonstrativo · Somente leitura.</strong> Explore o Residencial Digixs sem alterar os dados.</span>
+          </div>
+        )}
+        <main
+          className="flex-1 p-3 sm:p-4 lg:p-6 w-full"
+          onSubmitCapture={blockReadOnlySubmit}
+          onClickCapture={blockReadOnlyAction}
+        >
           <Outlet />
         </main>
       </div>

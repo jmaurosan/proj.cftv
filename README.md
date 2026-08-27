@@ -1,73 +1,61 @@
-# React + TypeScript + Vite
+# CFTV.PROJ
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Plataforma web para projeto, inventário, documentação, comissionamento e manutenção de instalações de CFTV. O sistema relaciona clientes, locais, câmeras, DVRs/NVRs, canais, switches, Power Baluns, racks, alimentação, mídias e topologia física.
 
-Currently, two official plugins are available:
+## Tecnologias
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 19, TypeScript e Vite
+- Tailwind CSS
+- Supabase (PostgreSQL, autenticação, RLS e Storage privado)
+- Vercel
+- PWA e agente local opcional para MediaMTX
 
-## React Compiler
+## Desenvolvimento
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Copie `.env.example` para `.env.local`.
+2. Preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com um ambiente autorizado.
+3. Instale e execute:
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Nunca reutilize dados, credenciais ou arquivos da produção em ambientes de teste ou demonstração.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Verificação
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run verify
 ```
+
+O comando executa lint, os testes automatizados e o build de produção.
+
+## Estrutura
+
+- `src/pages`: superfícies acessadas pelas rotas.
+- `src/components`: componentes, formulários, layout e UI compartilhada.
+- `src/hooks`: estado e operações de dados por domínio.
+- `src/services`: Supabase, Storage e integrações.
+- `src/lib`: regras de negócio puras e utilitários testáveis.
+- `tests`: testes unitários e de contrato.
+- `supabase`: migrations, políticas RLS e verificações do banco.
+- `tools`: ferramentas locais, incluindo o agente MediaMTX.
+- `docs`: arquitetura, produto, implantação e arquivos históricos.
+
+A evolução para uma organização por funcionalidades deve ser incremental. Consulte [a arquitetura](docs/architecture/README.md) antes de mover módulos.
+
+## Produção e demonstração
+
+- Produção: banco e projeto Vercel exclusivos para dados reais.
+- Demonstração: banco, autenticação, Storage e projeto Vercel separados, preenchidos somente com dados fictícios.
+
+O procedimento seguro está em [docs/demo/README.md](docs/demo/README.md).
+
+## Documentação
+
+- [Arquitetura e organização](docs/architecture/README.md)
+- [Ambiente demonstrativo](docs/demo/README.md)
+- [Requisitos do produto](docs/product/PRD.md)
+- [Roadmap](docs/product/roadmap.md)
+- [Aplicação das migrations](supabase/DEPLOY_20260826.md)
