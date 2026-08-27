@@ -5,6 +5,12 @@ import { useAuth } from './useAuth'
 import { useClient } from '../contexts/ClientContext'
 import { translateError } from '../lib/errorTranslator'
 
+export type CredentialSecret = {
+  password: string
+  verification_code: string | null
+  sharing_info: string | null
+}
+
 export function useCredentials() {
   const { user } = useAuth()
   const { selectedClientId } = useClient()
@@ -20,9 +26,7 @@ export function useCredentials() {
       return
     }
     setLoading(true)
-    let query = supabase.from('credentials').select('*').order('created_at', { ascending: false })
-    query = query.eq('client_id', selectedClientId)
-    const { data, error } = await query
+    const { data, error } = await supabase.rpc('list_credentials_safe', { p_client_id: selectedClientId })
     if (error) setError(translateError(error))
     else setData(data as Credential[])
     setLoading(false)
@@ -58,5 +62,12 @@ export function useCredentials() {
     return { error: null }
   }
 
-  return { data, loading, error, create, update, remove, refetch: fetch }
+  const reveal = async (id: string): Promise<{ data: CredentialSecret | null; error: string | null }> => {
+    const { data, error } = await supabase.rpc('reveal_credential_secret', { p_credential_id: id })
+    if (error) return { data: null, error: translateError(error) }
+    const secret = Array.isArray(data) ? data[0] : data
+    return { data: (secret as CredentialSecret | null) ?? null, error: null }
+  }
+
+  return { data, loading, error, create, update, remove, reveal, refetch: fetch }
 }

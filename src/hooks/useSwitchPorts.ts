@@ -51,19 +51,34 @@ export function useSwitchPorts(switchId: string | null) {
       .eq('switch_id', switchId);
     if (validationError) return { error: `Não foi possível validar as portas: ${translateError(validationError)}` };
     const conflict = validatePortAssignment(
-      (currentPorts || []).map((item) => ({ port_number: item.port_number, target_id: item.device_id, target_name: item.device_name })),
+      (currentPorts || []).filter((item) => (
+        item.device_id !== port.device_id || item.port_number === port.port_number
+      )).map((item) => ({ port_number: item.port_number, target_id: item.device_id, target_name: item.device_name })),
       { port_number: port.port_number, target_id: port.device_id },
       'switch',
     );
     if (conflict) return { error: conflict };
     const { data: existing } = await supabase
       .from('switch_ports')
-      .select('id')
+      .select('id, device_type, device_id')
       .eq('switch_id', switchId)
       .eq('port_number', port.port_number)
       .maybeSingle();
 
-    if (existing) {
+    const cameraAssignment = port.device_type === 'camera' || existing?.device_type === 'camera'
+    if (cameraAssignment) {
+      if (port.device_type && port.device_type !== 'camera') {
+        return { error: 'Libere primeiro a câmera vinculada antes de usar a porta para outro equipamento.' }
+      }
+      const { error } = await supabase.rpc('set_camera_switch_port', {
+        p_switch_id: switchId,
+        p_port_number: port.port_number,
+        p_camera_id: port.device_type === 'camera' ? port.device_id || null : null,
+        p_is_active: port.is_active ?? true,
+        p_notes: port.notes || null,
+      })
+      if (error) return { error: translateError(error) }
+    } else if (existing) {
       const { error } = await supabase.from('switch_ports').update({
         device_type: port.device_type || null,
         device_id: port.device_id || null,

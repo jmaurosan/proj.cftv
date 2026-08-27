@@ -1,10 +1,14 @@
 import http from 'node:http'
+import { randomBytes } from 'node:crypto'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import os from 'node:os'
 import { writeMediaMtxConfigWithBackup } from './agentCore.mjs'
 
 const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_PORT = 8727
 const DEFAULT_CONFIG_PATH = 'C:\\MediaMTX\\mediamtx.yml'
-const DEFAULT_TOKEN = 'cftv-local-agent'
+const AGENT_VERSION = '1.1.0'
 const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -15,11 +19,26 @@ const DEFAULT_ALLOWED_ORIGINS = [
 const host = process.env.CFTV_MEDIAMTX_AGENT_HOST || DEFAULT_HOST
 const port = Number(process.env.CFTV_MEDIAMTX_AGENT_PORT || DEFAULT_PORT)
 const configPath = process.env.CFTV_MEDIAMTX_CONFIG_PATH || DEFAULT_CONFIG_PATH
-const token = process.env.CFTV_MEDIAMTX_AGENT_TOKEN || DEFAULT_TOKEN
+const configuredToken = process.env.CFTV_MEDIAMTX_AGENT_TOKEN?.trim()
+const token = configuredToken || randomBytes(32).toString('base64url')
 const allowedOrigins = (process.env.CFTV_MEDIAMTX_ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(','))
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)
+const execFileAsync = promisify(execFile)
+const IPV4_PATTERN = /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/
+
+const pingTarget = async (ip) => {
+  if (!IPV4_PATTERN.test(ip)) throw new Error('Endereço IPv4 inválido.')
+  const startedAt = Date.now()
+  const args = process.platform === 'win32' ? ['-n', '1', '-w', '2500', ip] : ['-c', '1', '-W', '3', ip]
+  try {
+    await execFileAsync('ping', args, { timeout: 4000, windowsHide: true })
+    return { online: true, latency: Date.now() - startedAt }
+  } catch {
+    return { online: false, latency: Date.now() - startedAt }
+  }
+}
 
 const jsonResponse = (res, statusCode, body, origin) => {
   res.writeHead(statusCode, {
@@ -68,9 +87,29 @@ const server = http.createServer(async (req, res) => {
     jsonResponse(res, 200, {
       ok: true,
       service: 'cftv-mediamtx-agent',
+      version: AGENT_VERSION,
+      capabilities: ['mediamtx-config', 'network-ping'],
       configPath,
       allowedOrigins,
+      hostname: os.hostname(),
     }, origin)
+    return
+  }
+
+  if (req.method === 'POST' && req.url === '/network/ping') {
+    if (req.headers['x-cftv-agent-token'] !== token) {
+      jsonResponse(res, 401, { ok: false, error: 'Token inválido para o agente local.' }, origin)
+      return
+    }
+
+    try {
+      const rawBody = await readBody(req)
+      const payload = JSON.parse(rawBody)
+      const result = await pingTarget(String(payload.ip || '').trim())
+      jsonResponse(res, 200, { ok: true, ...result }, origin)
+    } catch (error) {
+      jsonResponse(res, 400, { ok: false, error: error instanceof Error ? error.message : 'Falha no diagnóstico.' }, origin)
+    }
     return
   }
 
@@ -97,4 +136,9 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`CFTV MediaMTX agent listening on http://${host}:${port}`)
   console.log(`Config path: ${configPath}`)
+  if (!configuredToken) {
+    console.warn('CFTV_MEDIAMTX_AGENT_TOKEN nao foi configurado.')
+    console.warn(`Token temporario desta execucao: ${token}`)
+    console.warn('Defina a variavel de ambiente para manter um token estavel e seguro.')
+  }
 })

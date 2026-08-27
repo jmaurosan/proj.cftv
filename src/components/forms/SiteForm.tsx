@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { InstallationSite, SiteType } from '../../lib/types'
-import { SITE_TYPES } from '../../lib/constants'
 import { useSites } from '../../hooks/useSites'
+import { useSiteTypes } from '../../hooks/useSiteTypes'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
@@ -16,6 +16,7 @@ const NONE_OPTION = { value: '', label: '— Sem site pai —' }
 
 export default function SiteForm({ siteId, onClose, onSaved }: SiteFormProps) {
   const { data: sites, loading: loadingSites, create, update, remove } = useSites()
+  const { options: siteTypeOptions, loading: loadingTypes } = useSiteTypes()
 
   const [name, setName] = useState('')
   const [siteType, setSiteType] = useState<SiteType>('outro')
@@ -44,6 +45,11 @@ export default function SiteForm({ siteId, onClose, onSaved }: SiteFormProps) {
     const filtered = sites.filter((s) => s.id !== siteId)
     return [NONE_OPTION, ...filtered.map((s) => ({ value: s.id, label: s.name }))]
   }, [sites, siteId])
+
+  const typeOptions = useMemo(() => {
+    const available = siteTypeOptions.filter((type) => type.isActive || type.value === siteType)
+    return available.map(({ value, label }) => ({ value, label }))
+  }, [siteTypeOptions, siteType])
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -116,7 +122,8 @@ export default function SiteForm({ siteId, onClose, onSaved }: SiteFormProps) {
           label="Tipo"
           value={siteType}
           onChange={(e) => setSiteType(e.target.value as SiteType)}
-          options={SITE_TYPES}
+          options={typeOptions}
+          disabled={loadingTypes}
           required
         />
       </div>

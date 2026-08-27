@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
-import { Wifi, RefreshCw, AlertCircle, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, WifiOff } from 'lucide-react'
 import Button from './Button'
 
-type PingStatus = 'online' | 'offline' | 'unverified'
+export type DiagnosticAccessMode = 'local' | 'wireguard'
 
-interface PingDevice {
+export interface PingDevice {
   id: string
   name: string
   type: 'DVR' | 'Switch' | 'Roteador' | 'Câmera'
@@ -14,7 +14,6 @@ interface PingDevice {
 export interface PingResult {
   deviceId: string
   online: boolean
-  status?: PingStatus
   latency: number
   tested: boolean
   reason?: string
@@ -22,252 +21,125 @@ export interface PingResult {
 
 interface PingStatusCardProps {
   devices: PingDevice[]
-  onResultsChange?: (results: Record<string, PingResult>) => void
+  agentUrl: string
+  agentToken: string
+  accessMode: DiagnosticAccessMode
+  agentOnline: boolean
+  onComplete?: (results: Record<string, PingResult>) => void | Promise<void>
 }
 
-const buildProbeTargets = (ip: string) => {
-  const target = ip.trim()
-  if (!target) return []
-  if (/^https?:\/\//i.test(target)) return [target]
-  return [`http://${target}`, `http://${target}/`, `http://${target}/favicon.ico`]
-}
-
-export default function PingStatusCard({ devices, onResultsChange }: PingStatusCardProps) {
+export default function PingStatusCard({ devices, agentUrl, agentToken, accessMode, agentOnline, onComplete }: PingStatusCardProps) {
   const [results, setResults] = useState<Record<string, PingResult>>({})
   const [testing, setTesting] = useState(false)
   const [progress, setProgress] = useState(0)
-  const testedResults = Object.values(results).filter((res) => res.tested)
-  const onlineCount = testedResults.filter((res) => res.status === 'online' || (res.online && !res.status)).length
-  const offlineCount = testedResults.filter((res) => res.status === 'offline' || (!res.online && !res.status)).length
-  const unverifiedCount = testedResults.filter((res) => res.status === 'unverified').length
-  const hasTestedAll = devices.length > 0 && testedResults.length === devices.length
+  const [testedAt, setTestedAt] = useState<Date | null>(null)
 
-  // Reseta os resultados quando os dispositivos mudam
   useEffect(() => {
-    const initial: Record<string, PingResult> = {}
-    devices.forEach((d) => {
-      initial[d.id] = { deviceId: d.id, online: false, status: 'offline', latency: 0, tested: false }
-    })
-    setResults(initial)
-    onResultsChange?.(initial)
-    setTesting(false)
+    setResults({})
     setProgress(0)
-  }, [devices, onResultsChange])
+    setTestedAt(null)
+  }, [devices, accessMode])
 
-  const pingIp = async (ip: string, timeout = 2500): Promise<{ online: boolean; status: PingStatus; latency: number; reason?: string }> => {
-    for (const target of buildProbeTargets(ip)) {
-      const start = Date.now()
-      const controller = new AbortController()
-      const id = setTimeout(() => controller.abort(), timeout)
-
-      try {
-        const response = await fetch(target, {
-          mode: 'cors',
-          cache: 'no-store',
-          redirect: 'manual',
-          signal: controller.signal,
-        })
-        clearTimeout(id)
-        return {
-          online: true,
-          status: 'online',
-          latency: Date.now() - start,
-          reason: `HTTP ${response.status || 'ok'}`,
-        }
-      } catch (err: any) {
-        clearTimeout(id)
-        if (err.name === 'AbortError') continue
-
-        const message = String(err?.message || '').toLowerCase()
-        if (message.includes('failed to fetch') || message.includes('networkerror')) {
-          return {
-            online: false,
-            status: 'unverified',
-            latency: Date.now() - start,
-            reason: 'O navegador bloqueou a leitura da resposta. Nao confirma que e o equipamento deste cliente.',
-          }
-        }
-        if (message.includes('mixed content') || message.includes('blocked')) {
-          return {
-            online: false,
-            status: 'unverified',
-            latency: Date.now() - start,
-            reason: 'Bloqueado pelo navegador por seguranca.',
-          }
-        }
-      }
+  const probe = async (device: PingDevice): Promise<PingResult> => {
+    const response = await fetch(`${agentUrl.replace(/\/+$/, '')}/network/ping`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-cftv-agent-token': agentToken.trim() },
+      body: JSON.stringify({ ip: device.ip }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok || !payload.ok) throw new Error(payload.error || 'O agente não conseguiu executar o ping.')
+    return {
+      deviceId: device.id,
+      online: Boolean(payload.online),
+      latency: Number(payload.latency || 0),
+      tested: true,
+      reason: payload.online ? 'Resposta ICMP recebida pelo agente.' : 'Sem resposta ICMP no tempo limite.',
     }
-
-    return { online: false, status: 'offline', latency: timeout, reason: 'Sem resposta dentro do tempo limite.' }
   }
 
   const runAllTests = async () => {
-    if (testing || devices.length === 0) return
+    if (testing || !agentOnline || !agentToken.trim() || devices.length === 0) return
     setTesting(true)
     setProgress(0)
+    const next: Record<string, PingResult> = {}
 
-    // Prepara estado inicial como "testando"
-    const runningResults = { ...results }
-    
-    let completedCount = 0
-    const updateProgress = () => {
-      completedCount++
-      setProgress(Math.round((completedCount / devices.length) * 100))
-    }
-
-    // Executa os testes em lotes (paralelo)
-    const promises = devices.map(async (device) => {
-      if (!device.ip) {
-        runningResults[device.id] = { deviceId: device.id, online: false, status: 'offline', latency: 0, tested: true }
-        updateProgress()
-        return
-      }
-
-      // O navegador nao faz ICMP real; este teste so confirma quando a resposta HTTP e legivel.
-      const res = await pingIp(device.ip)
-      runningResults[device.id] = {
-        deviceId: device.id,
-        online: res.online,
-        status: res.status,
-        latency: res.latency,
-        tested: true,
-        reason: res.reason,
-      }
-      
-      // Atualiza o estado incrementalmente para dar dinamismo na tela
-      setResults((prev) => {
-        const next = {
-          ...prev,
-          [device.id]: {
+    for (let index = 0; index < devices.length; index += 4) {
+      const batch = devices.slice(index, index + 4)
+      await Promise.all(batch.map(async (device) => {
+        try {
+          next[device.id] = await probe(device)
+        } catch (error) {
+          next[device.id] = {
             deviceId: device.id,
-            online: res.online,
-            status: res.status,
-            latency: res.latency,
+            online: false,
+            latency: 0,
             tested: true,
-            reason: res.reason,
+            reason: error instanceof Error ? error.message : 'Falha ao consultar o agente.',
           }
         }
-        onResultsChange?.(next)
-        return next
-      })
-      updateProgress()
-    })
+        setResults({ ...next })
+        setProgress(Math.round((Object.keys(next).length / devices.length) * 100))
+      }))
+    }
 
-    await Promise.all(promises)
     setTesting(false)
+    setTestedAt(new Date())
+    await onComplete?.(next)
   }
 
-  const getStatusIcon = (res: PingResult) => {
-    if (!res.tested) return <span className="w-2.5 h-2.5 rounded-full bg-slate-600" />
-    if (res.status === 'online' || (res.online && !res.status)) return <span className="w-2.5 h-2.5 rounded-full bg-success shadow-[0_0_6px_#22c55e]" />
-    if (res.status === 'unverified') return <AlertCircle className="w-3.5 h-3.5 text-warning" />
-    return <span className="w-2.5 h-2.5 rounded-full bg-danger shadow-[0_0_6px_#ef4444]" />
-  }
-
-  if (devices.length === 0) return null
+  const testedResults = Object.values(results)
+  const onlineCount = testedResults.filter(result => result.online).length
+  const offlineCount = testedResults.filter(result => !result.online).length
 
   return (
     <div className="bg-bg-secondary border border-border-light rounded-xl p-4 sm:p-5 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-            <Wifi className="w-4 h-4 text-primary" />
-            Diagnóstico de Status da Rede Local (Ping)
-          </h3>
-          <p className="text-[10px] text-text-muted mt-0.5">
-            Testa DVRs, câmeras IP/Wi-Fi, switches e roteadores com IP cadastrado. O seu computador/celular precisa estar na rede local do cliente.
-          </p>
+          <h3 className="text-sm font-semibold text-text-primary">Equipamentos com endereço IP</h3>
+          <p className="text-xs text-text-muted mt-1">O ping ICMP será executado pelo computador onde o agente local está rodando.</p>
         </div>
-        <Button
-          onClick={runAllTests}
-          disabled={testing}
-          size="sm"
-          className="flex items-center gap-1 shrink-0"
-        >
-          {testing ? (
-            <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Testando ({progress}%)</span>
-            </>
-          ) : (
-            <>
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Testar Conexões</span>
-            </>
-          )}
+        <Button onClick={runAllTests} disabled={testing || !agentOnline || !agentToken.trim()} size="sm" className="flex items-center gap-1.5">
+          {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          {testing ? `Testando (${progress}%)` : 'Testar conexões'}
         </Button>
       </div>
 
-      {testedResults.length > 0 && (
-        <div
-          className={`rounded-lg border px-3 py-2 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 ${
-            onlineCount > 0
-              ? 'bg-success/5 border-success/25 text-success'
-              : unverifiedCount > 0
-                ? 'bg-warning/5 border-warning/25 text-warning'
-              : 'bg-danger/5 border-danger/25 text-danger'
-          }`}
-        >
-          <span className="font-semibold">
-            {onlineCount > 0
-              ? 'Equipamento confirmado na rede local'
-              : unverifiedCount > 0
-                ? 'Rede local nao confirmada pelo navegador'
-                : 'Fora da rede local ou equipamentos sem resposta'}
-          </span>
-          <span className="text-[10px] text-text-muted">
-            {onlineCount} confirmado · {unverifiedCount} nao verificado · {offlineCount} offline{hasTestedAll ? '' : ' · testando...'}
-          </span>
+      {!agentOnline && (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5 flex items-start gap-2 text-xs text-warning">
+          <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>Agente indisponível. Nenhum equipamento será marcado como offline. Inicie o agente em um PC conectado à rede do cliente ou ao WireGuard.</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        {devices.map((d) => {
-          const res = results[d.id] || { tested: false, online: false, status: 'offline', latency: 0 }
-          return (
-            <div
-              key={d.id}
-              title={res.reason}
-              className={`p-3 rounded-lg border text-xs flex items-center justify-between transition-colors ${
-                res.tested
-                  ? res.status === 'online' || (res.online && !res.status)
-                    ? 'bg-success/5 border-success/20'
-                    : res.status === 'unverified'
-                      ? 'bg-warning/5 border-warning/20'
-                    : 'bg-danger/5 border-danger/20'
-                  : 'bg-bg-primary/40 border-border-light/30'
-              }`}
-            >
-              <div className="min-w-0 pr-2">
-                <div className="font-medium text-text-primary truncate">{d.name}</div>
-                <div className="text-[10px] text-text-muted mt-0.5 flex items-center gap-1.5 font-mono">
-                  <span className="px-1 py-0.2 bg-bg-tertiary rounded text-[8px] uppercase">{d.type}</span>
-                  <span>{d.ip}</span>
-                </div>
-              </div>
+      {testedAt && (
+        <div className="rounded-lg border border-border-light bg-bg-primary/40 px-3 py-2 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+          <span><strong className="text-success">{onlineCount} on-line</strong> · <strong className="text-danger">{offlineCount} sem resposta</strong></span>
+          <span className="text-text-muted">{accessMode === 'wireguard' ? 'WireGuard/VPN' : 'Rede local'} · {testedAt.toLocaleString('pt-BR')}</span>
+        </div>
+      )}
 
-              <div className="flex items-center gap-2 shrink-0">
-                {res.tested && (
-                  <span className="text-[9px] text-text-muted font-mono">
-                    {res.status === 'online' || (res.online && !res.status)
-                      ? `${res.latency}ms`
-                      : res.status === 'unverified'
-                        ? 'nao verif.'
-                        : 'timeout'}
-                  </span>
-                )}
-                <div className="flex items-center justify-center w-5 h-5 shrink-0">
-                  {testing && !res.tested ? (
-                    <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
-                  ) : (
-                    getStatusIcon(res)
-                  )}
+      {devices.length === 0 ? (
+        <p className="text-sm text-text-muted text-center py-8">Nenhum equipamento com IP cadastrado neste cliente.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {devices.map(device => {
+            const result = results[device.id]
+            return (
+              <div key={device.id} title={result?.reason} className={`p-3 rounded-lg border text-xs flex items-center justify-between ${!result ? 'bg-bg-primary/40 border-border-light/30' : result.online ? 'bg-success/5 border-success/20' : 'bg-danger/5 border-danger/20'}`}>
+                <div className="min-w-0 pr-2">
+                  <div className="font-medium text-text-primary truncate">{device.name}</div>
+                  <div className="text-[10px] text-text-muted mt-0.5 font-mono">{device.type} · {device.ip}</div>
                 </div>
+                {!result ? <span className="w-2.5 h-2.5 rounded-full bg-slate-600 shrink-0" /> : result.online ? (
+                  <span className="flex items-center gap-1 text-success shrink-0"><CheckCircle2 className="w-4 h-4" /> {result.latency}ms</span>
+                ) : (
+                  <span className="flex items-center gap-1 text-danger shrink-0"><AlertCircle className="w-4 h-4" /> sem resposta</span>
+                )}
               </div>
-            </div>
-          )}
-        )}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,22 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
-import { MapPin, Plus, Search, ChevronRight, ChevronDown, Building2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { MapPin, Plus, Search, ChevronRight, ChevronDown, Building2, Tags } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import Button from '../components/ui/Button'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
 import SiteForm from '../components/forms/SiteForm'
+import SiteTypesManager from '../components/forms/SiteTypesManager'
 import { useSites } from '../hooks/useSites'
+import { useSiteTypes } from '../hooks/useSiteTypes'
 import { useClient } from '../contexts/ClientContext'
 import { supabase } from '../lib/supabase'
-import { SITE_TYPES } from '../lib/constants'
 import type { InstallationSite } from '../lib/types'
 
 interface TreeNode {
   site: InstallationSite
   children: TreeNode[]
 }
-
-const siteTypeLabel = (type: string) =>
-  SITE_TYPES.find((t) => t.value === type)?.label ?? type
 
 /** Monta árvore. Sites com parent_site_id inválido caem na raiz. */
 function buildTree(sites: InstallationSite[]): TreeNode[] {
@@ -45,12 +43,18 @@ interface UsageStat {
 export default function SitesPage() {
   const { selectedClientId, selectedClientName } = useClient()
   const { data: sites, loading, refetch } = useSites()
+  const { options: siteTypes } = useSiteTypes()
 
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
+  const [managingTypes, setManagingTypes] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [usage, setUsage] = useState<Record<string, UsageStat>>({})
+  const siteTypeLabel = useCallback(
+    (type: string) => siteTypes.find((item) => item.value === type)?.label ?? type,
+    [siteTypes],
+  )
 
   // Carrega contagem de câmeras/roteadores por site
   useEffect(() => {
@@ -88,7 +92,7 @@ export default function SitesPage() {
       return null
     }
     return tree.map(filterNode).filter(Boolean) as TreeNode[]
-  }, [tree, search])
+  }, [tree, search, siteTypeLabel])
 
   const toggleExpand = (id: string) => {
     setExpanded((current) => {
@@ -113,10 +117,14 @@ export default function SitesPage() {
             Elevadores, blocos, guarita e outros locais físicos para organizar câmeras e roteadores
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Novo site
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setManagingTypes(true)}>
+            <Tags className="w-4 h-4" /> Tipos de local
+          </Button>
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="w-4 h-4" /> Novo site
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -160,6 +168,7 @@ export default function SitesPage() {
               onToggle={toggleExpand}
               onEdit={setEditingId}
               usage={usage}
+              siteTypeLabel={siteTypeLabel}
             />
           ))}
         </div>
@@ -167,6 +176,10 @@ export default function SitesPage() {
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Novo site" size="md">
         <SiteForm onClose={() => setCreating(false)} onSaved={refetch} />
+      </Modal>
+
+      <Modal open={managingTypes} onClose={() => setManagingTypes(false)} title="Tipos de local" size="lg">
+        <SiteTypesManager sites={sites} />
       </Modal>
 
       <Modal open={!!editingId} onClose={() => setEditingId(null)} title="Editar site" size="md">
@@ -185,9 +198,10 @@ interface SiteRowProps {
   onToggle: (id: string) => void
   onEdit: (id: string) => void
   usage: Record<string, UsageStat>
+  siteTypeLabel: (type: string) => string
 }
 
-function SiteRow({ node, depth, expanded, onToggle, onEdit, usage }: SiteRowProps) {
+function SiteRow({ node, depth, expanded, onToggle, onEdit, usage, siteTypeLabel }: SiteRowProps) {
   const hasChildren = node.children.length > 0
   const isExpanded = expanded.has(node.site.id)
   const stat = usage[node.site.id] ?? { cameras: 0, routers: 0 }
@@ -230,6 +244,7 @@ function SiteRow({ node, depth, expanded, onToggle, onEdit, usage }: SiteRowProp
           onToggle={onToggle}
           onEdit={onEdit}
           usage={usage}
+          siteTypeLabel={siteTypeLabel}
         />
       ))}
     </>

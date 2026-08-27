@@ -170,6 +170,10 @@ create table credentials (
   ip_address varchar(45),
   port integer,
   protocol varchar(20) default 'http',
+  serial_number text,
+  verification_code text,
+  sharing_info text,
+  qr_code_url text,
   notes text,
   user_id uuid not null references auth.users(id) on delete cascade,
   created_at timestamptz not null default now(),
@@ -178,6 +182,7 @@ create table credentials (
 
 create index idx_credentials_user_id on credentials(user_id);
 create index idx_credentials_device_type on credentials(device_type);
+create index idx_credentials_device_link on credentials(device_type, device_id) where device_id is not null;
 
 alter table credentials enable row level security;
 

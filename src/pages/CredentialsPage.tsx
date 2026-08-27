@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Plus, Eye, EyeOff } from 'lucide-react'
 import { useCredentials } from '../hooks/useCredentials'
 import type { Credential } from '../lib/types'
-import { DEVICE_TYPES } from '../lib/constants'
+import { DEVICE_TYPES, PROTOCOL_OPTIONS } from '../lib/constants'
 import DataTable, { type Column } from '../components/ui/DataTable'
 import Button from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
@@ -12,13 +12,30 @@ import CredentialForm from '../components/forms/CredentialForm'
 import { useToast } from '../components/ui/Toast'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
 
-function PasswordCell({ password }: { password: string }) {
+function PasswordCell({ credential, onReveal }: { credential: Credential; onReveal: (id: string) => Promise<{ password: string | null; error: string | null }> }) {
   const [visible, setVisible] = useState(false)
+  const [password, setPassword] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const handleToggle = async () => {
+    if (visible) {
+      setVisible(false)
+      return
+    }
+    if (password == null) {
+      setLoading(true)
+      const result = await onReveal(credential.id)
+      setLoading(false)
+      if (result.error) return
+      setPassword(result.password ?? '')
+    }
+    setVisible(true)
+  }
   return (
     <div className="flex items-center gap-2">
-      <span className="font-mono text-xs">{visible ? password : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}</span>
+      <span className="font-mono text-xs">{loading ? 'Carregando...' : visible ? password : credential.secret_available ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '-'}</span>
       <button
-        onClick={() => setVisible(!visible)}
+        onClick={handleToggle}
+        disabled={loading || !credential.secret_available}
         className="p-1 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
       >
         {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -28,7 +45,7 @@ function PasswordCell({ password }: { password: string }) {
 }
 
 export default function CredentialsPage() {
-  const { data, loading, create, update, remove } = useCredentials()
+  const { data, loading, create, update, remove, reveal } = useCredentials()
   const { toast } = useToast()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Credential | null>(null)
@@ -59,16 +76,34 @@ export default function CredentialsPage() {
   }, [data, sortKey, sortDir])
 
   const deviceTypeLabel = (val: string) => DEVICE_TYPES.find((d) => d.value === val)?.label ?? val
+  const protocolLabel = (val: string | null) => PROTOCOL_OPTIONS.find((item) => item.value === val)?.label ?? val?.toUpperCase() ?? '-'
 
   const columns: Column<Credential>[] = [
     { key: 'label', label: 'Rótulo', sortable: true },
     { key: 'device_type', label: 'Tipo', sortable: true, render: (c) => deviceTypeLabel(c.device_type) },
     { key: 'username', label: 'Usuário', sortable: true },
-    { key: 'password', label: 'Senha', render: (c) => <PasswordCell password={c.password} /> },
+    { key: 'password', label: 'Senha', render: (c) => <PasswordCell credential={c} onReveal={handleRevealPassword} /> },
     { key: 'ip_address', label: 'IP', sortable: true, render: (c) => c.ip_address ?? '-' },
     { key: 'port', label: 'Porta', sortable: true, render: (c) => c.port?.toString() ?? '-' },
-    { key: 'protocol', label: 'Protocolo', sortable: true, render: (c) => c.protocol?.toUpperCase() ?? '-' },
+    { key: 'protocol', label: 'Tipo de acesso', sortable: true, render: (c) => protocolLabel(c.protocol) },
+    { key: 'serial_number', label: 'Nº de série', sortable: true, render: (c) => c.serial_number ?? '-' },
   ]
+
+  async function handleRevealPassword(id: string) {
+    const result = await reveal(id)
+    if (result.error) toast(result.error, 'error')
+    return { password: result.data?.password ?? null, error: result.error }
+  }
+
+  const handleEdit = async (item: Credential) => {
+    const result = await reveal(item.id)
+    if (result.error || !result.data) {
+      toast(result.error || 'Não foi possível carregar a credencial para edição.', 'error')
+      return
+    }
+    setEditing({ ...item, ...result.data })
+    setModalOpen(true)
+  }
 
   const handleSubmit = async (formData: Record<string, unknown>) => {
     if (editing) {
@@ -120,7 +155,7 @@ export default function CredentialsPage() {
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}
-          onEdit={(item) => { setEditing(item); setModalOpen(true) }}
+          onEdit={handleEdit}
           onDelete={(item) => setDeleting(item)}
         />
       </div>

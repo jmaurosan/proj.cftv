@@ -15,12 +15,13 @@ import type { Client } from '../lib/types'
 // ─── Helpers de formatação ───────────────────────────────────────────────────
 
 function formatCNPJ(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 14)
-  return digits
-    .replace(/^(\d{2})(\d)/, '$1.$2')
-    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-    .replace(/\.(\d{3})(\d)/, '.$1/$2')
-    .replace(/(\d{4})(\d)/, '$1-$2')
+  const characters = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14)
+  let formatted = characters.slice(0, 2)
+  if (characters.length > 2) formatted += `.${characters.slice(2, 5)}`
+  if (characters.length > 5) formatted += `.${characters.slice(5, 8)}`
+  if (characters.length > 8) formatted += `/${characters.slice(8, 12)}`
+  if (characters.length > 12) formatted += `-${characters.slice(12, 14)}`
+  return formatted
 }
 
 function formatCPF(value: string) {
@@ -164,36 +165,40 @@ export default function ClientsPage() {
     fetchCities(formData.state)
   }, [formData.state, fetchCities])
 
-  // ─── Busca CNPJ via ReceitaWS ───────────────────────────────────────────────
+  // ─── Busca CNPJ via BrasilAPI ───────────────────────────────────────────────
 
-  const handleCNPJBlur = async () => {
-    const digits = formData.cnpj.replace(/\D/g, '')
-    if (digits.length !== 14) return
+  const lookupCNPJ = async (value = formData.cnpj) => {
+    const document = value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (document.length !== 14 || !/^([A-Z0-9]{12})([0-9]{2})$/.test(document)) {
+      toast('Informe um CNPJ válido com 14 caracteres.', 'error')
+      return
+    }
+    if (loadingCNPJ) return
     setLoadingCNPJ(true)
     try {
-      const res = await fetch(`https://publica.cnpj.ws/cnpj/${digits}`)
-      if (res.ok) {
-        const d = await res.json()
-        const razao = d.razao_social || ''
-        const endereco = d.estabelecimento || {}
-        const cep = (endereco.cep || '').replace(/\D/g, '')
-        const uf = endereco.estado?.sigla || ''
-        setFormData((prev) => ({
-          ...prev,
-          name: prev.name || razao,
-          contact_name: prev.contact_name || razao,
-          zipcode: cep ? formatCEP(cep) : prev.zipcode,
-          street: endereco.logradouro || prev.street,
-          number: endereco.numero || prev.number,
-          complement: endereco.complemento || prev.complement,
-          neighborhood: endereco.bairro || prev.neighborhood,
-          city: endereco.cidade?.nome || prev.city,
-          state: uf || prev.state,
-        }))
-        if (uf) fetchCities(uf)
-      }
-    } catch {
-      // silencia - API pode não estar disponível
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${document}`)
+      if (!res.ok) throw new Error(res.status === 404 ? 'CNPJ não encontrado.' : 'Não foi possível consultar o CNPJ agora.')
+      const d = await res.json()
+      const cep = String(d.cep || '').replace(/\D/g, '')
+      const phone = String(d.ddd_telefone_1 || '').replace(/\D/g, '')
+      const street = [d.descricao_tipo_de_logradouro, d.logradouro].filter(Boolean).join(' ')
+      setFormData((prev) => ({
+        ...prev,
+        name: d.razao_social || d.nome_fantasia || prev.name,
+        contact_phone: prev.contact_phone || (phone ? formatPhone(phone) : ''),
+        contact_email: prev.contact_email || d.email || '',
+        zipcode: cep ? formatCEP(cep) : prev.zipcode,
+        street: street || prev.street,
+        number: d.numero || prev.number,
+        complement: d.complemento || prev.complement,
+        neighborhood: d.bairro || prev.neighborhood,
+        city: d.municipio || prev.city,
+        state: d.uf || prev.state,
+      }))
+      if (d.uf) fetchCities(d.uf)
+      toast('Dados do CNPJ preenchidos. Confira antes de salvar.')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Não foi possível consultar o CNPJ.', 'error')
     } finally {
       setLoadingCNPJ(false)
     }
@@ -201,27 +206,31 @@ export default function ClientsPage() {
 
   // ─── Busca CEP via ViaCEP ───────────────────────────────────────────────────
 
-  const handleCEPBlur = async () => {
-    const digits = formData.zipcode.replace(/\D/g, '')
-    if (digits.length !== 8) return
+  const lookupCEP = async (value = formData.zipcode) => {
+    const digits = value.replace(/\D/g, '')
+    if (digits.length !== 8) {
+      toast('Informe um CEP válido com 8 números.', 'error')
+      return
+    }
+    if (loadingCEP) return
     setLoadingCEP(true)
     try {
       const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
-      if (res.ok) {
-        const d = await res.json()
-        if (!d.erro) {
-          setFormData((prev) => ({
-            ...prev,
-            street: d.logradouro || prev.street,
-            neighborhood: d.bairro || prev.neighborhood,
-            city: d.localidade || prev.city,
-            state: d.uf || prev.state,
-          }))
-          if (d.uf) fetchCities(d.uf)
-        }
-      }
-    } catch {
-      // silencia
+      if (!res.ok) throw new Error('Não foi possível consultar o CEP agora.')
+      const d = await res.json()
+      if (d.erro) throw new Error('CEP não encontrado.')
+      setFormData((prev) => ({
+        ...prev,
+        street: d.logradouro || prev.street,
+        complement: prev.complement || d.complemento || '',
+        neighborhood: d.bairro || prev.neighborhood,
+        city: d.localidade || prev.city,
+        state: d.uf || prev.state,
+      }))
+      if (d.uf) fetchCities(d.uf)
+      toast('Endereço preenchido. Informe o número e confira os dados.')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Não foi possível consultar o CEP.', 'error')
     } finally {
       setLoadingCEP(false)
     }
@@ -523,15 +532,23 @@ export default function ClientsPage() {
               <Field label="CNPJ" required>
                 <div className="relative">
                   <input
-                    className={inputClass}
+                    className={`${inputClass} pr-24`}
                     value={formData.cnpj}
-                    onChange={(e) => setFormData({ ...formData, cnpj: formatCNPJ(e.target.value) })}
-                    onBlur={handleCNPJBlur}
+                    onChange={(e) => {
+                      const formatted = formatCNPJ(e.target.value)
+                      setFormData({ ...formData, cnpj: formatted })
+                      if (formatted.replace(/[^A-Z0-9]/g, '').length === 14) void lookupCNPJ(formatted)
+                    }}
                     placeholder="00.000.000/0000-00"
                   />
-                  {loadingCNPJ && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent animate-spin" />
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => void lookupCNPJ()}
+                    disabled={loadingCNPJ}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10 disabled:opacity-60"
+                  >
+                    {loadingCNPJ ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}
+                  </button>
                 </div>
                 {loadingCNPJ && (
                   <p className="text-xs text-accent">Buscando dados do CNPJ...</p>
@@ -608,15 +625,23 @@ export default function ClientsPage() {
                 <Field label="CEP">
                   <div className="relative">
                     <input
-                      className={inputClass}
+                      className={`${inputClass} pr-24`}
                       value={formData.zipcode}
-                      onChange={(e) => setFormData({ ...formData, zipcode: formatCEP(e.target.value) })}
-                      onBlur={handleCEPBlur}
+                      onChange={(e) => {
+                        const formatted = formatCEP(e.target.value)
+                        setFormData({ ...formData, zipcode: formatted })
+                        if (formatted.replace(/\D/g, '').length === 8) void lookupCEP(formatted)
+                      }}
                       placeholder="00000-000"
                     />
-                    {loadingCEP && (
-                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent animate-spin" />
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => void lookupCEP()}
+                      disabled={loadingCEP}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10 disabled:opacity-60"
+                    >
+                      {loadingCEP ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}
+                    </button>
                   </div>
                   {loadingCEP && <p className="text-xs text-accent">Buscando endereço...</p>}
                 </Field>

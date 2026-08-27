@@ -165,3 +165,26 @@ export function deleteInstallationPhoto(url: string) {
 export function getInstallationPhotoUrl(storedValue: string) {
   return getPrivateImageUrl('installation-photos', storedValue)
 }
+
+// ============================================
+// Evidências de manutenção (bucket privado: maintenance-media)
+// ============================================
+
+export async function uploadMaintenanceMedia(file: File, userId: string, recordId: string, clientId: string) {
+  const uploadFile = await compressImage(file, { maxDimension: 1600, quality: 0.8, minBytes: 400 * 1024 })
+  const extension = uploadFile.name.split('.').pop() || 'bin'
+  const path = `${clientId}/${userId}/${recordId}-${Date.now()}.${extension}`
+  const { error } = await supabase.storage.from('maintenance-media').upload(path, uploadFile, {
+    cacheControl: '3600',
+    contentType: uploadFile.type || undefined,
+  })
+  return error ? { url: null, error: error.message } : { url: path, error: null }
+}
+
+export function deleteMaintenanceMedia(path: string) {
+  return deleteImage('maintenance-media', path)
+}
+
+export function getMaintenanceMediaUrl(path: string) {
+  return getPrivateImageUrl('maintenance-media', path)
+}

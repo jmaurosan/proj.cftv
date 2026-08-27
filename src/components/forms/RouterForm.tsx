@@ -11,6 +11,7 @@ import Button from '../ui/Button'
 import BackupManager from '../ui/BackupManager'
 import LabelScanner from '../ui/LabelScanner'
 import SiteSelector from '../ui/SiteSelector'
+import PowerConsumptionFields from '../ui/PowerConsumptionFields'
 import { applyScannedLabel } from '../../lib/labelScanMerge'
 import type { EquipmentLabelData } from '../../services/geminiService'
 import { translateError } from '../../lib/errorTranslator'
@@ -50,6 +51,9 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
   const [pairedRouterId, setPairedRouterId] = useState(initialData?.paired_router_id ?? '')
   const [siteId, setSiteId] = useState(initialData?.site_id ?? '')
   const [poweredByPoeInjector, setPoweredByPoeInjector] = useState(initialData?.powered_by_poe_injector ?? false)
+  const [powerWatts, setPowerWatts] = useState(initialData?.power_watts?.toString() ?? '')
+  const [operatingVoltage, setOperatingVoltage] = useState(initialData?.operating_voltage ?? '')
+  const [currentConsumption, setCurrentConsumption] = useState(initialData?.current_consumption_a?.toString() ?? '')
   const [otherRouters, setOtherRouters] = useState<Array<{ id: string; name: string; mode: RouterMode }>>([])
   
   const [loading, setLoading] = useState(false)
@@ -120,6 +124,9 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
     setPairedRouterId(initialData?.paired_router_id ?? '')
     setSiteId(initialData?.site_id ?? '')
     setPoweredByPoeInjector(initialData?.powered_by_poe_injector ?? false)
+    setPowerWatts(initialData?.power_watts?.toString() ?? '')
+    setOperatingVoltage(initialData?.operating_voltage ?? '')
+    setCurrentConsumption(initialData?.current_consumption_a?.toString() ?? '')
 
     const rawNotes = initialData?.notes ?? ''
     if (rawNotes.trim().startsWith('{') && rawNotes.trim().endsWith('}')) {
@@ -203,6 +210,9 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
       paired_router_id: pairedRouterId || null,
       site_id: siteId || null,
       powered_by_poe_injector: poweredByPoeInjector,
+      power_watts: powerWatts ? Number(powerWatts) : null,
+      operating_voltage: operatingVoltage || null,
+      current_consumption_a: currentConsumption ? Number(currentConsumption) : null,
       client_id: clientId || initialData?.client_id || selectedClient || null,
     })
 
@@ -701,6 +711,8 @@ export default function RouterForm({ initialData, clientId, onSubmit, onCancel }
           equipmentId={initialData.id}
         />
       )}
+
+      <PowerConsumptionFields powerWatts={powerWatts} operatingVoltage={operatingVoltage} currentConsumption={currentConsumption} onPowerWattsChange={setPowerWatts} onOperatingVoltageChange={setOperatingVoltage} onCurrentConsumptionChange={setCurrentConsumption} />
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>

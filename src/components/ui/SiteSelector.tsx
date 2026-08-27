@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import Select from './Select'
 import { useSites } from '../../hooks/useSites'
-import { SITE_TYPES } from '../../lib/constants'
+import { useSiteTypes } from '../../hooks/useSiteTypes'
 import type { InstallationSite } from '../../lib/types'
 
 interface SiteSelectorProps {
@@ -10,9 +10,6 @@ interface SiteSelectorProps {
   label?: string
   helpText?: string
 }
-
-const siteTypeLabel = (type: string) =>
-  SITE_TYPES.find((t) => t.value === type)?.label ?? type
 
 /**
  * Monta rótulo hierárquico: "Bloco A › Elevador 1" para facilitar identificação.
@@ -36,6 +33,7 @@ export default function SiteSelector({
   helpText = 'Opcional. Vincule a um elevador, bloco ou local cadastrado em Locais.',
 }: SiteSelectorProps) {
   const { data: sites, loading } = useSites()
+  const { options: siteTypes, loading: loadingTypes } = useSiteTypes()
 
   const options = useMemo(() => {
     const sorted = [...sites].sort((a, b) => {
@@ -47,10 +45,10 @@ export default function SiteSelector({
       { value: '', label: '— Sem local vinculado —' },
       ...sorted.map((s) => ({
         value: s.id,
-        label: `${buildHierarchicalLabel(s, sites)} · ${siteTypeLabel(s.site_type)}`,
+        label: `${buildHierarchicalLabel(s, sites)} · ${siteTypes.find((type) => type.value === s.site_type)?.label ?? s.site_type}`,
       })),
     ]
-  }, [sites])
+  }, [sites, siteTypes])
 
   return (
     <div>
@@ -59,7 +57,7 @@ export default function SiteSelector({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         options={options}
-        disabled={loading}
+        disabled={loading || loadingTypes}
       />
       {helpText && (
         <p className="text-xs text-text-muted mt-1">{helpText}</p>

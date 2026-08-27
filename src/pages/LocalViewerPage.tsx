@@ -34,11 +34,15 @@ const LIVE_VIEW_GRID_CLASSES: Record<LiveViewLayout, string> = {
 }
 
 const DEFAULT_AGENT_URL = 'http://127.0.0.1:8727'
-const DEFAULT_AGENT_TOKEN = 'cftv-local-agent'
 
 const readStoredValue = (key: string, fallback: string) => {
   if (typeof window === 'undefined') return fallback
   return window.localStorage.getItem(key) || fallback
+}
+
+const readSessionValue = (key: string) => {
+  if (typeof window === 'undefined') return ''
+  return window.sessionStorage.getItem(key) || ''
 }
 
 const readStoredLayout = (clientId: string | null): LiveViewLayout => {
@@ -59,7 +63,7 @@ export default function LocalViewerPage() {
   const [serverIp, setServerIp] = useState(() => readStoredValue(buildLocalViewerStorageKey('server-ip', selectedClientId), ''))
   const [webrtcPort, setWebrtcPort] = useState(() => readStoredValue(buildLocalViewerStorageKey('webrtc-port', selectedClientId), '8889'))
   const [agentUrl, setAgentUrl] = useState(() => readStoredValue(buildLocalViewerStorageKey('agent-url', selectedClientId), DEFAULT_AGENT_URL))
-  const [agentToken, setAgentToken] = useState(() => readStoredValue(buildLocalViewerStorageKey('agent-token', selectedClientId), DEFAULT_AGENT_TOKEN))
+  const [agentToken, setAgentToken] = useState(() => readSessionValue(buildLocalViewerStorageKey('agent-token', selectedClientId)))
   const [liveLayout, setLiveLayout] = useState<LiveViewLayout>(() => readStoredLayout(selectedClientId))
   const [showConfig, setShowConfig] = useState(false)
   const [sendingToAgent, setSendingToAgent] = useState(false)
@@ -82,7 +86,7 @@ export default function LocalViewerPage() {
     setServerIp(readStoredValue(buildLocalViewerStorageKey('server-ip', selectedClientId), ''))
     setWebrtcPort(readStoredValue(buildLocalViewerStorageKey('webrtc-port', selectedClientId), '8889'))
     setAgentUrl(readStoredValue(buildLocalViewerStorageKey('agent-url', selectedClientId), DEFAULT_AGENT_URL))
-    setAgentToken(readStoredValue(buildLocalViewerStorageKey('agent-token', selectedClientId), DEFAULT_AGENT_TOKEN))
+    setAgentToken(readSessionValue(buildLocalViewerStorageKey('agent-token', selectedClientId)))
     setLiveLayout(readStoredLayout(selectedClientId))
     setAgentHealth(null)
     setAgentHealthError(null)
@@ -110,7 +114,7 @@ export default function LocalViewerPage() {
 
   const handleAgentTokenChange = (value: string) => {
     setAgentToken(value)
-    window.localStorage.setItem(buildLocalViewerStorageKey('agent-token', selectedClientId), value)
+    window.sessionStorage.setItem(buildLocalViewerStorageKey('agent-token', selectedClientId), value)
   }
 
   const copyText = async (value: string, message: string) => {
@@ -148,6 +152,10 @@ export default function LocalViewerPage() {
       toast('Informe a URL do agente local MediaMTX.', 'error')
       return
     }
+    if (!agentToken.trim()) {
+      toast('Informe o token exibido pelo agente MediaMTX ao iniciar.', 'error')
+      return
+    }
 
     setSendingToAgent(true)
     try {
@@ -155,7 +163,7 @@ export default function LocalViewerPage() {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-cftv-agent-token': agentToken,
+          'x-cftv-agent-token': agentToken.trim(),
         },
         body: JSON.stringify({ yaml: mediaMtxConfig }),
       })

@@ -4,6 +4,7 @@ import type { EquipmentModel } from '../lib/types'
 import { useAuth } from './useAuth'
 import { translateError } from '../lib/errorTranslator'
 import { mergeEquipmentModelSources, type EquipmentModelSource } from '../lib/equipmentModelSources'
+import { requireCompatibleSchema } from '../lib/schemaCompatibility'
 
 const EQUIPMENT_SOURCE_CONFIG: Partial<Record<EquipmentModel['type'], {
   table: string
@@ -47,34 +48,6 @@ const EQUIPMENT_SOURCE_CONFIG: Partial<Record<EquipmentModel['type'], {
   },
 }
 
-const getMissingEquipmentModelColumn = (error: unknown) => {
-  const message = String((error as { message?: string })?.message || error || '')
-  if (!message.toLowerCase().includes('schema cache')) return null
-  return message.match(/could not find the ['"]([^'"]+)['"] column/i)?.[1] ?? null
-}
-
-const saveWithSchemaFallback = async (
-  payload: Record<string, unknown>,
-  operation: 'insert' | 'update',
-  id?: string,
-) => {
-  const compatiblePayload = { ...payload }
-
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const query = operation === 'insert'
-      ? supabase.from('equipment_models').insert(compatiblePayload)
-      : supabase.from('equipment_models').update(compatiblePayload).eq('id', id)
-    const { error } = await query
-    if (!error) return null
-
-    const missingColumn = getMissingEquipmentModelColumn(error)
-    if (!missingColumn || !(missingColumn in compatiblePayload)) return error
-    delete compatiblePayload[missingColumn]
-  }
-
-  return new Error('Não foi possível compatibilizar o catálogo com a estrutura atual do banco.')
-}
-
 export function useEquipmentModels(type?: string) {
   const { user } = useAuth()
   const [models, setModels] = useState<EquipmentModel[]>([])
@@ -109,6 +82,8 @@ export function useEquipmentModels(type?: string) {
 
   const saveModel = async (model: Partial<Omit<EquipmentModel, 'id' | 'user_id' | 'created_at' | 'updated_at'>> & { type: string; brand: string; model: string }) => {
     if (!user) return { error: 'Não autenticado' }
+    const schemaError = await requireCompatibleSchema()
+    if (schemaError) return { error: schemaError.message }
     const { data: existing } = await supabase
       .from('equipment_models')
       .select('id')
@@ -119,10 +94,10 @@ export function useEquipmentModels(type?: string) {
       .single()
 
     if (existing) {
-      const error = await saveWithSchemaFallback(model, 'update', existing.id)
+      const { error } = await supabase.from('equipment_models').update(model).eq('id', existing.id)
       if (error) return { error: translateError(error) }
     } else {
-      const error = await saveWithSchemaFallback({ ...model, user_id: user.id }, 'insert')
+      const { error } = await supabase.from('equipment_models').insert({ ...model, user_id: user.id })
       if (error) return { error: translateError(error) }
     }
     await fetch()

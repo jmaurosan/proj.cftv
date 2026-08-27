@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "verify": "npm run lint && npm test && npm run build",
     "mediamtx:agent": "node tools/mediamtx-agent/server.mjs",
     "preview": "vite preview"
   },

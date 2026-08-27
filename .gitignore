@@ -13,6 +13,8 @@ dist
 dist-ssr
 tsconfig.tsbuildinfo
 *.local
+output/
+tmp/
 
 .env
 .env.local

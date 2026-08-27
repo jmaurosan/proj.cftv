@@ -27,6 +27,12 @@ const TopologyPage = lazy(() => import('./pages/TopologyPage'))
 const PowerProtectionPage = lazy(() => import('./pages/PowerProtectionPage'))
 const DocumentsMediaPage = lazy(() => import('./pages/DocumentsMediaPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
+const CommissioningPage = lazy(() => import('./pages/CommissioningPage'))
+const NetworkDiagnosticsPage = lazy(() => import('./pages/NetworkDiagnosticsPage'))
+const StoragePlanningPage = lazy(() => import('./pages/StoragePlanningPage'))
+const IpPlanningPage = lazy(() => import('./pages/IpPlanningPage'))
+const MaintenanceHistoryPage = lazy(() => import('./pages/MaintenanceHistoryPage'))
+const CompanySettingsPage = lazy(() => import('./pages/CompanySettingsPage'))
 
 export default function App() {
   return (
@@ -55,6 +61,12 @@ export default function App() {
                   <Route path="/crimpagem" element={<CrimpPage />} />
                   <Route path="/topologia" element={<TopologyPage />} />
                   <Route path="/relatorios" element={<ReportsPage />} />
+                  <Route path="/comissionamento" element={<CommissioningPage />} />
+                  <Route path="/diagnostico-rede" element={<NetworkDiagnosticsPage />} />
+                  <Route path="/armazenamento" element={<StoragePlanningPage />} />
+                  <Route path="/plano-ips" element={<IpPlanningPage />} />
+                  <Route path="/manutencoes" element={<MaintenanceHistoryPage />} />
+                  <Route path="/empresa" element={<CompanySettingsPage />} />
                   <Route path="/energia-documentos" element={<PowerProtectionPage />} />
                   <Route path="/documentos-midias" element={<DocumentsMediaPage />} />
                 </Route>

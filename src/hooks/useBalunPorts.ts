@@ -32,7 +32,9 @@ export function useBalunPorts(balunId: string | null) {
       .eq('balun_id', balunId)
     if (validationError) return { error: `Não foi possível validar as portas: ${translateError(validationError)}` }
     const conflict = validatePortAssignment(
-      (currentPorts || []).map((item) => ({
+      (currentPorts || []).filter((item) => (
+        item.camera_id !== port.camera_id || item.port_number === port.port_number
+      )).map((item) => ({
         port_number: item.port_number,
         target_id: item.camera_id,
         target_name: (Array.isArray(item.cameras) ? item.cameras[0] : item.cameras)?.name,
@@ -41,31 +43,14 @@ export function useBalunPorts(balunId: string | null) {
       'Power Balun',
     )
     if (conflict) return { error: conflict }
-    const { data: existing } = await supabase
-      .from('balun_ports')
-      .select('id, user_id')
-      .eq('balun_id', balunId)
-      .eq('port_number', port.port_number)
-      .maybeSingle()
-
-    if (existing) {
-      const { error } = await supabase.from('balun_ports').update({
-        camera_id: port.camera_id || null,
-        is_active: port.is_active ?? true,
-        notes: port.notes || null,
-      }).eq('id', existing.id)
-      if (error) return { error: translateError(error) }
-    } else {
-      const { error } = await supabase.from('balun_ports').insert({
-        balun_id: balunId,
-        port_number: port.port_number,
-        camera_id: port.camera_id || null,
-        is_active: port.is_active ?? true,
-        notes: port.notes || null,
-        user_id: user.id,
-      })
-      if (error) return { error: translateError(error) }
-    }
+    const { error } = await supabase.rpc('set_camera_balun_port', {
+      p_balun_id: balunId,
+      p_port_number: port.port_number,
+      p_camera_id: port.camera_id || null,
+      p_is_active: port.is_active ?? true,
+      p_notes: port.notes || null,
+    })
+    if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }

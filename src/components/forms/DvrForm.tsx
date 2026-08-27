@@ -1,23 +1,18 @@
-import { useState, useMemo, type FormEvent, useEffect, useRef } from 'react'
+import { useState, useMemo, type FormEvent, useEffect } from 'react'
 import type { Camera, CameraUpdate, Dvr } from '../../lib/types'
 import { STATUS_OPTIONS, CHANNEL_OPTIONS, DVR_OPERATION_MODES } from '../../lib/constants'
 import { findEquipmentModelByText } from '../../lib/equipmentModelCatalog'
 import { useEquipmentModels } from '../../hooks/useEquipmentModels'
 import { useCameras } from '../../hooks/useCameras'
-import { useAuth } from '../../hooks/useAuth'
-import {
-  deleteQRCodeImage,
-  getQRCodeImageUrl,
-  uploadQRCodeImage,
-} from '../../services/storageService'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
 import BackupManager from '../ui/BackupManager'
+import PowerConsumptionFields from '../ui/PowerConsumptionFields'
 import LabelScanner from '../ui/LabelScanner'
 import { applyScannedLabel } from '../../lib/labelScanMerge'
 import type { EquipmentLabelData } from '../../services/geminiService'
-import { CameraIcon, Cloud, Cpu, HardDrive, Package, QrCode, Share2, X } from 'lucide-react'
+import { Cpu, HardDrive, Package } from 'lucide-react'
 
 const HD_CAPACITY_OPTIONS = [
   { value: '', label: 'Selecione a capacidade' },
@@ -161,45 +156,20 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
   const [hdCapacityTb, setHdCapacityTb] = useState(initialData?.hd_capacity_tb?.toString() ?? '')
   const [hdBrand, setHdBrand] = useState(initialData?.hd_brand ?? '')
   const [hdModel, setHdModel] = useState(initialData?.hd_model ?? '')
+  const [powerWatts, setPowerWatts] = useState(initialData?.power_watts?.toString() ?? '')
+  const [operatingVoltage, setOperatingVoltage] = useState(initialData?.operating_voltage ?? '')
+  const [currentConsumption, setCurrentConsumption] = useState(initialData?.current_consumption_a?.toString() ?? '')
   const [status, setStatus] = useState(initialData?.status ?? 'ativo')
   const [username, setUsername] = useState(initialData?.username ?? '')
   const [password, setPassword] = useState(initialData?.password ?? '')
-  const [hikConnectAccount, setHikConnectAccount] = useState(initialData?.hik_connect_account ?? '')
-  const [hikConnectPassword, setHikConnectPassword] = useState(initialData?.hik_connect_password ?? '')
-  const [hikConnectVerificationCode, setHikConnectVerificationCode] = useState(initialData?.hik_connect_verification_code ?? '')
-  const [hikConnectSharingInfo, setHikConnectSharingInfo] = useState(initialData?.hik_connect_sharing_info ?? '')
-  const [hikConnectQrCodeUrl, setHikConnectQrCodeUrl] = useState(initialData?.hik_connect_qr_code_url ?? '')
-  const [hikConnectQrPreviewUrl, setHikConnectQrPreviewUrl] = useState<string | null>(null)
-  const [uploadingHikConnectQr, setUploadingHikConnectQr] = useState(false)
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [otherBrandMode, setOtherBrandMode] = useState(false)
-  const hikConnectQrInputRef = useRef<HTMLInputElement>(null)
-
-  const { user } = useAuth()
   const { models: dvrModels, saveModel } = useEquipmentModels('dvr')
   const { data: cameras, update: updateCamera } = useCameras()
   const dvrId = initialData?.id ?? null
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadHikConnectQrPreview() {
-      if (!hikConnectQrCodeUrl) {
-        setHikConnectQrPreviewUrl(null)
-        return
-      }
-      const signedUrl = await getQRCodeImageUrl(hikConnectQrCodeUrl)
-      if (!cancelled) setHikConnectQrPreviewUrl(signedUrl)
-    }
-
-    loadHikConnectQrPreview()
-    return () => {
-      cancelled = true
-    }
-  }, [hikConnectQrCodeUrl])
-  
   // Extrai marcas únicas dos modelos cadastrados
   const brandOptions = useMemo(() => {
     const brands = new Set<string>()
@@ -249,54 +219,22 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
       hd_capacity_tb: hdCapacityTb ? Number(hdCapacityTb) : null,
       hd_brand: hdBrand || null,
       hd_model: hdModel || null,
+      power_watts: powerWatts ? Number(powerWatts) : null,
+      operating_voltage: operatingVoltage || null,
+      current_consumption_a: currentConsumption ? Number(currentConsumption) : null,
       status,
       username: username || null,
       password: password || null,
-      hik_connect_account: hikConnectAccount.trim() || null,
-      hik_connect_password: hikConnectPassword || null,
-      hik_connect_verification_code: hikConnectVerificationCode.trim() || null,
-      hik_connect_sharing_info: hikConnectSharingInfo.trim() || null,
-      hik_connect_qr_code_url: hikConnectQrCodeUrl || null,
       notes: notes || null,
     })
     if (result.error) {
       setError(result.error)
     } else {
-      if (initialData?.hik_connect_qr_code_url && hikConnectQrCodeUrl !== initialData.hik_connect_qr_code_url) {
-        await deleteQRCodeImage(initialData.hik_connect_qr_code_url)
-      }
       if (brand && model) {
         await saveModel({ type: 'dvr', brand, model, channel_count: totalChannels, resolution: null, poe_standard: null, max_ports: null, is_poe: false, notes: null })
       }
     }
     setLoading(false)
-  }
-
-  const handleHikConnectQrFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !user) return
-    setUploadingHikConnectQr(true)
-    setError(null)
-
-    if (hikConnectQrCodeUrl && hikConnectQrCodeUrl !== initialData?.hik_connect_qr_code_url) {
-      await deleteQRCodeImage(hikConnectQrCodeUrl)
-    }
-
-    const result = await uploadQRCodeImage(file, user.id, initialData?.id)
-    if (result.error) {
-      setError(`Erro ao enviar o QR Code do Hik-Connect: ${result.error}`)
-    } else if (result.url) {
-      setHikConnectQrCodeUrl(result.url)
-    }
-    setUploadingHikConnectQr(false)
-    e.target.value = ''
-  }
-
-  const handleRemoveHikConnectQr = async () => {
-    if (hikConnectQrCodeUrl && hikConnectQrCodeUrl !== initialData?.hik_connect_qr_code_url) {
-      await deleteQRCodeImage(hikConnectQrCodeUrl)
-    }
-    setHikConnectQrCodeUrl('')
   }
 
   return (
@@ -538,124 +476,6 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
         <Input label="Senha de Acesso" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
 
-      <div className="border border-border-light rounded-lg p-4 space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-primary flex items-center gap-2">
-            <Cloud className="w-4 h-4" />
-            Acesso Hik-Connect
-          </h3>
-          <p className="mt-1 text-xs text-text-muted">
-            Dados da conta em nuvem, compartilhamento e verificação deste DVR.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            label="Conta Hik-Connect"
-            value={hikConnectAccount}
-            onChange={(e) => setHikConnectAccount(e.target.value)}
-            placeholder="E-mail, telefone ou usuário"
-            autoComplete="off"
-          />
-          <Input
-            label="Senha do Hik-Connect"
-            type="password"
-            value={hikConnectPassword}
-            onChange={(e) => setHikConnectPassword(e.target.value)}
-            autoComplete="new-password"
-          />
-        </div>
-
-        <Input
-          label="Código de verificação do dispositivo"
-          type="password"
-          value={hikConnectVerificationCode}
-          onChange={(e) => setHikConnectVerificationCode(e.target.value)}
-          placeholder="Código usado para adicionar ou validar o DVR"
-          autoComplete="off"
-        />
-
-        <div>
-          <label className="text-sm font-medium text-text-secondary mb-1.5 flex items-center gap-1.5">
-            <Share2 className="w-3.5 h-3.5" />
-            Informações de compartilhamento
-          </label>
-          <textarea
-            value={hikConnectSharingInfo}
-            onChange={(e) => setHikConnectSharingInfo(e.target.value)}
-            rows={3}
-            placeholder="Ex: compartilhado com portaria@..., responsável, permissões e observações."
-            className="w-full px-3 py-2 bg-bg-primary border border-border-light rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors text-sm resize-y"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-text-secondary flex items-center gap-1.5">
-            <QrCode className="w-4 h-4" />
-            Foto do QR Code do DVR
-          </label>
-          <input
-            ref={hikConnectQrInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleHikConnectQrFileChange}
-            className="hidden"
-          />
-
-          {hikConnectQrCodeUrl ? (
-            <div className="relative w-fit group">
-              {hikConnectQrPreviewUrl ? (
-                <img
-                  src={hikConnectQrPreviewUrl}
-                  alt="QR Code do Hik-Connect do DVR"
-                  className="w-48 h-48 object-contain border border-border-light rounded-lg bg-bg-primary"
-                />
-              ) : (
-                <div className="w-48 h-48 border border-border-light rounded-lg bg-bg-primary flex items-center justify-center text-xs text-text-muted">
-                  Preparando QR Code...
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={handleRemoveHikConnectQr}
-                className="absolute -top-2 -right-2 w-7 h-7 bg-danger text-white rounded-full flex items-center justify-center shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                title="Remover foto"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => hikConnectQrInputRef.current?.click()}
-                className="absolute bottom-1 right-1 px-2 py-1 bg-bg-tertiary/90 backdrop-blur-sm text-text-primary text-xs rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-              >
-                Substituir
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => hikConnectQrInputRef.current?.click()}
-              disabled={uploadingHikConnectQr || !user}
-              className="w-full sm:w-auto flex items-center gap-2 px-4 py-8 border-2 border-dashed border-border-light rounded-lg text-text-muted hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
-            >
-              {uploadingHikConnectQr ? (
-                <span className="animate-pulse">Compactando e enviando...</span>
-              ) : (
-                <>
-                  <CameraIcon className="w-5 h-5" />
-                  <span>Tirar foto do QR Code</span>
-                  <span className="text-xs opacity-60">(ou selecionar arquivo)</span>
-                </>
-              )}
-            </button>
-          )}
-          <p className="text-xs text-text-muted">
-            A imagem fica armazenada de forma privada e é aberta por um link temporário.
-          </p>
-        </div>
-      </div>
-
       <Input label="Observações" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas adicionais..." />
 
       {/* Seção de Canais do DVR */}
@@ -694,6 +514,8 @@ export default function DvrForm({ initialData, onSubmit, onCancel }: DvrFormProp
           equipmentId={dvrId}
         />
       )}
+
+      <PowerConsumptionFields powerWatts={powerWatts} operatingVoltage={operatingVoltage} currentConsumption={currentConsumption} onPowerWattsChange={setPowerWatts} onOperatingVoltageChange={setOperatingVoltage} onCurrentConsumptionChange={setCurrentConsumption} />
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>

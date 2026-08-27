@@ -5,36 +5,7 @@ import { useAuth } from './useAuth'
 import { useClient } from '../contexts/ClientContext'
 import { translateError } from '../lib/errorTranslator'
 import { validateDvrConflicts } from '../lib/connectionValidation'
-
-const getMissingColumn = (error: unknown) => {
-  const message = String((error as { message?: string })?.message || error || '')
-  if (!message.toLowerCase().includes('schema cache')) return null
-  return message.match(/could not find the ['"]([^'"]+)['"] column/i)?.[1] ?? null
-}
-
-const insertWithSchemaFallback = async (payload: Record<string, unknown>) => {
-  const compatiblePayload = { ...payload }
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const { error } = await supabase.from('dvrs').insert(compatiblePayload)
-    if (!error) return null
-    const missingColumn = getMissingColumn(error)
-    if (!missingColumn || !(missingColumn in compatiblePayload)) return error
-    delete compatiblePayload[missingColumn]
-  }
-  return new Error('Não foi possível compatibilizar o cadastro com a estrutura atual do banco.')
-}
-
-const updateWithSchemaFallback = async (id: string, payload: Record<string, unknown>) => {
-  const compatiblePayload = { ...payload }
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const { error } = await supabase.from('dvrs').update(compatiblePayload).eq('id', id)
-    if (!error) return null
-    const missingColumn = getMissingColumn(error)
-    if (!missingColumn || !(missingColumn in compatiblePayload)) return error
-    delete compatiblePayload[missingColumn]
-  }
-  return new Error('Não foi possível compatibilizar a atualização com a estrutura atual do banco.')
-}
+import { requireCompatibleSchema } from '../lib/schemaCompatibility'
 
 export function useDvrs() {
   const { user } = useAuth()
@@ -75,6 +46,8 @@ export function useDvrs() {
   const create = async (payload: Omit<DvrInsert, 'user_id'>) => {
     if (!user) return { error: 'Não autenticado' }
     if (!selectedClientId && !payload.client_id) return { error: 'Selecione um cliente antes de cadastrar DVR' }
+    const schemaError = await requireCompatibleSchema()
+    if (schemaError) return { error: schemaError.message }
     const finalPayload = {
       ...payload,
       user_id: user.id,
@@ -82,23 +55,27 @@ export function useDvrs() {
     }
     const conflict = await validateBeforeSave(finalPayload)
     if (conflict) return { error: conflict }
-    const error = await insertWithSchemaFallback(finalPayload)
+    const { error } = await supabase.from('dvrs').insert(finalPayload)
     if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }
 
   const update = async (id: string, payload: DvrUpdate) => {
+    const schemaError = await requireCompatibleSchema()
+    if (schemaError) return { error: schemaError.message }
     const current = data.find((dvr) => dvr.id === id)
     const conflict = await validateBeforeSave({ ...current, ...payload }, id)
     if (conflict) return { error: conflict }
-    const error = await updateWithSchemaFallback(id, payload)
+    const { error } = await supabase.from('dvrs').update(payload).eq('id', id)
     if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }
 
   const remove = async (id: string) => {
+    const schemaError = await requireCompatibleSchema()
+    if (schemaError) return { error: schemaError.message }
     const { error } = await supabase.from('dvrs').delete().eq('id', id)
     if (error) return { error: translateError(error) }
     await fetch()

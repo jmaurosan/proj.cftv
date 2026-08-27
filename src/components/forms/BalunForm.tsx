@@ -8,6 +8,7 @@ import { useCameras } from '../../hooks/useCameras'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import PowerConsumptionFields from '../ui/PowerConsumptionFields'
 import LabelScanner from '../ui/LabelScanner'
 import { applyScannedLabel } from '../../lib/labelScanMerge'
 import type { EquipmentLabelData } from '../../services/geminiService'
@@ -28,6 +29,9 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
   const [totalPorts, setTotalPorts] = useState(initialData?.total_ports ?? 4)
   const [status, setStatus] = useState(initialData?.status ?? 'ativo')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
+  const [powerWatts, setPowerWatts] = useState(initialData?.power_watts?.toString() ?? '')
+  const [operatingVoltage, setOperatingVoltage] = useState(initialData?.operating_voltage ?? '')
+  const [currentConsumption, setCurrentConsumption] = useState(initialData?.current_consumption_a?.toString() ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingNotes, setEditingNotes] = useState<Record<number, string>>({})
@@ -62,6 +66,9 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
       location,
       total_ports: totalPorts,
       status,
+      power_watts: isPowerBalun && powerWatts ? Number(powerWatts) : null,
+      operating_voltage: isPowerBalun && operatingVoltage ? operatingVoltage : null,
+      current_consumption_a: isPowerBalun && currentConsumption ? Number(currentConsumption) : null,
       notes: notes || null,
     })
     if (result.error) {
@@ -296,6 +303,8 @@ export default function BalunForm({ initialData, onSubmit, onCancel }: BalunForm
           </div>
         </div>
       )}
+
+      {isPowerBalun && <PowerConsumptionFields powerWatts={powerWatts} operatingVoltage={operatingVoltage} currentConsumption={currentConsumption} onPowerWattsChange={setPowerWatts} onOperatingVoltageChange={setOperatingVoltage} onCurrentConsumptionChange={setCurrentConsumption} />}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>

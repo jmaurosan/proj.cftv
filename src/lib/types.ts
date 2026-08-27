@@ -40,6 +40,9 @@ export interface Dvr {
   hd_capacity_tb: number | null
   hd_brand: string | null
   hd_model: string | null
+  power_watts: number | null
+  operating_voltage: string | null
+  current_consumption_a: number | null
   status: string
   username: string | null
   password: string | null
@@ -76,12 +79,18 @@ export interface Camera {
   power_supply_current_a: number | null
   operating_voltage: string | null
   current_consumption_a: number | null
+  power_watts: number | null
   power_supply_brand: string | null
   power_supply_model: string | null
   location: string
   type: string
   status: string
   resolution: string | null
+  recording_codec: 'h264' | 'h265' | 'h265_plus' | null
+  recording_fps: number | null
+  recording_bitrate_kbps: number | null
+  recording_mode: 'continuous' | 'motion' | null
+  motion_recording_percent: number | null
   rtsp_url: string | null
   streaming_user: string | null
   streaming_password: string | null
@@ -122,6 +131,9 @@ export interface PowerBalun {
   balun_type: BalunType
   location: string
   total_ports: number
+  power_watts: number | null
+  operating_voltage: string | null
+  current_consumption_a: number | null
   status: string
   notes: string | null
   client_id: string | null
@@ -154,6 +166,9 @@ export interface Switch {
   is_poe: boolean
   poe_standard: string | null
   poe_budget_watts: number | null
+  power_watts: number | null
+  operating_voltage: string | null
+  current_consumption_a: number | null
   status: string
   notes: string | null
   client_id: string | null
@@ -172,11 +187,16 @@ export interface Credential {
   ip_address: string | null
   port: number | null
   protocol: string | null
+  serial_number: string | null
+  verification_code: string | null
+  sharing_info: string | null
+  qr_code_url: string | null
   notes: string | null
   client_id: string | null
   user_id: string
   created_at: string
   updated_at: string
+  secret_available?: boolean
 }
 
 export type DvrInsert = Omit<Dvr, 'id' | 'created_at' | 'updated_at'>
@@ -293,7 +313,7 @@ export type PowerCableUpdate = Partial<Omit<PowerCable, 'id' | 'user_id' | 'crea
 // Sites físicos (Fase 2) — elevadores, blocos, guarita, etc.
 // ------------------------------------------------------------
 
-export type SiteType =
+export type BuiltInSiteType =
   | 'elevador_social'
   | 'elevador_servico'
   | 'elevador_panoramico'
@@ -305,6 +325,20 @@ export type SiteType =
   | 'area_comum'
   | 'ext_externo'
   | 'outro'
+
+// Tipos personalizados usam uma chave estavel criada no banco (custom_<uuid>).
+export type SiteType = BuiltInSiteType | (string & {})
+
+export interface InstallationSiteType {
+  id: string
+  client_id: string
+  user_id: string
+  type_key: string
+  name: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
 
 export interface InstallationSite {
   id: string
@@ -453,6 +487,9 @@ export interface Router {
   paired_router_id: string | null
   site_id: string | null
   powered_by_poe_injector: boolean
+  power_watts: number | null
+  operating_voltage: string | null
+  current_consumption_a: number | null
   client_id: string | null
   user_id: string
   created_at: string
@@ -486,6 +523,8 @@ export interface NetworkSegment {
   subnet_mask: string | null
   gateway_ip: string | null
   vlan_id: number | null
+  dhcp_start_ip: string | null
+  dhcp_end_ip: string | null
   router_id: string | null
   client_id: string | null
   user_id: string

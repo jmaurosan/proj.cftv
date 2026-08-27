@@ -11,36 +11,8 @@ import { Wifi, Search, Plus } from 'lucide-react'
 import { STATUS_COLORS } from '../lib/constants'
 import { useToast } from '../components/ui/Toast'
 import ClientFilterBanner from '../components/ui/ClientFilterBanner'
-
-const getMissingColumn = (error: unknown) => {
-  const message = String((error as { message?: string })?.message || error || '')
-  if (!message.toLowerCase().includes('schema cache')) return null
-  return message.match(/could not find the ['"]([^'"]+)['"] column/i)?.[1] ?? null
-}
-
-const updateRouterWithSchemaFallback = async (id: string, payload: Record<string, unknown>) => {
-  const compatiblePayload = { ...payload }
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const { error } = await supabase.from('routers').update(compatiblePayload).eq('id', id)
-    if (!error) return null
-    const missingColumn = getMissingColumn(error)
-    if (!missingColumn || !(missingColumn in compatiblePayload)) return error
-    delete compatiblePayload[missingColumn]
-  }
-  return new Error('Não foi possível compatibilizar a atualização com a estrutura atual do banco.')
-}
-
-const insertRouterWithSchemaFallback = async (payload: Record<string, unknown>) => {
-  const compatiblePayload = { ...payload }
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const { data, error } = await supabase.from('routers').insert(compatiblePayload).select().single()
-    if (!error) return { data, error: null }
-    const missingColumn = getMissingColumn(error)
-    if (!missingColumn || !(missingColumn in compatiblePayload)) return { data: null, error }
-    delete compatiblePayload[missingColumn]
-  }
-  return { data: null, error: new Error('Não foi possível compatibilizar o cadastro com a estrutura atual do banco.') }
-}
+import { requireCompatibleSchema } from '../lib/schemaCompatibility'
+import { translateError } from '../lib/errorTranslator'
 
 export default function RoutersPage() {
   const { user } = useAuth()
@@ -129,20 +101,27 @@ export default function RoutersPage() {
   const handleSubmit = async (data: Record<string, unknown>) => {
     if (!user) return { error: 'Não autenticado' }
     if (!selectedClientId && !editingRouter) return { error: 'Selecione um cliente antes de cadastrar roteador' }
+    const schemaError = await requireCompatibleSchema()
+    if (schemaError) {
+      toast(schemaError.message, 'error')
+      return { error: schemaError.message }
+    }
 
     if (editingRouter) {
-      const error = await updateRouterWithSchemaFallback(editingRouter.id, data)
+      const { error } = await supabase.from('routers').update(data).eq('id', editingRouter.id)
       if (error) {
-        toast(error.message, 'error')
-        return { error: error.message }
+        const message = translateError(error)
+        toast(message, 'error')
+        return { error: message }
       }
       setRouters((prev) => prev.map((r) => (r.id === editingRouter.id ? { ...r, ...data } as Router : r)))
       toast('Roteador atualizado com sucesso')
     } else {
-      const { data: newRouter, error } = await insertRouterWithSchemaFallback({ ...data, user_id: user.id, client_id: selectedClientId })
+      const { data: newRouter, error } = await supabase.from('routers').insert({ ...data, user_id: user.id, client_id: selectedClientId }).select().single()
       if (error) {
-        toast(error.message, 'error')
-        return { error: error.message }
+        const message = translateError(error)
+        toast(message, 'error')
+        return { error: message }
       }
       setRouters((prev) => [...prev, newRouter as Router])
       toast('Roteador criado com sucesso')
@@ -155,6 +134,11 @@ export default function RoutersPage() {
 
   const handleDelete = async (router: Router) => {
     if (!confirm(`Excluir roteador "${router.name}"?`)) return
+    const schemaError = await requireCompatibleSchema()
+    if (schemaError) {
+      toast(schemaError.message, 'error')
+      return
+    }
     const { error } = await supabase.from('routers').delete().eq('id', router.id)
     if (error) {
       toast('Erro ao excluir: ' + error.message, 'error')

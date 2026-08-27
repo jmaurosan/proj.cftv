@@ -13,6 +13,15 @@ const pageTitles: Record<string, string> = {
   '/credenciais': 'Credenciais',
   '/visualizacao': 'Visualização',
   '/relatorios': 'Relatórios',
+  '/visualizacao-local': 'Visualização local',
+  '/topologia': 'Diagrama da instalação',
+  '/mapeamento': 'Canais e vínculos',
+  '/comissionamento': 'Comissionamento',
+  '/diagnostico-rede': 'Diagnóstico de rede',
+  '/armazenamento': 'Armazenamento',
+  '/plano-ips': 'Plano de IPs',
+  '/manutencoes': 'Manutenções',
+  '/empresa': 'Empresa e identidade',
 }
 
 interface TopbarProps {
@@ -43,8 +52,8 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         <button
           type="button"
           onClick={handleMenuClick}
-          className="p-2 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors lg:hidden touch-manipulation"
-          aria-label="Abrir menu"
+          className="p-2 rounded-md border border-border-light hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors touch-manipulation"
+          aria-label="Abrir ou recolher menu"
         >
           <Menu className="w-5 h-5" />
         </button>

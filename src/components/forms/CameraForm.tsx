@@ -33,6 +33,8 @@ import { useUtpCables } from '../../hooks/useUtpCables'
 import { usePowerCables } from '../../hooks/usePowerCables'
 import { useClient } from '../../contexts/ClientContext'
 import { CABLE_PRESETS, detectCablePreset } from '../../lib/cableConfiguration'
+import { calculatePowerWatts } from '../../lib/powerConsumption'
+import { calculateCameraStorage, formatCodec, type RecordingCodec, type RecordingMode } from '../../lib/recordingStorage'
 import type { PairFunction } from '../../lib/balunConfiguration'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
@@ -162,12 +164,18 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
   const [powerSupplyCurrent, setPowerSupplyCurrent] = useState(initialData?.power_supply_current_a?.toString() ?? '')
   const [operatingVoltage, setOperatingVoltage] = useState(initialData?.operating_voltage ?? '12V')
   const [currentConsumption, setCurrentConsumption] = useState(initialData?.current_consumption_a?.toString() ?? '')
+  const [powerWatts, setPowerWatts] = useState(initialData?.power_watts?.toString() ?? '')
   const [powerSupplyBrand, setPowerSupplyBrand] = useState(initialData?.power_supply_brand ?? '')
   const [powerSupplyModel, setPowerSupplyModel] = useState(initialData?.power_supply_model ?? '')
   const [location, setLocation] = useState(initialData?.location ?? '')
   const [type, setType] = useState(initialData?.type ?? 'dome')
   const [status, setStatus] = useState(initialData?.status ?? 'ativo')
   const [resolution, setResolution] = useState(initialData?.resolution ?? '1080p')
+  const [recordingCodec, setRecordingCodec] = useState<RecordingCodec>(initialData?.recording_codec ?? 'h265')
+  const [recordingFps, setRecordingFps] = useState(initialData?.recording_fps?.toString() ?? '15')
+  const [recordingBitrateKbps, setRecordingBitrateKbps] = useState(initialData?.recording_bitrate_kbps?.toString() ?? '')
+  const [recordingMode, setRecordingMode] = useState<RecordingMode>(initialData?.recording_mode ?? 'continuous')
+  const [motionRecordingPercent, setMotionRecordingPercent] = useState(initialData?.motion_recording_percent?.toString() ?? '35')
   const [rtspUrl, setRtspUrl] = useState(initialData?.rtsp_url ?? '')
   const [streamingUser, setStreamingUser] = useState(initialData?.streaming_user ?? '')
   const [streamingPassword, setStreamingPassword] = useState(initialData?.streaming_password ?? '')
@@ -201,6 +209,15 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
   const [existingCameras, setExistingCameras] = useState<Camera[]>([])
 
   const isIP = connectionType === 'ip' || connectionType === 'wifi'
+  const calculatedCameraWatts = calculatePowerWatts({ power_watts: powerWatts ? Number(powerWatts) : null, operating_voltage: operatingVoltage, current_consumption_a: currentConsumption ? Number(currentConsumption) : null })
+  const cameraStorageEstimate = calculateCameraStorage({
+    resolution,
+    recording_codec: recordingCodec,
+    recording_fps: recordingFps ? Number(recordingFps) : null,
+    recording_bitrate_kbps: recordingBitrateKbps ? Number(recordingBitrateKbps) : null,
+    recording_mode: recordingMode,
+    motion_recording_percent: motionRecordingPercent ? Number(motionRecordingPercent) : null,
+  })
   const selectedBalun = baluns.find((balun) => balun.id === balunId)
   const { models: cameraModels, saveModel } = useEquipmentModels('camera')
   const { models: powerSupplyModels, saveModel: savePowerSupplyModel } = useEquipmentModels('power_supply')
@@ -219,7 +236,72 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
     return CAMERA_TECHNOLOGY_OPTIONS.filter((option) => allowed.includes(option.value))
   }, [connectionType])
 
-  const handleConnectionTypeChange = (nextConnectionType: string) => {
+  const existingCamerasForConnectionType = useMemo(
+    () => existingCameras,
+    [existingCameras],
+  )
+
+  const existingCameraTypeLabel = (camera: Camera) => {
+    if (camera.connection_type === 'ip') return 'IP'
+    if (camera.connection_type === 'wifi') return 'Wi-Fi'
+    return 'Analógica'
+  }
+
+  const clearSelectedCamera = (nextConnectionType: string) => {
+    setSelectedExistingCameraId('')
+    setName('')
+    setBrand('')
+    setModel('')
+    setLensType('')
+    setIrDistanceMeters('')
+    setSerialNumber('')
+    setInstallationDate('')
+    setTechnology(getDefaultTechnology(nextConnectionType))
+    setDvrId('')
+    setChannelNumber(1)
+    setIpAddress('')
+    setMacAddress('')
+    setPoePowered(false)
+    setPowerSourceType('power_supply')
+    setPowerSupplyVoltage('12V')
+    setPowerSupplyCurrent('')
+    setOperatingVoltage('12V')
+    setCurrentConsumption('')
+    setPowerWatts('')
+    setPowerSupplyBrand('')
+    setPowerSupplyModel('')
+    setLocation('')
+    setType('dome')
+    setStatus('ativo')
+    setResolution('1080p')
+    setRecordingCodec('h265')
+    setRecordingFps('15')
+    setRecordingBitrateKbps('')
+    setRecordingMode('continuous')
+    setMotionRecordingPercent('35')
+    setRtspUrl('')
+    setStreamingUser('')
+    setStreamingPassword('')
+    setMediaMtxStreamName('')
+    setBalunId('')
+    setBalunPort('')
+    setSwitchId('')
+    setSwitchPort('')
+    setNotes('')
+    setSiteId('')
+    setQrCodeUrl('')
+    setInstallationPhotoUrl('')
+    setInstallationPhotos([])
+    setInstallationPhotoPreviews({})
+    setOtherBrandMode(false)
+  }
+
+  const handleConnectionTypeChange = (nextConnectionType: string, clearCurrentCamera = false) => {
+    if (nextConnectionType === connectionType) return
+
+    // No cadastro/realocação por seleção, cada aba representa um conjunto distinto
+    // de câmeras. Nunca carregue os dados ou o ID de uma câmera de outra tecnologia.
+    if (!initialData && clearCurrentCamera) clearSelectedCamera(nextConnectionType)
     setConnectionType(nextConnectionType)
     const nextDefaultTechnology = getDefaultTechnology(nextConnectionType)
     const nextAllowed = nextConnectionType === 'analogica'
@@ -358,7 +440,9 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
     })
   }, [initialData?.client_id, selectedClientId])
 
-  const applyCameraData = (camera: Camera) => {
+  const applyCameraData = (camera: Camera, keepCurrentPosition = false) => {
+    const currentDvrId = dvrId
+    const currentChannelNumber = channelNumber
     setSelectedExistingCameraId(camera.id)
     setName(camera.name ?? '')
     setBrand(camera.brand ?? '')
@@ -368,8 +452,8 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
     setSerialNumber(camera.serial_number ?? '')
     setInstallationDate(camera.installation_date ?? '')
     handleConnectionTypeChange(camera.connection_type ?? 'analogica')
-    setDvrId(camera.dvr_id ?? '')
-    setChannelNumber(camera.channel_number ?? 1)
+    setDvrId(keepCurrentPosition ? currentDvrId : camera.dvr_id ?? '')
+    setChannelNumber(keepCurrentPosition ? currentChannelNumber : camera.channel_number ?? 1)
     setTechnology(camera.technology ?? getDefaultTechnology(camera.connection_type ?? 'analogica'))
     setIpAddress(camera.ip_address ?? '')
     setMacAddress(camera.mac_address ?? '')
@@ -379,12 +463,18 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
     setPowerSupplyCurrent(camera.power_supply_current_a?.toString() ?? '')
     setOperatingVoltage(camera.operating_voltage ?? '12V')
     setCurrentConsumption(camera.current_consumption_a?.toString() ?? '')
+    setPowerWatts(camera.power_watts?.toString() ?? '')
     setPowerSupplyBrand(camera.power_supply_brand ?? '')
     setPowerSupplyModel(camera.power_supply_model ?? '')
     setLocation(camera.location ?? '')
     setType(camera.type ?? 'dome')
     setStatus(camera.status ?? 'ativo')
     setResolution(camera.resolution ?? '1080p')
+    setRecordingCodec(camera.recording_codec ?? 'h265')
+    setRecordingFps(camera.recording_fps?.toString() ?? '15')
+    setRecordingBitrateKbps(camera.recording_bitrate_kbps?.toString() ?? '')
+    setRecordingMode(camera.recording_mode ?? 'continuous')
+    setMotionRecordingPercent(camera.motion_recording_percent?.toString() ?? '35')
     setRtspUrl(camera.rtsp_url ?? '')
     setStreamingUser(camera.streaming_user ?? '')
     setStreamingPassword(camera.streaming_password ?? '')
@@ -404,7 +494,9 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
       return
     }
     const camera = existingCameras.find((item) => item.id === cameraId)
-    if (camera) applyCameraData(camera)
+    // Ao editar uma posição ocupada, selecionar outra câmera significa colocá-la
+    // nessa posição. Preserve DVR/canal do formulário e carregue os demais dados.
+    if (camera) applyCameraData(camera, Boolean(initialData))
   }
 
   useEffect(() => {
@@ -520,12 +612,18 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
       power_supply_current_a: powerSourceType === 'power_supply' && powerSupplyCurrent ? Number(powerSupplyCurrent) : null,
       operating_voltage: operatingVoltage || null,
       current_consumption_a: currentConsumption ? Number(currentConsumption) : null,
+      power_watts: powerWatts ? Number(powerWatts) : null,
       power_supply_brand: powerSourceType === 'power_supply' ? powerSupplyBrand || null : null,
       power_supply_model: powerSourceType === 'power_supply' ? powerSupplyModel || null : null,
       location,
       type,
       status,
       resolution,
+      recording_codec: recordingCodec,
+      recording_fps: recordingFps ? Number(recordingFps) : 15,
+      recording_bitrate_kbps: recordingBitrateKbps ? Number(recordingBitrateKbps) : null,
+      recording_mode: recordingMode,
+      motion_recording_percent: recordingMode === 'motion' ? Number(motionRecordingPercent || 35) : 100,
       balun_id: !isIP && balunId ? balunId : null,
       balun_port: !isIP && balunPort ? Number(balunPort) : null,
       switch_id: switchId || null,
@@ -542,10 +640,11 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
     if (result.error) {
       setError(result.error)
     } else {
-      if (initialData?.qr_code_url && (!isIP || qrCodeUrl !== initialData.qr_code_url)) {
+      const isEditingInitialCamera = !selectedExistingCameraId || selectedExistingCameraId === initialData?.id
+      if (isEditingInitialCamera && initialData?.qr_code_url && (!isIP || qrCodeUrl !== initialData.qr_code_url)) {
         await deleteQRCodeImage(initialData.qr_code_url)
       }
-      if (initialData?.installation_photo_url && installationPhotoUrl !== initialData.installation_photo_url) {
+      if (isEditingInitialCamera && initialData?.installation_photo_url && installationPhotoUrl !== initialData.installation_photo_url) {
         await deleteInstallationPhoto(initialData.installation_photo_url)
       }
       const catalogModel = normalizedModel.trim()
@@ -774,7 +873,7 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
         <button
           key="analogica"
           type="button"
-          onClick={() => handleConnectionTypeChange('analogica')}
+          onClick={() => handleConnectionTypeChange('analogica', true)}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             connectionType === 'analogica'
               ? 'bg-accent text-white shadow-sm'
@@ -786,7 +885,7 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
         <button
           key="ip"
           type="button"
-          onClick={() => handleConnectionTypeChange('ip')}
+          onClick={() => handleConnectionTypeChange('ip', true)}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             connectionType === 'ip'
               ? 'bg-accent text-white shadow-sm'
@@ -798,7 +897,7 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
         <button
           key="wifi"
           type="button"
-          onClick={() => handleConnectionTypeChange('wifi')}
+          onClick={() => handleConnectionTypeChange('wifi', true)}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             connectionType === 'wifi'
               ? 'bg-accent text-white shadow-sm'
@@ -828,9 +927,9 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
             list="existing-camera-names"
           />
           <datalist id="existing-camera-names">
-            {existingCameras.map((camera) => (
+            {existingCamerasForConnectionType.map((camera) => (
               <option key={camera.id} value={camera.name}>
-                {camera.dvr_id ? `Canal ${camera.channel_number ?? '-'}${camera.location ? ` · ${camera.location}` : ''}` : camera.location ?? ''}
+                {`${existingCameraTypeLabel(camera)}${camera.dvr_id ? ` · Canal ${camera.channel_number ?? '-'}` : ''}${camera.location ? ` · ${camera.location}` : ''}`}
               </option>
             ))}
           </datalist>
@@ -859,7 +958,7 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
           <Input label="Marca" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ex: Intelbras, Hikvision" />
         )}
       </div>
-      {existingCameras.length > 0 && !initialData && (
+      {!initialData && (
         <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3">
           <label className="text-xs font-medium text-text-secondary flex items-center gap-1.5 mb-2">
             <CameraIcon className="w-3.5 h-3.5" />
@@ -868,12 +967,17 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
           <Select
             value={selectedExistingCameraId}
             onChange={(e) => handleExistingCameraSelect(e.target.value)}
-            options={existingCameras.map((camera) => ({
+            options={existingCamerasForConnectionType.map((camera) => ({
               value: camera.id,
-              label: `${camera.name}${camera.dvr_id ? ` · canal ${camera.channel_number ?? '-'}` : ''}${camera.location ? ` · ${camera.location}` : ''}`,
+              label: `${camera.name} · ${existingCameraTypeLabel(camera)}${camera.dvr_id ? ` · canal ${camera.channel_number ?? '-'}` : ''}${camera.location ? ` · ${camera.location}` : ''}`,
             }))}
             placeholder="Selecione para editar ou realocar sem duplicar"
           />
+          {existingCamerasForConnectionType.length === 0 && (
+            <p className="mt-2 text-xs text-text-muted">
+              Nenhuma câmera cadastrada neste cliente.
+            </p>
+          )}
           {selectedExistingCameraId && (
             <p className="mt-2 text-xs text-accent">
               Esta câmera será atualizada. Se escolher um canal ocupado, o app troca as duas câmeras de posição.
@@ -990,6 +1094,25 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
               disabled={!dvrId}
             />
           </div>
+          {initialData && existingCamerasForConnectionType.length > 1 && (
+            <div>
+              <Select
+                label="Câmera para este canal"
+                value={selectedExistingCameraId}
+                onChange={(e) => handleExistingCameraSelect(e.target.value)}
+                options={existingCamerasForConnectionType.map((camera) => ({
+                  value: camera.id,
+                  label: `${camera.name} · ${existingCameraTypeLabel(camera)}${camera.dvr_id ? ` · ${camera.dvrs?.name ?? 'DVR'} canal ${camera.channel_number ?? '-'}` : ' · sem DVR/NVR'}`,
+                }))}
+                placeholder="Selecione uma câmera cadastrada"
+              />
+              {selectedExistingCameraId !== initialData.id && (
+                <p className="mt-2 text-xs text-accent">
+                  Ao salvar, esta câmera ocupará o canal {channelNumber}. {initialData.name} irá para a posição anterior dela.
+                </p>
+              )}
+            </div>
+          )}
           <p className="text-xs text-text-muted">
             Para realocar uma câmera existente, selecione outro DVR/canal. Se o canal estiver ocupado, as duas câmeras trocam de posição.
           </p>
@@ -1029,6 +1152,25 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
               disabled={!dvrId}
             />
           </div>
+          {initialData && existingCamerasForConnectionType.length > 1 && (
+            <div>
+              <Select
+                label="Câmera para este canal"
+                value={selectedExistingCameraId}
+                onChange={(e) => handleExistingCameraSelect(e.target.value)}
+                options={existingCamerasForConnectionType.map((camera) => ({
+                  value: camera.id,
+                  label: `${camera.name} · ${existingCameraTypeLabel(camera)}${camera.dvr_id ? ` · ${camera.dvrs?.name ?? 'DVR'} canal ${camera.channel_number ?? '-'}` : ' · sem DVR/NVR'}`,
+                }))}
+                placeholder="Selecione uma câmera cadastrada"
+              />
+              {selectedExistingCameraId !== initialData.id && (
+                <p className="mt-2 text-xs text-accent">
+                  Ao salvar, esta câmera ocupará o canal {channelNumber}. {initialData.name} irá para a posição anterior dela.
+                </p>
+              )}
+            </div>
+          )}
           <p className="text-xs text-text-muted">
             Se esta câmera IP estiver gravando em DVR/NVR, altere aqui o equipamento e o canal. Se for câmera IP direta, deixe sem DVR/NVR.
           </p>
@@ -1244,7 +1386,16 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
             </datalist>
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-border-light pt-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-border-light pt-3">
+          <Input
+            label="Potência informada (W)"
+            type="number"
+            min={0}
+            step="0.01"
+            value={powerWatts}
+            onChange={(e) => setPowerWatts(e.target.value)}
+            placeholder="Ex: 5,4"
+          />
           <Select
             label="Tensão consumida pela câmera"
             value={operatingVoltage}
@@ -1260,6 +1411,47 @@ export default function CameraForm({ initialData, relocationMode = false, onSubm
             onChange={(e) => setCurrentConsumption(e.target.value)}
             placeholder="Ex: 0,35"
           />
+        </div>
+        <p className={`text-xs ${calculatedCameraWatts != null ? 'text-accent' : 'text-text-muted'}`}>
+          {calculatedCameraWatts != null
+            ? `${powerWatts ? 'Consumo considerado' : 'Calculado automaticamente'}: ${calculatedCameraWatts.toLocaleString('pt-BR')} W`
+            : 'Informe watts ou tensão e corrente para calcular o consumo da câmera.'}
+        </p>
+      </div>
+
+      <div className="border border-border-light rounded-lg p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-text-primary">Gravação e armazenamento</h3>
+          <p className="text-xs text-text-muted mt-1">O bitrate informado tem prioridade. Se ficar vazio, o sistema estima pelo codec, resolução e FPS.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Select
+            label="Codec"
+            value={recordingCodec}
+            onChange={(event) => setRecordingCodec(event.target.value as RecordingCodec)}
+            options={[
+              { value: 'h264', label: 'H.264' },
+              { value: 'h265', label: 'H.265' },
+              { value: 'h265_plus', label: 'H.265+' },
+            ]}
+          />
+          <Input label="FPS" type="number" min="1" max="60" value={recordingFps} onChange={(event) => setRecordingFps(event.target.value)} />
+          <Input label="Bitrate (Kbps, opcional)" type="number" min="1" value={recordingBitrateKbps} onChange={(event) => setRecordingBitrateKbps(event.target.value)} placeholder="Estimativa automática" />
+          <Select
+            label="Modo de gravação"
+            value={recordingMode}
+            onChange={(event) => setRecordingMode(event.target.value as RecordingMode)}
+            options={[
+              { value: 'continuous', label: 'Contínua (24 horas)' },
+              { value: 'motion', label: 'Por movimento/evento' },
+            ]}
+          />
+          {recordingMode === 'motion' && (
+            <Input label="Atividade estimada (%)" type="number" min="1" max="100" value={motionRecordingPercent} onChange={(event) => setMotionRecordingPercent(event.target.value)} />
+          )}
+        </div>
+        <div className="rounded-lg bg-bg-primary/50 border border-border-light px-3 py-2 text-xs text-text-secondary">
+          {cameraStorageEstimate.bitrateSource === 'estimated' ? 'Estimado' : 'Informado'}: <strong className="text-text-primary">{cameraStorageEstimate.bitrateKbps.toLocaleString('pt-BR')} Kbps</strong> · {formatCodec(recordingCodec)} · <strong className="text-text-primary">{cameraStorageEstimate.gbPerDay.toLocaleString('pt-BR')} GB/dia</strong>
         </div>
       </div>
       {isIP && (

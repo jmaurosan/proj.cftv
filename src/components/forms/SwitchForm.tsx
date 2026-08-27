@@ -10,6 +10,7 @@ import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
 import BackupManager from '../ui/BackupManager'
+import PowerConsumptionFields from '../ui/PowerConsumptionFields'
 import SwitchPortItem from './SwitchPortItem'
 import LabelScanner from '../ui/LabelScanner'
 import { applyScannedLabel } from '../../lib/labelScanMerge'
@@ -34,6 +35,9 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
   const [isPoe, setIsPoe] = useState(initialData?.is_poe ?? false)
   const [poeStandard, setPoeStandard] = useState(initialData?.poe_standard ?? '')
   const [poeBudgetWatts, setPoeBudgetWatts] = useState(initialData?.poe_budget_watts ?? '')
+  const [powerWatts, setPowerWatts] = useState(initialData?.power_watts?.toString() ?? '')
+  const [operatingVoltage, setOperatingVoltage] = useState(initialData?.operating_voltage ?? '')
+  const [currentConsumption, setCurrentConsumption] = useState(initialData?.current_consumption_a?.toString() ?? '')
   const [status, setStatus] = useState(initialData?.status ?? 'ativo')
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [loading, setLoading] = useState(false)
@@ -120,6 +124,9 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
       is_poe: isPoe,
       poe_standard: isPoe && poeStandard ? poeStandard : null,
       poe_budget_watts: isPoe && poeBudgetWatts ? Number(poeBudgetWatts) : null,
+      power_watts: powerWatts ? Number(powerWatts) : null,
+      operating_voltage: operatingVoltage || null,
+      current_consumption_a: currentConsumption ? Number(currentConsumption) : null,
       status,
       notes: notes || null,
     })
@@ -302,6 +309,8 @@ export default function SwitchForm({ initialData, onSubmit, onCancel }: SwitchFo
           equipmentId={switchId}
         />
       )}
+
+      <PowerConsumptionFields powerWatts={powerWatts} operatingVoltage={operatingVoltage} currentConsumption={currentConsumption} onPowerWattsChange={setPowerWatts} onOperatingVoltageChange={setOperatingVoltage} onCurrentConsumptionChange={setCurrentConsumption} />
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>

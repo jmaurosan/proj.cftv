@@ -5,48 +5,7 @@ import { useAuth } from './useAuth'
 import { useClient } from '../contexts/ClientContext'
 import { translateError } from '../lib/errorTranslator'
 import { validateCameraConflicts, type CameraConnectionRecord } from '../lib/connectionValidation'
-
-const IMAGE_FIELDS = new Set(['installation_photo_url', 'qr_code_url'])
-
-const getMissingCameraColumn = (error: unknown) => {
-  const message = String((error as { message?: string })?.message || error || '')
-  if (!message.toLowerCase().includes('schema cache')) return null
-  return message.match(/could not find the ['"]([^'"]+)['"] column/i)?.[1] ?? null
-}
-
-const insertWithSchemaFallback = async (payload: Record<string, unknown>) => {
-  const compatiblePayload = { ...payload }
-
-  for (let attempt = 0; attempt < 15; attempt++) {
-    const { error } = await supabase.from('cameras').insert(compatiblePayload)
-    if (!error) return null
-
-    const missingColumn = getMissingCameraColumn(error)
-    if (!missingColumn || IMAGE_FIELDS.has(missingColumn) || !(missingColumn in compatiblePayload)) {
-      return error
-    }
-    delete compatiblePayload[missingColumn]
-  }
-
-  return new Error('Não foi possível compatibilizar o cadastro com a estrutura atual do banco.')
-}
-
-const updateWithSchemaFallback = async (id: string, payload: Record<string, unknown>) => {
-  const compatiblePayload = { ...payload }
-
-  for (let attempt = 0; attempt < 15; attempt++) {
-    const { error } = await supabase.from('cameras').update(compatiblePayload).eq('id', id)
-    if (!error) return null
-
-    const missingColumn = getMissingCameraColumn(error)
-    if (!missingColumn || IMAGE_FIELDS.has(missingColumn) || !(missingColumn in compatiblePayload)) {
-      return error
-    }
-    delete compatiblePayload[missingColumn]
-  }
-
-  return new Error('Não foi possível compatibilizar a atualização com a estrutura atual do banco.')
-}
+import { requireCompatibleSchema } from '../lib/schemaCompatibility'
 
 export function useCameras() {
   const { user } = useAuth()
@@ -123,6 +82,8 @@ export function useCameras() {
   const create = async (payload: Omit<CameraInsert, 'user_id'>) => {
     if (!user) return { error: 'Não autenticado' }
     if (!selectedClientId && !payload.client_id) return { error: 'Selecione um cliente antes de cadastrar câmera' }
+    const schemaError = await requireCompatibleSchema()
+    if (schemaError) return { error: schemaError.message }
     const finalPayload = {
       ...payload,
       user_id: user.id,
@@ -130,13 +91,15 @@ export function useCameras() {
     }
     const conflict = await validateBeforeSave(finalPayload)
     if (conflict) return { error: conflict }
-    const error = await insertWithSchemaFallback(finalPayload)
+    const { error } = await supabase.from('cameras').insert(finalPayload)
     if (error) return { error: translateError(error) }
     await fetch()
     return { error: null }
   }
 
   const update = async (id: string, payload: CameraUpdate) => {
+    const schemaError = await requireCompatibleSchema()
+    if (schemaError) return { error: schemaError.message }
     const current = data.find((camera) => camera.id === id)
     const candidate = { ...current, ...payload }
     const dvrChannelOccupant = data.find((camera) => (
@@ -152,28 +115,65 @@ export function useCameras() {
     })
     if (conflict) return { error: conflict }
 
-    if (dvrChannelOccupant) {
-      const temporaryReleaseError = await updateWithSchemaFallback(id, {
-        dvr_id: null,
-        channel_number: null,
-      })
-      if (temporaryReleaseError) return { error: translateError(temporaryReleaseError) }
+    const connectionsChanged = current?.dvr_id !== (candidate.dvr_id ?? null)
+      || current?.channel_number !== (candidate.channel_number ?? null)
+      || current?.balun_id !== (candidate.balun_id ?? null)
+      || current?.balun_port !== (candidate.balun_port ?? null)
+      || current?.switch_id !== (candidate.switch_id ?? null)
+      || current?.switch_port !== (candidate.switch_port ?? null)
+    const {
+      dvr_id: _dvrId,
+      channel_number: _channelNumber,
+      balun_id: _balunId,
+      balun_port: _balunPort,
+      switch_id: _switchId,
+      switch_port: _switchPort,
+      ...nonConnectionPayload
+    } = payload
+    void _dvrId
+    void _channelNumber
+    void _balunId
+    void _balunPort
+    void _switchId
+    void _switchPort
 
-      const swapPayload: CameraUpdate = {
-        dvr_id: current?.dvr_id ?? null,
-        channel_number: current?.channel_number ?? null,
-      }
-      const swapError = await updateWithSchemaFallback(dvrChannelOccupant.id, swapPayload)
-      if (swapError) return { error: translateError(swapError) }
+    if (connectionsChanged) {
+      const { error: moveError } = await supabase.rpc('update_camera_connections', {
+        p_camera_id: id,
+        p_dvr_id: candidate.dvr_id ?? null,
+        p_channel_number: candidate.channel_number ?? null,
+        p_balun_id: candidate.balun_id ?? null,
+        p_balun_port: candidate.balun_port ?? null,
+        p_switch_id: candidate.switch_id ?? null,
+        p_switch_port: candidate.switch_port ?? null,
+      })
+      if (moveError) return { error: translateError(moveError) }
     }
 
-    const error = await updateWithSchemaFallback(id, payload)
-    if (error) return { error: translateError(error) }
+    const hasNonConnectionChanges = Object.keys(nonConnectionPayload).length > 0
+    const { error } = hasNonConnectionChanges
+      ? await supabase.from('cameras').update(nonConnectionPayload).eq('id', id)
+      : { error: null }
+    if (error) {
+      return { error: translateError(error) }
+    }
+
+    // switch_ports mantém um rótulo desnormalizado para exibição. O vínculo real
+    // continua sendo o ID da câmera; ao renomeá-la, mantenha o rótulo em sincronia.
+    if (typeof candidate.name === 'string' && candidate.name.trim()) {
+      await supabase
+        .from('switch_ports')
+        .update({ device_name: candidate.name.trim() })
+        .eq('device_type', 'camera')
+        .eq('device_id', id)
+    }
     await fetch()
     return { error: null }
   }
 
   const remove = async (id: string) => {
+    const schemaError = await requireCompatibleSchema()
+    if (schemaError) return { error: schemaError.message }
     const { error } = await supabase.from('cameras').delete().eq('id', id)
     if (error) return { error: translateError(error) }
     await fetch()

@@ -61,7 +61,7 @@ export default function CamerasPage() {
   const [sortKey, setSortKey] = useState<string>('channel_number')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [searchQuery, setSearchQuery] = useState('')
-  // activeTab: 'all' = todas; 'ip' = IP sem DVR; ou id do DVR
+  // activeTab: todas, cameras de rede, cameras diretas ou id do DVR/NVR
   const [activeTab, setActiveTab] = useState<string>('all')
 
   const handleSort = (key: string) => {
@@ -141,7 +141,8 @@ export default function CamerasPage() {
   const filteredData = useMemo(() => {
     const byTab = (() => {
       if (activeTab === 'all') return sortedData
-      if (activeTab === 'ip') return sortedData.filter((c) => c.connection_type === 'ip' && !c.dvr_id)
+      if (activeTab === 'network') return sortedData.filter((c) => c.connection_type === 'ip' || c.connection_type === 'wifi')
+      if (activeTab === 'direct') return sortedData.filter((c) => (c.connection_type === 'ip' || c.connection_type === 'wifi') && !c.dvr_id)
       return sortedData.filter((c) => c.dvr_id === activeTab)
     })()
 
@@ -173,15 +174,17 @@ export default function CamerasPage() {
   // Contagens por aba
   const counts = useMemo(() => {
     const byDvr: Record<string, number> = {}
-    let ipOnly = 0
+    let network = 0
+    let direct = 0
     for (const c of data) {
+      const isNetwork = c.connection_type === 'ip' || c.connection_type === 'wifi'
+      if (isNetwork) network++
+      if (isNetwork && !c.dvr_id) direct++
       if (c.dvr_id) {
         byDvr[c.dvr_id] = (byDvr[c.dvr_id] ?? 0) + 1
-      } else if (c.connection_type === 'ip') {
-        ipOnly++
       }
     }
-    return { byDvr, ipOnly, total: data.length }
+    return { byDvr, network, direct, total: data.length }
   }, [data])
 
   // Fetch cable types for all cameras to show badge
@@ -245,6 +248,10 @@ export default function CamerasPage() {
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-500/15 text-blue-400">
             IP{c.poe_powered ? ' ⚡' : ''}
           </span>
+        ) : c.connection_type === 'wifi' ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-cyan-500/15 text-cyan-300">
+            Wi-Fi
+          </span>
         ) : (
           <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-slate-500/15 text-slate-400">
             Analógica
@@ -294,8 +301,10 @@ export default function CamerasPage() {
       key: 'dvr',
       label: 'DVR / IP',
       render: (c) =>
-        c.connection_type === 'ip'
-          ? c.ip_address ?? '-'
+        c.connection_type === 'ip' || c.connection_type === 'wifi'
+          ? c.dvr_id
+            ? `${c.dvrs?.name ?? 'DVR/NVR'}${c.ip_address ? ` · ${c.ip_address}` : ''}`
+            : c.ip_address ?? 'Direta · IP não informado'
           : c.dvrs?.name ?? '-',
     },
     {
@@ -393,7 +402,9 @@ export default function CamerasPage() {
     delete payload.__camera_id
 
     if (editing || targetCameraId) {
-      const result = await update(editing?.id ?? targetCameraId, payload)
+      const cameraIdToUpdate = targetCameraId || editing?.id
+      if (!cameraIdToUpdate) return { error: 'Nenhuma câmera selecionada para edição.' }
+      const result = await update(cameraIdToUpdate, payload)
       if (!result.error) {
         setModalOpen(false)
         setEditing(null)
@@ -516,6 +527,21 @@ export default function CamerasPage() {
           </span>
         </button>
 
+        {counts.network > 0 && (
+          <button
+            onClick={() => setActiveTab('network')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+              activeTab === 'network'
+                ? 'bg-accent/15 text-accent border-b-2 border-accent'
+                : 'text-text-muted hover:text-text-primary hover:bg-bg-secondary'
+            }`}
+          >
+            <Wifi className="w-4 h-4" />
+            IP / Wi-Fi
+            <span className="px-1.5 py-0.5 rounded-full bg-bg-primary text-xs">{counts.network}</span>
+          </button>
+        )}
+
         {sortedDvrs.map((dvr) => {
           const used = counts.byDvr[dvr.id] ?? 0
           const isActive = activeTab === dvr.id
@@ -539,19 +565,19 @@ export default function CamerasPage() {
           )
         })}
 
-        {counts.ipOnly > 0 && (
+        {counts.direct > 0 && (
           <button
-            onClick={() => setActiveTab('ip')}
+            onClick={() => setActiveTab('direct')}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
-              activeTab === 'ip'
+              activeTab === 'direct'
                 ? 'bg-accent/15 text-accent border-b-2 border-accent'
                 : 'text-text-muted hover:text-text-primary hover:bg-bg-secondary'
             }`}
           >
             <Wifi className="w-4 h-4" />
-            IP (sem DVR)
+            Sem DVR/NVR
             <span className="px-1.5 py-0.5 rounded-full bg-bg-primary text-xs">
-              {counts.ipOnly}
+              {counts.direct}
             </span>
           </button>
         )}
@@ -566,9 +592,9 @@ export default function CamerasPage() {
           filteredData.map((camera) => {
             const connectionLabel = camera.connection_type === 'ip'
               ? `IP${camera.poe_powered ? ' · PoE' : ''}`
-              : 'Analógica'
-            const dvrOrIp = camera.connection_type === 'ip'
-              ? camera.ip_address ?? 'IP não informado'
+              : camera.connection_type === 'wifi' ? 'Wi-Fi' : 'Analógica'
+            const dvrOrIp = camera.connection_type === 'ip' || camera.connection_type === 'wifi'
+              ? camera.dvrs?.name ?? camera.ip_address ?? 'IP não informado'
               : camera.dvrs?.name ?? 'DVR não informado'
             const cableType = cableTypes[camera.id]
             const mediaCount = (cameraMediaCounts[camera.id] ?? 0) + (camera.installation_photo_url ? 1 : 0)

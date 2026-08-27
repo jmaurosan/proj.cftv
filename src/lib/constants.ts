@@ -54,6 +54,7 @@ export const DEVICE_TYPES = [
 ] as const
 
 export const PROTOCOL_OPTIONS = [
+  { value: 'hik_connect', label: 'Hik-Connect' },
   { value: 'http', label: 'HTTP' },
   { value: 'https', label: 'HTTPS' },
   { value: 'rtsp', label: 'RTSP' },

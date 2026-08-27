@@ -50,6 +50,11 @@ export function translateError(err: unknown): string {
   const e = (typeof err === 'string' ? { message: err } : err) as ErrorLike
   const raw = (e.message ?? '').toLowerCase()
 
+  // Divergência entre a versão publicada do app e o schema do banco.
+  if (raw.includes('schema cache') || raw.includes('could not find the') && raw.includes('column')) {
+    return 'O banco de dados está desatualizado e esta alteração não foi salva. Aplique a migration indicada no aviso do sistema.'
+  }
+
   // 1. Violação de unique constraint — tenta extrair o nome da constraint
   if (raw.includes('duplicate key') || raw.includes('unique constraint')) {
     const match = (e.message ?? '').match(/constraint ["']?([\w_]+)["']?/i)

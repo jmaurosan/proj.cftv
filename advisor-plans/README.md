@@ -8,7 +8,7 @@ status ao concluir.
 
 | Plano | Título | Prioridade | Esforço | Depende de | Status |
 |------|--------|------------|---------|------------|--------|
-| 001 | Transformar a topologia física em diagrama automático apresentável | P1 | L | — | TODO |
+| 001 | Transformar a topologia física em diagrama automático apresentável | P1 | L | — | DONE |
 
 Status possíveis: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED.
 
