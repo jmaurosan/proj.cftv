@@ -43,6 +43,24 @@ begin
     '192.0.2.1', 'ativo', 'Endereco reservado para documentacao.', v_client_id, v_owner_id)
   on conflict (id) do update set name = excluded.name;
 
+  insert into public.network_segments
+    (id, name, description, network_ip, subnet_mask, gateway_ip, vlan_id, router_id, client_id, user_id, dhcp_start_ip, dhcp_end_ip)
+  values
+    ('d5100000-0000-4000-8000-000000000001', 'Rede CFTV demonstrativa',
+     'Faixa reservada exclusivamente para documentacao e demonstracao.', '192.0.2.0',
+     '255.255.255.0', '192.0.2.1', 20, v_router_a, v_client_id, v_owner_id,
+     '192.0.2.150', '192.0.2.199')
+  on conflict (id) do update set
+    name = excluded.name,
+    description = excluded.description,
+    network_ip = excluded.network_ip,
+    subnet_mask = excluded.subnet_mask,
+    gateway_ip = excluded.gateway_ip,
+    vlan_id = excluded.vlan_id,
+    router_id = excluded.router_id,
+    dhcp_start_ip = excluded.dhcp_start_ip,
+    dhcp_end_ip = excluded.dhcp_end_ip;
+
   insert into public.switches (id, name, model, location, total_ports, is_poe, poe_standard, poe_budget_watts, status, notes, client_id, user_id)
   values (v_switch_a, 'Switch PoE principal', 'SW-16-POE-DEMO', 'Rack da portaria', 16,
     true, '802.3at', 180, 'ativo', 'Equipamento ficticio.', v_client_id, v_owner_id)
